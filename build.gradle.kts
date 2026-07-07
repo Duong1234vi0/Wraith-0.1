@@ -32,7 +32,7 @@ plugins {
     id("io.gitlab.arturbosch.detekt") version "1.23.6"
     // Note: Node plugin removed - no longer needed without Svelte
     // id("com.github.node-gradle.node") version "7.1.0"
-    id("org.jetbrains.dokka") version "1.9.10"
+    id("org.jetbrains.dokka") version "2.2.0"
 }
 
 val archives_base_name: String by project
