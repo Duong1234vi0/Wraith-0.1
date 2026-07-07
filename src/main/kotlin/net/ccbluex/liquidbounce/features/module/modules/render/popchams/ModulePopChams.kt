@@ -33,62 +33,32 @@ import net.ccbluex.liquidbounce.utils.client.logger
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.client.player
 import net.ccbluex.liquidbounce.utils.client.registerDynamicImageFromResources
-import net.ccbluex.liquidbounce.utils.client.world
 import net.ccbluex.liquidbounce.utils.entity.skinTextures
-import net.minecraft.client.model.EntityModel
+import net.minecraft.client.model.geom.ModelLayers
+import net.minecraft.client.model.geom.PartPose
 import net.minecraft.client.model.player.PlayerModel
 import net.minecraft.client.player.AbstractClientPlayer
 import net.minecraft.client.player.RemotePlayer
 import net.minecraft.client.renderer.MultiBufferSource
-import net.minecraft.client.renderer.entity.LivingEntityRenderer
-import net.minecraft.client.renderer.entity.state.HumanoidRenderState
-import net.minecraft.client.renderer.entity.state.LivingEntityRenderState
+import net.minecraft.client.renderer.entity.player.AvatarRenderer
+import net.minecraft.client.renderer.entity.state.AvatarRenderState
 import net.minecraft.client.renderer.rendertype.RenderType
 import net.minecraft.client.renderer.rendertype.RenderTypes
 import net.minecraft.client.renderer.texture.OverlayTexture
 import net.minecraft.resources.Identifier
 import net.minecraft.world.entity.Entity
-import net.minecraft.world.entity.LivingEntity
-import net.minecraft.world.entity.player.Player
+import net.minecraft.world.entity.Pose
 import net.minecraft.world.phys.Vec3
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.math.min
 
 /**
- * PopChams — ported 1:1 from VCore `vcore.features.modules.render.PopChams`
- * onto the fork's 1.26.2 / Mojang mappings.
+ * Source-faithful non-shader PopChams port from VCore's
+ * `vcore.features.modules.render.PopChams`.
  *
- * #Edit By Claude 2026-06-14.
- *
- * Behaviour (faithful to VCore): when a non-self player pops a totem, clone
- * them into a frozen [RemotePlayer] and render that clone's player model
- * rising into the air, slowly rotating and fading out, in the shared client theme colour.
- *
- * VCore → fork mapping notes:
- *  - Totem-pop detection: VCore's `TotemPopEvent` (fired from its `CombatManager`
- *    on an `EntityStatusS2CPacket` status 35) is ported faithfully — the fork's
- *    [TotemPopEvent] is fired by `CombatManager` on a real status-35 packet and
- *    by `ModuleFakePlayer` for a client-side fake pop, and PopChams subscribes to
- *    it. This is VCore's exact decoupling (no raw-packet parsing duplicated here).
- *  - Model render: VCore drew through `Tessellator` + `model.renderToBuffer` +
- *    `setShaderColor`. On 1.26.2 the immediate `setAngles(entity, ...)` API is
- *    gone, so the model is posed from a render-state extracted via the entity's
- *    own renderer ([LivingEntityRenderer.extractRenderState]) and drawn with
- *    [EntityModel.renderToBuffer] through a vanilla entity [RenderType].
- *  - Helpers: `Render2DEngine.interpolateFloat` → [lerp]; `MathUtility.rad` →
- *    [Math.toRadians]; `MathUtility.clamp` → [coerceIn]; `Render3DEngine.getTickDelta`
- *    → `deltaTracker…PartialTick`; `IEntity.setPos` → `clone.setPos`.
- *
- * Shader logic (mirrors [net.ccbluex.liquidbounce.features.module.modules.render.targetesp.ModuleTargetESP]):
- * when an Iris shaderpack is active the chams is drawn through
- * `entityTranslucentEmissive` during [renderShaderWorldPass] (called from
- * `MixinWorldRenderer` before Iris' final composite) so Complementary's bloom
- * lights it up. Otherwise it falls back to the normal [WorldRenderEvent] path.
- *
- * DEVIATION (noted): VCore disabled the depth test so the chams shows through
- * walls. The vanilla entity render types used here depth-test; since the pop
- * model rises into open air above the player this is rarely occluded. The
- * additive `SrcAlpha/One` blend of VCore's Textured mode maps to the emissive
- * (full-bright translucent) entity type, which reads as a bright glow.
+ * Intentional project deviations:
+ * - RGB comes from [ClientTheme.accentA] instead of VCore's standalone ColorSetting.
+ * - The existing Iris shader/bloom pass remains in place.
  */
 @Suppress("MagicNumber", "TooManyFunctions")
 object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
@@ -101,23 +71,16 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
 
     private val popList = CopyOnWriteArrayList<Person>()
 
-    // Flat-colour silhouette texture for Simple mode (Textured mode uses the real skin).
-    private val whiteTexture = lazyTexture("popchams-white", "popchams/white.png")
-
     private const val VCORE_MODEL_LIGHT = 10
     private const val SHADER_FULL_BRIGHT = 0xF000F0
-    private const val VANILLA_AVATAR_SCALE = 0.9375f
     private const val INITIAL_ALPHA = 255
+    private const val MODEL_ROOT_SCALE_OFFSET = -0.3f
 
     private var shaderPassRendered = false
     private var shaderPassDisabled = false
 
-    // ----- totem-pop detection -----
+    private val shaderSimpleTexture = lazyTexture("popchams-white", "popchams/white.png")
 
-    // #Edit By Claude 2026-06-14: subscribe to the fork's TotemPopEvent (fired by CombatManager on a
-    // real status-35 packet, and by ModuleFakePlayer for a client-side fake pop) instead of parsing the
-    // raw packet here. This is VCore's exact decoupling — PopChams reacts to both real and fake pops,
-    // and we don't duplicate packet parsing across every consumer.
     @Suppress("unused")
     private val totemPopHandler = handler<TotemPopEvent> { event ->
         val popped = event.entity as? AbstractClientPlayer ?: return@handler
@@ -125,21 +88,23 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
             return@handler
         }
 
-        val clone = RemotePlayer(world, popped.gameProfile)
-        clone.setPos(popped.x, popped.y, popped.z)
+        val level = mc.level ?: return@handler
+        val clone = RemotePlayer(level, popped.gameProfile)
+        clone.copyPosition(popped)
+        clone.yRotO = popped.yRotO
         clone.setYRot(popped.yRot)
-        clone.yRotO = popped.yRot
+        clone.xRotO = popped.xRotO
         clone.setXRot(popped.xRot)
-        clone.xRotO = popped.xRot
-        clone.setYHeadRot(popped.yHeadRot)
-        clone.yHeadRotO = popped.yHeadRot
+        clone.yBodyRotO = popped.yBodyRotO
         clone.setYBodyRot(popped.yBodyRot)
-        clone.yBodyRotO = popped.yBodyRot
+        clone.yHeadRotO = popped.yHeadRotO
+        clone.setYHeadRot(popped.yHeadRot)
         clone.isShiftKeyDown = popped.isShiftKeyDown
-        popList.add(Person(clone, popped.skinTextures.texture, INITIAL_ALPHA))
-    }
+        clone.walkAnimation.setSpeed(popped.walkAnimation.speed())
+        clone.walkAnimation.position = popped.walkAnimation.position()
 
-    // ----- fade / cleanup (VCore Person.update on every tick) -----
+        popList.add(Person(clone, popped.skinTextures.texture))
+    }
 
     @Suppress("unused")
     private val tickHandler = handler<GameTickEvent> {
@@ -148,11 +113,6 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
                 popList.remove(person)
                 person.discard()
             } else {
-                // #Edit By Codex 2026-06-15: advance PopChams animation once per tick so shader and
-                // fallback render paths obey the same YSpeed/AlphaSpeed settings.
-                person.previousYOffset = person.yOffset
-                person.yOffset += ySpeed / 50.0
-                person.previousAlpha = person.alpha
                 person.alpha -= aSpeed
             }
         }
@@ -170,12 +130,9 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
         popList.clear()
     }
 
-    // ----- render: normal post-world path -----
-
     @Suppress("unused")
     private val renderHandler = handler<WorldRenderEvent> { event ->
         if (shaderPassRendered) {
-            // The Iris shader-world pass already drew this frame; skip to avoid a duplicate.
             shaderPassRendered = false
             return@handler
         }
@@ -194,8 +151,6 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
         provider.endBatch()
     }
 
-    // ----- render: Iris shader-world pass (called from MixinWorldRenderer) -----
-
     @JvmStatic
     fun renderShaderWorldPass(cameraPos: Vec3) {
         shaderPassRendered = false
@@ -209,9 +164,7 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
         runCatching {
             try {
                 popList.forEach { person ->
-                    // #Edit By Claude 2026-06-14: emissive entity type → Iris maps it to Complementary's
-                    // bloom/emissive program, exactly like TargetESP's shader-world pass.
-                    val renderType = RenderTypes.entityTranslucentEmissive(textureFor(person), false)
+                    val renderType = RenderTypes.entityTranslucentEmissive(shaderTextureFor(person), false)
                     renderEntity(stack, provider, person, cameraPos, partial, renderType)
                 }
             } finally {
@@ -233,132 +186,99 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
         partialTicks: Float,
         shaderRenderType: RenderType?
     ) {
-        val clone = person.clone
-        val renderer = mc.entityRenderDispatcher.getRenderer(clone)
-            as? LivingEntityRenderer<LivingEntity, LivingEntityRenderState, EntityModel<LivingEntityRenderState>>
-            ?: return
+        val renderAlpha = person.renderAlpha()
+        if (renderAlpha <= 0) {
+            return
+        }
 
-        val renderAlpha = person.renderAlpha(partialTicks)
-        val renderYOffset = person.renderYOffset(partialTicks)
+        val clone = person.clone
+        val renderer = mc.entityRenderDispatcher.getRenderer(clone) as? AvatarRenderer<RemotePlayer> ?: return
+
+        val renderX = clone.x - cam.x
+        val renderY = clone.y - cam.y
+        val renderZ = clone.z - cam.z
+        clone.setPos(clone.x, clone.y + ySpeed / 50.0, clone.z)
 
         val state = renderer.createRenderState()
         renderer.extractRenderState(clone, state, partialTicks)
-        val model = renderer.model
-        model.setupAnim(state)
+        applyFrozenState(state, clone, person)
+        person.model.setupAnim(state)
 
         matrices.pushPose()
-        matrices.translate(clone.x - cam.x, clone.y + renderYOffset - cam.y, clone.z - cam.z)
-
-        val yRotYaw = renderAlpha / 255.0f * 360.0f * rotSpeed
-        preparePlayerScale(matrices, state, yRotYaw)
+        matrices.translate(renderX, renderY, renderZ)
+        matrices.mulPose(Axis.YP.rotation(Math.toRadians((180.0f - clone.yBodyRot + yRotation(renderAlpha, partialTicks)).toDouble()).toFloat()))
+        prepareScale(matrices)
 
         val renderType = shaderRenderType ?: renderTypeFor(person)
         val consumer = provider.getBuffer(renderType)
         val light = if (shaderRenderType != null) SHADER_FULL_BRIGHT else VCORE_MODEL_LIGHT
-        if (model is PlayerModel) {
-            renderPlayerModel(model, matrices, consumer, light, colorWithAlpha(renderAlpha))
-        } else {
-            model.renderToBuffer(matrices, consumer, light, OverlayTexture.NO_OVERLAY, colorWithAlpha(renderAlpha))
-        }
-
+        person.model.renderToBuffer(matrices, consumer, light, OverlayTexture.NO_OVERLAY, themeColorWithAlpha(renderAlpha))
         matrices.popPose()
     }
 
-    private fun renderPlayerModel(
-        model: PlayerModel,
-        matrices: PoseStack,
-        consumer: com.mojang.blaze3d.vertex.VertexConsumer,
-        light: Int,
-        color: Int
-    ) {
-        val oldHat = model.hat.visible
-        val oldJacket = model.jacket.visible
-        val oldLeftSleeve = model.leftSleeve.visible
-        val oldRightSleeve = model.rightSleeve.visible
-        val oldLeftPants = model.leftPants.visible
-        val oldRightPants = model.rightPants.visible
+    private fun applyFrozenState(state: AvatarRenderState, clone: RemotePlayer, person: Person) {
+        state.bodyRot = clone.yBodyRot
+        state.yRot = clone.yHeadRot - clone.yBodyRot
+        state.xRot = clone.xRot
+        state.walkAnimationPos = person.limbPosition
+        state.walkAnimationSpeed = min(person.limbSpeed, 1.0f)
+        state.wornHeadAnimationPos = person.limbPosition
+        state.isCrouching = clone.isShiftKeyDown
+        state.pose = if (clone.isShiftKeyDown) Pose.CROUCHING else Pose.STANDING
+        state.isFallFlying = false
+        state.isVisuallySwimming = false
+        state.isPassenger = false
+        state.isUsingItem = false
+        state.isAutoSpinAttack = false
+        state.hasRedOverlay = false
+        state.isSpectator = false
+        state.showCape = false
 
-        try {
-            applySecondLayer(model)
-            model.renderToBuffer(matrices, consumer, light, OverlayTexture.NO_OVERLAY, color)
-        } finally {
-            model.hat.visible = oldHat
-            model.jacket.visible = oldJacket
-            model.leftSleeve.visible = oldLeftSleeve
-            model.rightSleeve.visible = oldRightSleeve
-            model.leftPants.visible = oldLeftPants
-            model.rightPants.visible = oldRightPants
+        val outerVisible = secondLayer
+        state.showHat = outerVisible
+        state.showJacket = outerVisible
+        state.showLeftSleeve = outerVisible
+        state.showRightSleeve = outerVisible
+        state.showLeftPants = outerVisible
+        state.showRightPants = outerVisible
+    }
+
+    private fun yRotation(alpha: Int, partialTicks: Float): Float {
+        val yRotYaw = alpha / 255.0f * 360.0f * rotSpeed
+        return if (yRotYaw != 0.0f) {
+            interpolateFloat(
+                yRotYaw,
+                yRotYaw - aSpeed / 255.0f * 360.0f * rotSpeed,
+                partialTicks
+            )
+        } else {
+            yRotYaw
         }
     }
 
-    private fun applySecondLayer(model: PlayerModel) {
-        val visible = secondLayer
-        model.hat.visible = visible
-        model.jacket.visible = visible
-        model.leftSleeve.visible = visible
-        model.rightSleeve.visible = visible
-        model.leftPants.visible = visible
-        model.rightPants.visible = visible
-    }
-
-    private fun preparePlayerScale(matrices: PoseStack, state: LivingEntityRenderState, yRotYaw: Float) {
-        // #Edit By Codex 2026-06-15: mirror 1.26.2 AvatarRenderer's player transform instead of
-        // VCore's old raw-model scale. EntityRenderDispatcher has already selected the WIDE/SLIM
-        // AvatarRenderer from PlayerSkin.model(), so this keeps head/body/arm dimensions skin-accurate.
-        if (state is HumanoidRenderState && state.isCrouching) {
-            matrices.translate(0.0, (state.scale * -2.0f / 16.0f).toDouble(), 0.0)
-        }
-
-        matrices.scale(state.scale, state.scale, state.scale)
-        matrices.mulPose(Axis.YP.rotation(Math.toRadians((180.0f - state.bodyRot + yRotYaw).toDouble()).toFloat()))
+    private fun prepareScale(matrices: PoseStack) {
         matrices.scale(-1.0f, -1.0f, 1.0f)
-        matrices.scale(VANILLA_AVATAR_SCALE, VANILLA_AVATAR_SCALE, VANILLA_AVATAR_SCALE)
+        matrices.scale(1.6f, 1.8f, 1.6f)
         matrices.translate(0.0f, -1.501f, 0.0f)
     }
 
-    private fun renderTypeFor(person: Person): RenderType =
-        // #Edit By Codex 2026-06-15: VCore's fallback PopChams draw used raw unlit model buffers plus
-        // setShaderColor. A lit entityTranslucent material with light=10 turns red chams nearly black,
-        // so the no-shader fallback uses the unlit eyes material and keeps shader-only rendering separate.
-        RenderTypes.eyes(textureFor(person))
-
-    private fun textureFor(person: Person): Identifier = if (mode == Mode.TEXTURED) {
-        person.texture
-    } else {
-        whiteTexture() ?: person.texture
+    private fun renderTypeFor(person: Person): RenderType = when (mode) {
+        Mode.SIMPLE -> PopChamsPipelines.simple
+        Mode.TEXTURED -> PopChamsPipelines.texturedAdditive(person.texture)
     }
 
-    private fun colorWithAlpha(alpha: Int): Int {
-        val a = alpha.coerceIn(0, 255)
-        // #Edit By Codex 2026-06-15: PopChams no longer exposes a separate Color setting; it follows
-        // the shared client theme, matching TargetESP/HUD theme sync.
-        val fadeProgress = 1.0f - a / INITIAL_ALPHA.toFloat()
-        return withAlpha(themeColor(fadeProgress), a)
+    private fun shaderTextureFor(person: Person): Identifier = when (mode) {
+        Mode.SIMPLE -> shaderSimpleTexture() ?: person.texture
+        Mode.TEXTURED -> person.texture
     }
 
-    private fun themeColor(progress: Float): Int =
-        lerpColor(ClientTheme.accentA, ClientTheme.accentB, progress.coerceIn(0.0f, 1.0f))
-
-    private fun lerpColor(c1: Int, c2: Int, t: Float): Int {
-        val a1 = (c1 shr 24) and 0xFF
-        val r1 = (c1 shr 16) and 0xFF
-        val g1 = (c1 shr 8) and 0xFF
-        val b1 = c1 and 0xFF
-        val a2 = (c2 shr 24) and 0xFF
-        val r2 = (c2 shr 16) and 0xFF
-        val g2 = (c2 shr 8) and 0xFF
-        val b2 = c2 and 0xFF
-        val a = (a1 + (a2 - a1) * t).toInt()
-        val r = (r1 + (r2 - r1) * t).toInt()
-        val g = (g1 + (g2 - g1) * t).toInt()
-        val b = (b1 + (b2 - b1) * t).toInt()
-        return (a shl 24) or (r shl 16) or (g shl 8) or b
-    }
+    private fun themeColorWithAlpha(alpha: Int): Int =
+        withAlpha(ClientTheme.accentA, alpha)
 
     private fun withAlpha(color: Int, alpha: Int): Int =
         (color and 0x00FFFFFF) or (alpha.coerceIn(0, 255) shl 24)
 
-    private fun lerp(oldValue: Float, newValue: Float, delta: Float): Float =
+    private fun interpolateFloat(oldValue: Float, newValue: Float, delta: Float): Float =
         oldValue + (newValue - oldValue) * delta
 
     @Suppress("unused")
@@ -367,24 +287,35 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
         TEXTURED("Textured")
     }
 
-    private class Person(val clone: RemotePlayer, val texture: Identifier, initialAlpha: Int) {
-        var previousAlpha: Int = initialAlpha
-        var alpha: Int = initialAlpha
-        var previousYOffset: Double = 0.0
-        var yOffset: Double = 0.0
+    private class Person(val clone: RemotePlayer, val texture: Identifier) {
+        val model: PlayerModel = PlayerModel(mc.entityModels.bakeLayer(ModelLayers.PLAYER), false).apply {
+            val root = root()
+            val initialPose = root.initialPose
+            root.setInitialPose(
+                PartPose(
+                    initialPose.x(),
+                    initialPose.y(),
+                    initialPose.z(),
+                    initialPose.xRot(),
+                    initialPose.yRot(),
+                    initialPose.zRot(),
+                    initialPose.xScale() + MODEL_ROOT_SCALE_OFFSET,
+                    initialPose.yScale() + MODEL_ROOT_SCALE_OFFSET,
+                    initialPose.zScale() + MODEL_ROOT_SCALE_OFFSET
+                )
+            )
+            root.resetPose()
+        }
+        val limbPosition: Float = clone.walkAnimation.position()
+        val limbSpeed: Float = clone.walkAnimation.speed()
+        var alpha: Int = INITIAL_ALPHA
 
-        fun renderAlpha(partialTicks: Float): Int =
-            lerp(previousAlpha.toFloat(), alpha.toFloat(), partialTicks).toInt().coerceIn(0, 255)
-
-        fun renderYOffset(partialTicks: Float): Double =
-            previousYOffset + (yOffset - previousYOffset) * partialTicks.toDouble()
+        fun renderAlpha(): Int = alpha.coerceIn(0, 255)
 
         fun discard() {
             clone.remove(Entity.RemovalReason.DISCARDED)
         }
     }
-
-    // ----- lazy texture (mirrors TargetESP.RichTexture) -----
 
     private fun lazyTexture(idPath: String, resource: String): () -> Identifier? {
         var identifier: Identifier? = null
@@ -405,8 +336,6 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
             }
         }
     }
-
-    // ----- Iris detection (reflection only, same approach as TargetESP) -----
 
     private object IrisShaderPack {
         private var loaded = false
@@ -430,6 +359,4 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
             return runCatching { method.invoke(api) as? Boolean ?: false }.getOrDefault(false)
         }
     }
-
-    private const val TOTEM_USE_STATUS = 35
 }

@@ -21,6 +21,7 @@ package net.ccbluex.liquidbounce.injection.mixins.minecraft.render;
 import net.ccbluex.liquidbounce.render.gui.GlowRectShader;
 import net.ccbluex.liquidbounce.render.gui.RoundedRectShader;
 import net.ccbluex.liquidbounce.render.gui.RoundedTextureShader;
+import net.ccbluex.liquidbounce.features.module.modules.render.popchams.PopChamsPipelines;
 import net.minecraft.client.renderer.ShaderManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -44,6 +45,7 @@ public abstract class MixinShaderManager {
         RoundedRectShader.INSTANCE.precompile();
         GlowRectShader.INSTANCE.precompile();
         RoundedTextureShader.INSTANCE.precompile();
+        PopChamsPipelines.INSTANCE.precompile();
         // #Edit By Codex 2026-06-22: custom main-menu pipelines were removed with the custom main screen.
     }
 }
