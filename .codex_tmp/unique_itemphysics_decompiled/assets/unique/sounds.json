@@ -1,0 +1,132 @@
+{
+  "keypress": {
+    "sounds": [
+      "unique:keypress"
+    ]
+  },
+  "keyrelease": {
+    "sounds": [
+      "unique:keyrelease"
+    ]
+  },
+  "uwu": {
+    "sounds": [
+      "unique:uwu"
+    ]
+  },
+  "disable": {
+    "sounds": [
+      "unique:disable"
+    ]
+  },
+  "enable": {
+    "sounds": [
+      "unique:enable"
+    ]
+  },
+  "moan1": {
+    "sounds": [
+      "unique:moan1"
+    ]
+  },
+  "moan2": {
+    "sounds": [
+      "unique:moan2"
+    ]
+  },
+  "moan3": {
+    "sounds": [
+      "unique:moan3"
+    ]
+  },
+  "moan4": {
+    "sounds": [
+      "unique:moan4"
+    ]
+  },
+  "skeet": {
+    "sounds": [
+      "unique:skeet"
+    ]
+  },
+  "orthodox": {
+    "sounds": [
+      "unique:orthodox"
+    ]
+  },
+  "boolean": {
+    "sounds": [
+      "unique:boolean"
+    ]
+  },
+  "scroll": {
+    "sounds": [
+      "unique:scroll"
+    ]
+  },
+  "swipein": {
+    "sounds": [
+      "unique:swipein"
+    ]
+  },
+  "swipeout": {
+    "sounds": [
+      "unique:swipeout"
+    ]
+  },
+  "pmsound": {
+    "sounds": [
+      "unique:pmsound"
+    ]
+  },
+  "rifk": {
+    "sounds": [
+      "unique:rifk"
+    ]
+  },
+  "cutie": {
+    "sounds": [
+      "unique:cutie"
+    ]
+  },
+  "newcode_on": {
+    "sounds": [
+      "unique:newcode_on"
+    ]
+  },
+  "newcode_off": {
+    "sounds": [
+      "unique:newcode_off"
+    ]
+  },
+  "catlavan_on": {
+    "sounds": [
+      "unique:catlavan_on"
+    ]
+  },
+  "catlavan_off": {
+    "sounds": [
+      "unique:catlavan_off"
+    ]
+  },
+  "celestial_on": {
+    "sounds": [
+      "unique:celestial_on"
+    ]
+  },
+  "celestial_off": {
+    "sounds": [
+      "unique:celestial_off"
+    ]
+  },
+  "nursultan_on": {
+    "sounds": [
+      "unique:nursultan_on"
+    ]
+  },
+  "nursultan_off": {
+    "sounds": [
+      "unique:nursultan_off"
+    ]
+  }
+}

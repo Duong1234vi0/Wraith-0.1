@@ -1,0 +1,17 @@
+{
+  "module_enable": {
+    "sounds": [
+      "liquidbounce:module_enable"
+    ]
+  },
+  "module_disable": {
+    "sounds": [
+      "liquidbounce:module_disable"
+    ]
+  },
+  "frageffects_strike": {
+    "sounds": [
+      "liquidbounce:frageffects_strike"
+    ]
+  }
+}

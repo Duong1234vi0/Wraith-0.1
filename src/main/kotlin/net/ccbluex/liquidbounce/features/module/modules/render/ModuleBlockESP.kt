@@ -1,0 +1,205 @@
+/*
+ * This file is part of LiquidBounce (https://github.com/CCBlueX/LiquidBounce)
+ *
+ * Copyright (c) 2015 - 2025 CCBlueX
+ *
+ * LiquidBounce is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * LiquidBounce is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
+ */
+package net.ccbluex.liquidbounce.features.module.modules.render
+import net.ccbluex.liquidbounce.utils.entity.*
+
+import net.ccbluex.liquidbounce.config.types.nesting.Choice
+import net.ccbluex.liquidbounce.config.types.nesting.ChoiceConfigurable
+import net.ccbluex.liquidbounce.event.events.DrawOutlinesEvent
+import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
+import net.ccbluex.liquidbounce.event.handler
+import net.ccbluex.liquidbounce.features.module.Category
+import net.ccbluex.liquidbounce.features.module.ClientModule
+import net.ccbluex.liquidbounce.render.BoxRenderer
+import net.ccbluex.liquidbounce.render.FULL_BOX
+import net.ccbluex.liquidbounce.render.GenericColorMode
+import net.ccbluex.liquidbounce.render.GenericRainbowColorMode
+import net.ccbluex.liquidbounce.render.GenericStaticColorMode
+import net.ccbluex.liquidbounce.render.MapColorMode
+import net.ccbluex.liquidbounce.render.WorldRenderEnvironment
+import net.ccbluex.liquidbounce.render.engine.type.Color4b
+import net.ccbluex.liquidbounce.render.renderEnvironmentForWorld
+import net.ccbluex.liquidbounce.render.withPositionRelativeToCamera
+import net.ccbluex.liquidbounce.utils.block.AbstractBlockLocationTracker
+import net.ccbluex.liquidbounce.utils.block.ChunkScanner
+import net.ccbluex.liquidbounce.utils.block.boundingBox
+import net.ccbluex.liquidbounce.utils.block.getOutlineShape
+import net.ccbluex.liquidbounce.utils.block.getState
+import net.ccbluex.liquidbounce.utils.inventory.findBlocksEndingWith
+import net.ccbluex.liquidbounce.utils.math.toVec3
+import net.ccbluex.liquidbounce.utils.math.toVec3d
+import net.minecraft.world.level.block.Block
+import net.minecraft.world.level.block.state.BlockState
+import com.mojang.blaze3d.vertex.PoseStack
+import net.minecraft.core.BlockPos
+
+/**
+ * BlockESP module
+ *
+ * Allows you to see selected blocks through walls.
+ */
+
+object ModuleBlockESP : ClientModule("BlockESP", Category.RENDER) {
+
+    private val modes = choices("Mode", Glow, arrayOf(AABB, Glow, Outline))
+    private val targets by blocks<HashSet<Block>>(
+        "Targets",
+        findBlocksEndingWith("_BED", "DRAGON_EGG").toHashSet()
+    ).onChange { newTargets: HashSet<Block> ->
+        if (running) {
+            disable()
+            enable()
+        }
+        newTargets
+    }
+
+    private val colorMode = choices("ColorMode", 0) {
+        arrayOf(
+            MapColorMode(it),
+            GenericStaticColorMode(it, Color4b(255, 179, 72, 50)),
+            GenericRainbowColorMode(it)
+        )
+    }
+
+    private object AABB : Choice("AABB") {
+        override val parent: ChoiceConfigurable<Choice>
+            get() = modes
+
+        private val outline by boolean("Outline", true)
+
+        @Suppress("unused")
+        val renderHandler = handler<WorldRenderEvent> { event ->
+            val matrixStack = event.matrixStack
+
+            drawBoxMode(matrixStack, this.outline, false)
+        }
+
+        fun drawBoxMode(matrixStack: PoseStack, drawOutline: Boolean, fullAlpha: Boolean): Boolean {
+            val colorMode = colorMode.activeChoice
+
+            var dirty = false
+
+            renderEnvironmentForWorld(matrixStack) {
+                dirty = drawInternal(
+                    BlockTracker.allPositions(),
+                    colorMode,
+                    fullAlpha,
+                    drawOutline
+                )
+            }
+
+            return dirty
+        }
+
+        private fun WorldRenderEnvironment.drawInternal(
+            blocks: Sequence<BlockPos>,
+            colorMode: GenericColorMode<Pair<BlockPos, BlockState>>,
+            fullAlpha: Boolean,
+            drawOutline: Boolean
+        ): Boolean {
+            var dirty = false
+
+            BoxRenderer.drawWith(this) {
+                for (blockPos in blocks) {
+                    val blockState = blockPos.getState() ?: continue
+
+                    if (blockState.isAir) {
+                        continue
+                    }
+
+                    val outlineShape = blockState.getOutlineShape(world, blockPos)
+                    val boundingBox = if (outlineShape.isEmpty) {
+                        FULL_BOX
+                    } else {
+                        outlineShape.boundingBox
+                    }
+
+                    var color = colorMode.getColor(Pair(blockPos, blockState))
+
+                    if (fullAlpha) {
+                        color = color.with(a = 255)
+                    }
+
+                    withPositionRelativeToCamera(blockPos.toVec3d().toVec3()) {
+                        drawBox(
+                            boundingBox,
+                            faceColor = color,
+                            outlineColor = color.with(a = 150).takeIf { drawOutline }
+                        )
+                    }
+
+                    dirty = true
+                }
+            }
+
+            return dirty
+        }
+    }
+
+    private object Glow : Choice("Glow") {
+        override val parent: ChoiceConfigurable<Choice>
+            get() = modes
+
+        @Suppress("unused")
+        val renderHandler = handler<DrawOutlinesEvent> { event ->
+            if (event.type != DrawOutlinesEvent.OutlineType.MINECRAFT_GLOW) {
+                return@handler
+            }
+
+            val dirty = AABB.drawBoxMode(event.matrixStack, drawOutline = false, fullAlpha = true)
+
+            if (dirty) {
+                event.markDirty()
+            }
+        }
+
+    }
+
+    private object Outline : Choice("Outline") {
+        override val parent: ChoiceConfigurable<Choice>
+            get() = modes
+
+        @Suppress("unused")
+        val renderHandler = handler<DrawOutlinesEvent> { event ->
+            if (event.type != DrawOutlinesEvent.OutlineType.INBUILT_OUTLINE) {
+                return@handler
+            }
+
+            val dirty = AABB.drawBoxMode(event.matrixStack, drawOutline = false, fullAlpha = true)
+
+            if (dirty) {
+                event.markDirty()
+            }
+        }
+    }
+
+    override fun enable() {
+        ChunkScanner.subscribe(BlockTracker)
+    }
+
+    override fun disable() {
+        ChunkScanner.unsubscribe(BlockTracker)
+    }
+
+    private object BlockTracker : AbstractBlockLocationTracker.State2BlockPos<Block>() {
+        override fun getStateFor(pos: BlockPos, state: BlockState): Block? =
+            state.block?.takeIf { it in targets }
+    }
+
+}

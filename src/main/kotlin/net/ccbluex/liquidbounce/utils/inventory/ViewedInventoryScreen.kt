@@ -1,0 +1,159 @@
+/*
+ * This file is part of LiquidBounce (https://github.com/CCBlueX/LiquidBounce)
+ *
+ * Copyright (c) 2015 - 2025 CCBlueX
+ *
+ * LiquidBounce is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * LiquidBounce is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
+ */
+package net.ccbluex.liquidbounce.utils.inventory
+import net.ccbluex.liquidbounce.utils.entity.*
+
+import net.ccbluex.liquidbounce.render.compat.RenderSystem
+import net.ccbluex.liquidbounce.utils.client.mc
+import net.minecraft.client.gui.DrawContext
+import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.input.KeyEvent
+import net.minecraft.world.entity.player.Player
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.inventory.InventoryMenu
+import net.minecraft.world.inventory.Slot
+import net.minecraft.network.chat.Component
+
+class ViewedInventoryScreen(private val player: () -> Player?) : Screen(Component.empty()) {
+
+    val handler: InventoryMenu?
+        get() = player()?.playerScreenHandler
+
+    private val backgroundWidth: Int = 176
+    private val backgroundHeight: Int = 166
+    private var x: Int = (width - backgroundWidth) / 2
+    private var y: Int = (height - backgroundHeight) / 2
+
+    override fun init() {
+        x = (width - backgroundWidth) / 2
+        y = (height - backgroundHeight) / 2
+    }
+
+    override fun extractRenderState(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
+        super.extractRenderState(context, mouseX, mouseY, delta)
+
+        val handler = handler ?: return
+        RenderSystem.disableDepthTest()
+        context.matrices.pushPose()
+        context.matrices.translate(x.toFloat(), y.toFloat(), 0.0f)
+        var hoveredSlot: Slot? = null
+
+        for (slot in handler.slots) {
+            if (slot.isEnabled) {
+                drawSlot(context, slot)
+            }
+
+            if (isPointOverSlot(slot, mouseX.toDouble(), mouseY.toDouble()) && slot.isEnabled) {
+                hoveredSlot = slot
+                if (slot.canBeHighlighted()) {
+                    // draw slot highlight
+                    context.fillGradient(slot.x, slot.y, slot.x + 16, slot.y + 16, -2130706433, -2130706433)
+                }
+            }
+        }
+
+        val cursorStack = handler.cursorStack
+        if (!cursorStack.isEmpty) {
+            drawItem(context, cursorStack, mouseX - x - 8, mouseY - y - 8)
+        }
+
+        context.matrices.popPose()
+        RenderSystem.enableDepthTest()
+
+        if (cursorStack.isEmpty && hoveredSlot != null && hoveredSlot.hasStack()) {
+            val hoveredItemStack = hoveredSlot.stack
+            context.drawTooltip(
+                textRenderer, getTooltipFromItem(mc, hoveredItemStack),
+                hoveredItemStack.tooltipData, mouseX, mouseY
+            )
+        }
+    }
+
+    override fun extractBackground(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
+        drawBackground(context, mouseX, mouseY)
+    }
+
+    private fun drawItem(context: DrawContext, stack: ItemStack, x: Int, y: Int) {
+        context.matrices.pushPose()
+        context.matrices.translate(0f, 0f, 232f)
+        context.drawItem(stack, x, y)
+        context.drawStackOverlay(textRenderer, stack, x, y, null)
+        context.matrices.popPose()
+    }
+
+    private fun drawBackground(context: DrawContext, mouseX: Int, mouseY: Int) {
+        context.fill(x, y, x + backgroundWidth, y + backgroundHeight, 0xA0000000.toInt())
+        context.drawBorder(x, y, backgroundWidth, backgroundHeight, 0xFF555555.toInt())
+    }
+
+    private fun drawSlot(context: DrawContext, slot: Slot) {
+        var spriteDrawn = false
+
+        context.matrices.pushPose()
+        context.matrices.translate(0f, 0f, 100f)
+        if (slot.stack.isEmpty && slot.isEnabled) {
+            val identifier = slot.backgroundSprite
+            if (identifier != null) {
+                context.drawGuiTexture(null, identifier, slot.x, slot.y, 16, 16)
+                spriteDrawn = true
+            }
+        }
+
+        if (!spriteDrawn) {
+            val seed = slot.x + slot.y * backgroundWidth
+            if (slot.disablesDynamicDisplay()) {
+                context.drawItemWithoutEntity(slot.stack, slot.x, slot.y, seed)
+            } else {
+                context.drawItem(slot.stack, slot.x, slot.y, seed)
+            }
+
+            context.drawStackOverlay(textRenderer, slot.stack, slot.x, slot.y, null)
+        }
+
+        context.matrices.popPose()
+    }
+
+    private fun isPointOverSlot(slot: Slot, pointX: Double, pointY: Double): Boolean {
+        val width = 16
+        val height = 16
+        val pX = pointX - x
+        val pY = pointY - y
+        return pX >= slot.x - 1 && pX < slot.x + width + 1
+            && pY >= slot.y - 1 && pY < slot.y + height + 1
+    }
+
+    override fun keyPressed(event: KeyEvent): Boolean =
+        keyPressed(event.key, event.scancode, event.modifiers)
+
+    fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
+        if (mc.options.inventoryKey.matchesKey(keyCode, scanCode)) {
+            onClose()
+        }
+
+        return true
+    }
+
+    override fun isPauseScreen() = false
+
+    override fun tick() {
+        if (handler == null) {
+            onClose()
+        }
+    }
+}

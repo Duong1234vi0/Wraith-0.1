@@ -1,0 +1,32 @@
+{
+  "clickgui_boolean": {
+    "sounds": [
+      "liquidbounce:clickgui_boolean"
+    ]
+  },
+  "clickgui_scroll": {
+    "sounds": [
+      "liquidbounce:clickgui_scroll"
+    ]
+  },
+  "clickgui_swipein": {
+    "sounds": [
+      "liquidbounce:clickgui_swipein"
+    ]
+  },
+  "clickgui_swipeout": {
+    "sounds": [
+      "liquidbounce:clickgui_swipeout"
+    ]
+  },
+  "module_enable": {
+    "sounds": [
+      "liquidbounce:module_enable"
+    ]
+  },
+  "module_disable": {
+    "sounds": [
+      "liquidbounce:module_disable"
+    ]
+  }
+}

@@ -1,0 +1,1764 @@
+Compiled from "LineGlyphes.java"
+public class fun.wonderful.client.modules.impl.render.LineGlyphes extends fun.wonderful.client.modules.Module {
+  public static fun.wonderful.client.modules.impl.render.LineGlyphes INSTANCE;
+
+  private static final net.minecraft.class_2382[] AXIS_DIRECTIONS;
+
+  private final fun.wonderful.client.modules.settings.implement.FloatSetting glyphsCount;
+
+  private final fun.wonderful.client.modules.settings.implement.BooleanSetting slowSpeed;
+
+  private final fun.wonderful.client.modules.settings.implement.BooleanSetting applyStippleLines;
+
+  private final fun.wonderful.client.modules.settings.implement.FloatSetting stippleStepPixels;
+
+  private final fun.wonderful.client.modules.settings.implement.BooleanSetting linesGlowing;
+
+  private final java.util.Random rand;
+
+  private final java.util.List<fun.wonderful.client.modules.impl.render.LineGlyphes$GlyphPath> glyphs;
+
+  public fun.wonderful.client.modules.impl.render.LineGlyphes();
+    Code:
+         0: aload_0
+         1: ldc           #57                 // String LineGlyphes
+         3: ldc           #59                 // String Анимированные линии по миру
+         5: getstatic     #63                 // Field fun/wonderful/client/modules/Module$ModuleCategory.RENDER:Lfun/wonderful/client/modules/Module$ModuleCategory;
+         8: invokespecial #66                 // Method fun/wonderful/client/modules/Module."<init>":(Ljava/lang/String;Ljava/lang/String;Lfun/wonderful/client/modules/Module$ModuleCategory;)V
+        11: aload_0
+        12: new           #68                 // class fun/wonderful/client/modules/settings/implement/FloatSetting
+        15: dup
+        16: ldc           #70                 // String Количество Линий
+        18: ldc           #71                 // float 70.0f
+        20: ldc           #72                 // float 10.0f
+        22: ldc           #73                 // float 200.0f
+        24: fconst_1
+        25: invokespecial #76                 // Method fun/wonderful/client/modules/settings/implement/FloatSetting."<init>":(Ljava/lang/String;FFFF)V
+        28: putfield      #78                 // Field glyphsCount:Lfun/wonderful/client/modules/settings/implement/FloatSetting;
+        31: aload_0
+        32: new           #80                 // class fun/wonderful/client/modules/settings/implement/BooleanSetting
+        35: dup
+        36: ldc           #82                 // String Медленная Скорость
+        38: iconst_0
+        39: invokespecial #85                 // Method fun/wonderful/client/modules/settings/implement/BooleanSetting."<init>":(Ljava/lang/String;Z)V
+        42: putfield      #87                 // Field slowSpeed:Lfun/wonderful/client/modules/settings/implement/BooleanSetting;
+        45: aload_0
+        46: new           #80                 // class fun/wonderful/client/modules/settings/implement/BooleanSetting
+        49: dup
+        50: ldc           #89                 // String Пунктирные Линии
+        52: iconst_0
+        53: invokespecial #85                 // Method fun/wonderful/client/modules/settings/implement/BooleanSetting."<init>":(Ljava/lang/String;Z)V
+        56: putfield      #91                 // Field applyStippleLines:Lfun/wonderful/client/modules/settings/implement/BooleanSetting;
+        59: aload_0
+        60: new           #68                 // class fun/wonderful/client/modules/settings/implement/FloatSetting
+        63: dup
+        64: ldc           #93                 // String Шаг Пунктира
+        66: ldc           #94                 // float 3.0f
+        68: ldc           #95                 // float 0.5f
+        70: ldc           #96                 // float 20.0f
+        72: ldc           #95                 // float 0.5f
+        74: invokespecial #76                 // Method fun/wonderful/client/modules/settings/implement/FloatSetting."<init>":(Ljava/lang/String;FFFF)V
+        77: aload_0
+        78: invokedynamic #115,  0            // InvokeDynamic #0:get:(Lfun/wonderful/client/modules/impl/render/LineGlyphes;)Ljava/util/function/Supplier;
+        83: invokevirtual #119                // Method fun/wonderful/client/modules/settings/implement/FloatSetting.visible:(Ljava/util/function/Supplier;)Lfun/wonderful/client/modules/settings/implement/FloatSetting;
+        86: putfield      #121                // Field stippleStepPixels:Lfun/wonderful/client/modules/settings/implement/FloatSetting;
+        89: aload_0
+        90: new           #80                 // class fun/wonderful/client/modules/settings/implement/BooleanSetting
+        93: dup
+        94: ldc           #123                // String Свечение
+        96: iconst_0
+        97: invokespecial #85                 // Method fun/wonderful/client/modules/settings/implement/BooleanSetting."<init>":(Ljava/lang/String;Z)V
+       100: putfield      #125                // Field linesGlowing:Lfun/wonderful/client/modules/settings/implement/BooleanSetting;
+       103: aload_0
+       104: new           #127                // class java/util/Random
+       107: dup
+       108: ldc2_w        #128                // long 93882l
+       111: invokespecial #132                // Method java/util/Random."<init>":(J)V
+       114: putfield      #134                // Field rand:Ljava/util/Random;
+       117: aload_0
+       118: new           #136                // class java/util/ArrayList
+       121: dup
+       122: invokespecial #138                // Method java/util/ArrayList."<init>":()V
+       125: putfield      #140                // Field glyphs:Ljava/util/List;
+       128: aload_0
+       129: iconst_5
+       130: anewarray     #142                // class fun/wonderful/client/modules/settings/Setting
+       133: dup
+       134: iconst_0
+       135: aload_0
+       136: getfield      #78                 // Field glyphsCount:Lfun/wonderful/client/modules/settings/implement/FloatSetting;
+       139: aastore
+       140: dup
+       141: iconst_1
+       142: aload_0
+       143: getfield      #87                 // Field slowSpeed:Lfun/wonderful/client/modules/settings/implement/BooleanSetting;
+       146: aastore
+       147: dup
+       148: iconst_2
+       149: aload_0
+       150: getfield      #91                 // Field applyStippleLines:Lfun/wonderful/client/modules/settings/implement/BooleanSetting;
+       153: aastore
+       154: dup
+       155: iconst_3
+       156: aload_0
+       157: getfield      #121                // Field stippleStepPixels:Lfun/wonderful/client/modules/settings/implement/FloatSetting;
+       160: aastore
+       161: dup
+       162: iconst_4
+       163: aload_0
+       164: getfield      #125                // Field linesGlowing:Lfun/wonderful/client/modules/settings/implement/BooleanSetting;
+       167: aastore
+       168: invokevirtual #146                // Method addSettings:([Lfun/wonderful/client/modules/settings/Setting;)V
+       171: return
+
+  public void onDisable();
+    Code:
+         0: aload_0
+         1: getfield      #140                // Field glyphs:Ljava/util/List;
+         4: invokeinterface #153,  1          // InterfaceMethod java/util/List.clear:()V
+         9: aload_0
+        10: invokespecial #155                // Method fun/wonderful/client/modules/Module.onDisable:()V
+        13: return
+
+  public void onUpdate(fun.wonderful.api.events.implement.EventUpdate);
+    Code:
+         0: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+         3: getfield      #169                // Field net/minecraft/class_310.field_1724:Lnet/minecraft/class_746;
+         6: ifnull        18
+         9: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+        12: getfield      #173                // Field net/minecraft/class_310.field_1687:Lnet/minecraft/class_638;
+        15: ifnonnull     28
+        18: aload_0
+        19: getfield      #140                // Field glyphs:Ljava/util/List;
+        22: invokeinterface #153,  1          // InterfaceMethod java/util/List.clear:()V
+        27: return
+        28: aload_0
+        29: invokevirtual #176                // Method updateGlyphs:()V
+        32: aload_0
+        33: invokevirtual #179                // Method maintainGlyphCount:()V
+        36: return
+
+  public void onRender3D(fun.wonderful.api.events.implement.Event3DRender);
+    Code:
+         0: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+         3: getfield      #169                // Field net/minecraft/class_310.field_1724:Lnet/minecraft/class_746;
+         6: ifnull        25
+         9: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+        12: getfield      #173                // Field net/minecraft/class_310.field_1687:Lnet/minecraft/class_638;
+        15: ifnull        25
+        18: aload_1
+        19: invokevirtual #189                // Method fun/wonderful/api/events/implement/Event3DRender.getCamera:()Lnet/minecraft/class_4184;
+        22: ifnonnull     26
+        25: return
+        26: aload_0
+        27: aload_1
+        28: invokevirtual #192                // Method drawAllGlyphs:(Lfun/wonderful/api/events/implement/Event3DRender;)V
+        31: return
+
+  private void drawAllGlyphs(fun.wonderful.api.events.implement.Event3DRender);
+    Code:
+         0: aload_0
+         1: getfield      #140                // Field glyphs:Ljava/util/List;
+         4: invokeinterface #197,  1          // InterfaceMethod java/util/List.isEmpty:()Z
+         9: ifeq          13
+        12: return
+        13: new           #136                // class java/util/ArrayList
+        16: dup
+        17: invokespecial #138                // Method java/util/ArrayList."<init>":()V
+        20: astore_2
+        21: aload_0
+        22: getfield      #140                // Field glyphs:Ljava/util/List;
+        25: invokeinterface #201,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        30: astore_3
+        31: aload_3
+        32: invokeinterface #206,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        37: ifeq          83
+        40: aload_3
+        41: invokeinterface #209,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        46: checkcast     #7                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath
+        49: astore        4
+        51: aload         4
+        53: invokevirtual #213                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath.getAlpha:()F
+        56: ldc           #214                // float 0.01f
+        58: fcmpl
+        59: ifle          80
+        62: aload         4
+        64: invokevirtual #218                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath.getPointCount:()I
+        67: iconst_2
+        68: if_icmplt     80
+        71: aload_2
+        72: aload         4
+        74: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        79: pop
+        80: goto          31
+        83: aload_2
+        84: invokeinterface #197,  1          // InterfaceMethod java/util/List.isEmpty:()Z
+        89: ifeq          93
+        92: return
+        93: aload_1
+        94: invokevirtual #226                // Method fun/wonderful/api/events/implement/Event3DRender.getMatrices:()Lnet/minecraft/class_4587;
+        97: astore_3
+        98: aload_1
+        99: invokevirtual #189                // Method fun/wonderful/api/events/implement/Event3DRender.getCamera:()Lnet/minecraft/class_4184;
+       102: invokevirtual #232                // Method net/minecraft/class_4184.method_19326:()Lnet/minecraft/class_243;
+       105: astore        4
+       107: aload_3
+       108: invokevirtual #235                // Method net/minecraft/class_4587.method_22903:()V
+       111: aload_3
+       112: aload         4
+       114: getfield      #241                // Field net/minecraft/class_243.field_1352:D
+       117: dneg
+       118: aload         4
+       120: getfield      #244                // Field net/minecraft/class_243.field_1351:D
+       123: dneg
+       124: aload         4
+       126: getfield      #247                // Field net/minecraft/class_243.field_1350:D
+       129: dneg
+       130: invokevirtual #251                // Method net/minecraft/class_4587.method_22904:(DDD)V
+       133: aload_0
+       134: invokevirtual #254                // Method setupRenderState:()V
+       137: aload_0
+       138: getfield      #125                // Field linesGlowing:Lfun/wonderful/client/modules/settings/implement/BooleanSetting;
+       141: invokevirtual #257                // Method fun/wonderful/client/modules/settings/implement/BooleanSetting.isState:()Z
+       144: ifeq          199
+       147: aload_0
+       148: invokevirtual #260                // Method setAdditiveBlend:()V
+       151: aload_0
+       152: aload_3
+       153: aload_2
+       154: aload_1
+       155: invokevirtual #263                // Method fun/wonderful/api/events/implement/Event3DRender.getTickDelta:()F
+       158: ldc_w         #264                // float 4.0f
+       161: ldc_w         #265                // float 0.08f
+       164: invokevirtual #269                // Method drawGlyphPass:(Lnet/minecraft/class_4587;Ljava/util/List;FFF)V
+       167: aload_0
+       168: aload_3
+       169: aload_2
+       170: aload_1
+       171: invokevirtual #263                // Method fun/wonderful/api/events/implement/Event3DRender.getTickDelta:()F
+       174: ldc_w         #270                // float 2.5f
+       177: ldc_w         #271                // float 0.15f
+       180: invokevirtual #269                // Method drawGlyphPass:(Lnet/minecraft/class_4587;Ljava/util/List;FFF)V
+       183: aload_0
+       184: aload_3
+       185: aload_2
+       186: aload_1
+       187: invokevirtual #263                // Method fun/wonderful/api/events/implement/Event3DRender.getTickDelta:()F
+       190: ldc_w         #272                // float 1.5f
+       193: ldc_w         #273                // float 0.25f
+       196: invokevirtual #269                // Method drawGlyphPass:(Lnet/minecraft/class_4587;Ljava/util/List;FFF)V
+       199: aload_0
+       200: invokevirtual #276                // Method setNormalBlend:()V
+       203: aload_0
+       204: aload_3
+       205: aload_2
+       206: aload_1
+       207: invokevirtual #263                // Method fun/wonderful/api/events/implement/Event3DRender.getTickDelta:()F
+       210: fconst_1
+       211: fconst_1
+       212: invokevirtual #269                // Method drawGlyphPass:(Lnet/minecraft/class_4587;Ljava/util/List;FFF)V
+       215: aload_0
+       216: invokevirtual #279                // Method restoreRenderState:()V
+       219: aload_3
+       220: invokevirtual #282                // Method net/minecraft/class_4587.method_22909:()V
+       223: goto          239
+       226: astore        5
+       228: aload_0
+       229: invokevirtual #279                // Method restoreRenderState:()V
+       232: aload_3
+       233: invokevirtual #282                // Method net/minecraft/class_4587.method_22909:()V
+       236: aload         5
+       238: athrow
+       239: return
+      Exception table:
+         from    to  target type
+           133   215   226   any
+           226   228   226   any
+
+  private void drawGlyphPass(net.minecraft.class_4587, java.util.List<fun.wonderful.client.modules.impl.render.LineGlyphes$GlyphPath>, float, float, float);
+    Code:
+         0: aload_1
+         1: invokevirtual #299                // Method net/minecraft/class_4587.method_23760:()Lnet/minecraft/class_4587$class_4665;
+         4: invokevirtual #303                // Method net/minecraft/class_4587$class_4665.method_23761:()Lorg/joml/Matrix4f;
+         7: astore        6
+         9: aload_0
+        10: getfield      #91                 // Field applyStippleLines:Lfun/wonderful/client/modules/settings/implement/BooleanSetting;
+        13: invokevirtual #257                // Method fun/wonderful/client/modules/settings/implement/BooleanSetting.isState:()Z
+        16: istore        7
+        18: ldc_w         #304                // float 0.04f
+        21: aload_0
+        22: getfield      #121                // Field stippleStepPixels:Lfun/wonderful/client/modules/settings/implement/FloatSetting;
+        25: invokevirtual #306                // Method fun/wonderful/client/modules/settings/implement/FloatSetting.get:()F
+        28: ldc_w         #265                // float 0.08f
+        31: fmul
+        32: invokestatic  #312                // Method java/lang/Math.max:(FF)F
+        35: fstore        8
+        37: fload         8
+        39: ldc_w         #313                // float 0.85f
+        42: fmul
+        43: fstore        9
+        45: ldc_w         #314                // float 1.15f
+        48: fload         4
+        50: fmul
+        51: ldc_w         #315                // float 12.0f
+        54: invokestatic  #318                // Method java/lang/Math.min:(FF)F
+        57: invokestatic  #324                // Method com/mojang/blaze3d/systems/RenderSystem.lineWidth:(F)V
+        60: new           #136                // class java/util/ArrayList
+        63: dup
+        64: invokespecial #138                // Method java/util/ArrayList."<init>":()V
+        67: astore        10
+        69: iconst_0
+        70: istore        11
+        72: aload_2
+        73: invokeinterface #201,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        78: astore        12
+        80: aload         12
+        82: invokeinterface #206,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        87: ifeq          270
+        90: aload         12
+        92: invokeinterface #209,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        97: checkcast     #7                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath
+       100: astore        13
+       102: aload         13
+       104: invokevirtual #213                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath.getAlpha:()F
+       107: fload         5
+       109: fmul
+       110: fstore        14
+       112: fload         14
+       114: ldc           #214                // float 0.01f
+       116: fcmpg
+       117: ifgt          123
+       120: goto          80
+       123: aload         13
+       125: fload_3
+       126: invokevirtual #330                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath.getSmoothedPositions:(F)Ljava/util/List;
+       129: astore        15
+       131: aload         15
+       133: invokeinterface #333,  1          // InterfaceMethod java/util/List.size:()I
+       138: istore        16
+       140: iload         16
+       142: iconst_2
+       143: if_icmpge     149
+       146: goto          80
+       149: iconst_0
+       150: istore        17
+       152: iload         17
+       154: iload         16
+       156: iconst_1
+       157: isub
+       158: if_icmpge     267
+       161: aload         15
+       163: iload         17
+       165: invokeinterface #336,  2          // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+       170: checkcast     #237                // class net/minecraft/class_243
+       173: astore        18
+       175: aload         15
+       177: iload         17
+       179: iconst_1
+       180: iadd
+       181: invokeinterface #336,  2          // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+       186: checkcast     #237                // class net/minecraft/class_243
+       189: astore        19
+       191: fload         14
+       193: ldc_w         #273                // float 0.25f
+       196: iload         17
+       198: i2f
+       199: iload         16
+       201: i2f
+       202: fdiv
+       203: ldc_w         #337                // float 1.75f
+       206: fdiv
+       207: fadd
+       208: fmul
+       209: fstore        20
+       211: aload_0
+       212: fload         20
+       214: invokevirtual #341                // Method getThemeColorWithAlpha:(F)I
+       217: istore        21
+       219: iinc_w        11, 180
+       225: iload         7
+       227: ifeq          249
+       230: aload_0
+       231: aload         10
+       233: aload         18
+       235: aload         19
+       237: iload         21
+       239: fload         8
+       241: fload         9
+       243: invokevirtual #345                // Method collectDashedSegment:(Ljava/util/List;Lnet/minecraft/class_243;Lnet/minecraft/class_243;IFF)V
+       246: goto          261
+       249: aload_0
+       250: aload         10
+       252: aload         18
+       254: aload         19
+       256: iload         21
+       258: invokevirtual #349                // Method collectSegment:(Ljava/util/List;Lnet/minecraft/class_243;Lnet/minecraft/class_243;I)V
+       261: iinc          17, 1
+       264: goto          152
+       267: goto          80
+       270: ldc_w         #350                // float 0.018f
+       273: fload         4
+       275: fmul
+       276: fstore        12
+       278: iconst_0
+       279: istore        13
+       281: aload_2
+       282: invokeinterface #201,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       287: astore        14
+       289: aload         14
+       291: invokeinterface #206,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+       296: ifeq          437
+       299: aload         14
+       301: invokeinterface #209,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       306: checkcast     #7                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath
+       309: astore        15
+       311: aload         15
+       313: invokevirtual #213                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath.getAlpha:()F
+       316: fload         5
+       318: fmul
+       319: fstore        16
+       321: fload         16
+       323: ldc           #214                // float 0.01f
+       325: fcmpg
+       326: ifgt          332
+       329: goto          289
+       332: aload         15
+       334: fload_3
+       335: invokevirtual #330                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath.getSmoothedPositions:(F)Ljava/util/List;
+       338: astore        17
+       340: aload         17
+       342: invokeinterface #333,  1          // InterfaceMethod java/util/List.size:()I
+       347: istore        18
+       349: iload         18
+       351: iconst_2
+       352: if_icmpge     358
+       355: goto          289
+       358: iconst_0
+       359: istore        19
+       361: iload         19
+       363: iload         18
+       365: if_icmpge     434
+       368: aload         17
+       370: iload         19
+       372: invokeinterface #336,  2          // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+       377: checkcast     #237                // class net/minecraft/class_243
+       380: astore        20
+       382: fload         16
+       384: ldc_w         #273                // float 0.25f
+       387: iload         19
+       389: i2f
+       390: iload         18
+       392: i2f
+       393: fdiv
+       394: ldc_w         #337                // float 1.75f
+       397: fdiv
+       398: fadd
+       399: fmul
+       400: fstore        21
+       402: aload_0
+       403: fload         21
+       405: invokevirtual #341                // Method getThemeColorWithAlpha:(F)I
+       408: istore        22
+       410: iinc_w        13, 180
+       416: aload_0
+       417: aload         10
+       419: aload         20
+       421: iload         22
+       423: fload         12
+       425: invokevirtual #354                // Method collectPointCross:(Ljava/util/List;Lnet/minecraft/class_243;IF)V
+       428: iinc          19, 1
+       431: goto          361
+       434: goto          289
+       437: aload         10
+       439: invokeinterface #197,  1          // InterfaceMethod java/util/List.isEmpty:()Z
+       444: ifne          555
+       447: invokestatic  #360                // Method net/minecraft/class_289.method_1348:()Lnet/minecraft/class_289;
+       450: astore        14
+       452: aload         14
+       454: getstatic     #364                // Field net/minecraft/class_293$class_5596.field_29344:Lnet/minecraft/class_293$class_5596;
+       457: getstatic     #370                // Field net/minecraft/class_290.field_1576:Lnet/minecraft/class_293;
+       460: invokevirtual #374                // Method net/minecraft/class_289.method_60827:(Lnet/minecraft/class_293$class_5596;Lnet/minecraft/class_293;)Lnet/minecraft/class_287;
+       463: astore        15
+       465: aload         10
+       467: invokeinterface #201,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       472: astore        16
+       474: aload         16
+       476: invokeinterface #206,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+       481: ifeq          547
+       484: aload         16
+       486: invokeinterface #209,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       491: checkcast     #9                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData
+       494: astore        17
+       496: aload         15
+       498: aload         6
+       500: aload         17
+       502: getfield      #380                // Field fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData.x:F
+       505: aload         17
+       507: getfield      #383                // Field fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData.y:F
+       510: aload         17
+       512: getfield      #386                // Field fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData.z:F
+       515: invokevirtual #390                // Method net/minecraft/class_287.method_22918:(Lorg/joml/Matrix4f;FFF)Lnet/minecraft/class_4588;
+       518: aload         17
+       520: getfield      #394                // Field fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData.r:I
+       523: aload         17
+       525: getfield      #397                // Field fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData.g:I
+       528: aload         17
+       530: getfield      #400                // Field fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData.b:I
+       533: aload         17
+       535: getfield      #403                // Field fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData.a:I
+       538: invokeinterface #409,  5          // InterfaceMethod net/minecraft/class_4588.method_1336:(IIII)Lnet/minecraft/class_4588;
+       543: pop
+       544: goto          474
+       547: aload         15
+       549: invokevirtual #413                // Method net/minecraft/class_287.method_60800:()Lnet/minecraft/class_9801;
+       552: invokestatic  #419                // Method net/minecraft/class_286.method_43433:(Lnet/minecraft/class_9801;)V
+       555: fconst_1
+       556: invokestatic  #324                // Method com/mojang/blaze3d/systems/RenderSystem.lineWidth:(F)V
+       559: return
+
+  private int getThemeColorWithAlpha(float);
+    Code:
+         0: invokestatic  #452                // Method fun/wonderful/api/utils/color/ColorUtils.getThemeColor:()I
+         3: istore_2
+         4: fload_1
+         5: fconst_0
+         6: fconst_1
+         7: invokestatic  #458                // Method net/minecraft/class_3532.method_15363:(FFF)F
+        10: fstore_3
+        11: iload_2
+        12: bipush        16
+        14: ishr
+        15: sipush        255
+        18: iand
+        19: istore        4
+        21: iload_2
+        22: bipush        8
+        24: ishr
+        25: sipush        255
+        28: iand
+        29: istore        5
+        31: iload_2
+        32: sipush        255
+        35: iand
+        36: istore        6
+        38: fload_3
+        39: ldc_w         #459                // float 255.0f
+        42: fmul
+        43: f2i
+        44: istore        7
+        46: iload         7
+        48: bipush        24
+        50: ishl
+        51: iload         4
+        53: bipush        16
+        55: ishl
+        56: ior
+        57: iload         5
+        59: bipush        8
+        61: ishl
+        62: ior
+        63: iload         6
+        65: ior
+        66: ireturn
+
+  private void collectSegment(java.util.List<fun.wonderful.client.modules.impl.render.LineGlyphes$VertexData>, net.minecraft.class_243, net.minecraft.class_243, int);
+    Code:
+         0: aload_1
+         1: new           #9                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData
+         4: dup
+         5: aload_2
+         6: getfield      #241                // Field net/minecraft/class_243.field_1352:D
+         9: d2f
+        10: aload_2
+        11: getfield      #244                // Field net/minecraft/class_243.field_1351:D
+        14: d2f
+        15: aload_2
+        16: getfield      #247                // Field net/minecraft/class_243.field_1350:D
+        19: d2f
+        20: iload         4
+        22: invokespecial #465                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData."<init>":(FFFI)V
+        25: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        30: pop
+        31: aload_1
+        32: new           #9                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData
+        35: dup
+        36: aload_3
+        37: getfield      #241                // Field net/minecraft/class_243.field_1352:D
+        40: d2f
+        41: aload_3
+        42: getfield      #244                // Field net/minecraft/class_243.field_1351:D
+        45: d2f
+        46: aload_3
+        47: getfield      #247                // Field net/minecraft/class_243.field_1350:D
+        50: d2f
+        51: iload         4
+        53: invokespecial #465                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData."<init>":(FFFI)V
+        56: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        61: pop
+        62: return
+
+  private void collectDashedSegment(java.util.List<fun.wonderful.client.modules.impl.render.LineGlyphes$VertexData>, net.minecraft.class_243, net.minecraft.class_243, int, float, float);
+    Code:
+         0: aload_3
+         1: getfield      #241                // Field net/minecraft/class_243.field_1352:D
+         4: aload_2
+         5: getfield      #241                // Field net/minecraft/class_243.field_1352:D
+         8: dsub
+         9: dstore        7
+        11: aload_3
+        12: getfield      #244                // Field net/minecraft/class_243.field_1351:D
+        15: aload_2
+        16: getfield      #244                // Field net/minecraft/class_243.field_1351:D
+        19: dsub
+        20: dstore        9
+        22: aload_3
+        23: getfield      #247                // Field net/minecraft/class_243.field_1350:D
+        26: aload_2
+        27: getfield      #247                // Field net/minecraft/class_243.field_1350:D
+        30: dsub
+        31: dstore        11
+        33: dload         7
+        35: dload         7
+        37: dmul
+        38: dload         9
+        40: dload         9
+        42: dmul
+        43: dadd
+        44: dload         11
+        46: dload         11
+        48: dmul
+        49: dadd
+        50: invokestatic  #472                // Method java/lang/Math.sqrt:(D)D
+        53: dstore        13
+        55: dload         13
+        57: ldc2_w        #473                // double 1.0E-4d
+        60: dcmpg
+        61: ifge          65
+        64: return
+        65: dload         7
+        67: dload         13
+        69: ddiv
+        70: dstore        15
+        72: dload         9
+        74: dload         13
+        76: ddiv
+        77: dstore        17
+        79: dload         11
+        81: dload         13
+        83: ddiv
+        84: dstore        19
+        86: dconst_0
+        87: dstore        21
+        89: iconst_1
+        90: istore        23
+        92: dload         21
+        94: dload         13
+        96: dcmpg
+        97: ifge          274
+       100: iload         23
+       102: ifeq          111
+       105: fload         5
+       107: f2d
+       108: goto          114
+       111: fload         6
+       113: f2d
+       114: dstore        24
+       116: dload         13
+       118: dload         21
+       120: dload         24
+       122: dadd
+       123: invokestatic  #477                // Method java/lang/Math.min:(DD)D
+       126: dstore        26
+       128: iload         23
+       130: ifeq          255
+       133: aload_2
+       134: getfield      #241                // Field net/minecraft/class_243.field_1352:D
+       137: dload         15
+       139: dload         21
+       141: dmul
+       142: dadd
+       143: d2f
+       144: fstore        28
+       146: aload_2
+       147: getfield      #244                // Field net/minecraft/class_243.field_1351:D
+       150: dload         17
+       152: dload         21
+       154: dmul
+       155: dadd
+       156: d2f
+       157: fstore        29
+       159: aload_2
+       160: getfield      #247                // Field net/minecraft/class_243.field_1350:D
+       163: dload         19
+       165: dload         21
+       167: dmul
+       168: dadd
+       169: d2f
+       170: fstore        30
+       172: aload_2
+       173: getfield      #241                // Field net/minecraft/class_243.field_1352:D
+       176: dload         15
+       178: dload         26
+       180: dmul
+       181: dadd
+       182: d2f
+       183: fstore        31
+       185: aload_2
+       186: getfield      #244                // Field net/minecraft/class_243.field_1351:D
+       189: dload         17
+       191: dload         26
+       193: dmul
+       194: dadd
+       195: d2f
+       196: fstore        32
+       198: aload_2
+       199: getfield      #247                // Field net/minecraft/class_243.field_1350:D
+       202: dload         19
+       204: dload         26
+       206: dmul
+       207: dadd
+       208: d2f
+       209: fstore        33
+       211: aload_1
+       212: new           #9                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData
+       215: dup
+       216: fload         28
+       218: fload         29
+       220: fload         30
+       222: iload         4
+       224: invokespecial #465                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData."<init>":(FFFI)V
+       227: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       232: pop
+       233: aload_1
+       234: new           #9                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData
+       237: dup
+       238: fload         31
+       240: fload         32
+       242: fload         33
+       244: iload         4
+       246: invokespecial #465                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData."<init>":(FFFI)V
+       249: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       254: pop
+       255: dload         26
+       257: dstore        21
+       259: iload         23
+       261: ifne          268
+       264: iconst_1
+       265: goto          269
+       268: iconst_0
+       269: istore        23
+       271: goto          92
+       274: return
+
+  private void collectPointCross(java.util.List<fun.wonderful.client.modules.impl.render.LineGlyphes$VertexData>, net.minecraft.class_243, int, float);
+    Code:
+         0: aload_2
+         1: getfield      #241                // Field net/minecraft/class_243.field_1352:D
+         4: d2f
+         5: fstore        5
+         7: aload_2
+         8: getfield      #244                // Field net/minecraft/class_243.field_1351:D
+        11: d2f
+        12: fstore        6
+        14: aload_2
+        15: getfield      #247                // Field net/minecraft/class_243.field_1350:D
+        18: d2f
+        19: fstore        7
+        21: aload_1
+        22: new           #9                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData
+        25: dup
+        26: fload         5
+        28: fload         4
+        30: fsub
+        31: fload         6
+        33: fload         7
+        35: iload_3
+        36: invokespecial #465                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData."<init>":(FFFI)V
+        39: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        44: pop
+        45: aload_1
+        46: new           #9                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData
+        49: dup
+        50: fload         5
+        52: fload         4
+        54: fadd
+        55: fload         6
+        57: fload         7
+        59: iload_3
+        60: invokespecial #465                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData."<init>":(FFFI)V
+        63: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        68: pop
+        69: aload_1
+        70: new           #9                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData
+        73: dup
+        74: fload         5
+        76: fload         6
+        78: fload         4
+        80: fsub
+        81: fload         7
+        83: iload_3
+        84: invokespecial #465                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData."<init>":(FFFI)V
+        87: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        92: pop
+        93: aload_1
+        94: new           #9                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData
+        97: dup
+        98: fload         5
+       100: fload         6
+       102: fload         4
+       104: fadd
+       105: fload         7
+       107: iload_3
+       108: invokespecial #465                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData."<init>":(FFFI)V
+       111: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       116: pop
+       117: aload_1
+       118: new           #9                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData
+       121: dup
+       122: fload         5
+       124: fload         6
+       126: fload         7
+       128: fload         4
+       130: fsub
+       131: iload_3
+       132: invokespecial #465                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData."<init>":(FFFI)V
+       135: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       140: pop
+       141: aload_1
+       142: new           #9                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData
+       145: dup
+       146: fload         5
+       148: fload         6
+       150: fload         7
+       152: fload         4
+       154: fadd
+       155: iload_3
+       156: invokespecial #465                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$VertexData."<init>":(FFFI)V
+       159: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       164: pop
+       165: return
+
+  private void setupRenderState();
+    Code:
+         0: invokestatic  #497                // Method com/mojang/blaze3d/systems/RenderSystem.enableBlend:()V
+         3: invokestatic  #500                // Method com/mojang/blaze3d/systems/RenderSystem.disableCull:()V
+         6: invokestatic  #503                // Method com/mojang/blaze3d/systems/RenderSystem.enableDepthTest:()V
+         9: iconst_0
+        10: invokestatic  #507                // Method com/mojang/blaze3d/systems/RenderSystem.depthMask:(Z)V
+        13: getstatic     #513                // Field net/minecraft/class_10142.field_53876:Lnet/minecraft/class_10156;
+        16: invokestatic  #517                // Method com/mojang/blaze3d/systems/RenderSystem.setShader:(Lnet/minecraft/class_10156;)Lnet/minecraft/class_5944;
+        19: pop
+        20: sipush        2848
+        23: invokestatic  #523                // Method org/lwjgl/opengl/GL11.glEnable:(I)V
+        26: sipush        3154
+        29: sipush        4354
+        32: invokestatic  #527                // Method org/lwjgl/opengl/GL11.glHint:(II)V
+        35: return
+
+  private void setAdditiveBlend();
+    Code:
+         0: getstatic     #531                // Field com/mojang/blaze3d/platform/GlStateManager$class_4535.SRC_ALPHA:Lcom/mojang/blaze3d/platform/GlStateManager$class_4535;
+         3: getstatic     #535                // Field com/mojang/blaze3d/platform/GlStateManager$class_4534.ONE:Lcom/mojang/blaze3d/platform/GlStateManager$class_4534;
+         6: getstatic     #537                // Field com/mojang/blaze3d/platform/GlStateManager$class_4535.ONE:Lcom/mojang/blaze3d/platform/GlStateManager$class_4535;
+         9: getstatic     #540                // Field com/mojang/blaze3d/platform/GlStateManager$class_4534.ZERO:Lcom/mojang/blaze3d/platform/GlStateManager$class_4534;
+        12: invokestatic  #544                // Method com/mojang/blaze3d/systems/RenderSystem.blendFuncSeparate:(Lcom/mojang/blaze3d/platform/GlStateManager$class_4535;Lcom/mojang/blaze3d/platform/GlStateManager$class_4534;Lcom/mojang/blaze3d/platform/GlStateManager$class_4535;Lcom/mojang/blaze3d/platform/GlStateManager$class_4534;)V
+        15: return
+
+  private void setNormalBlend();
+    Code:
+         0: invokestatic  #547                // Method com/mojang/blaze3d/systems/RenderSystem.defaultBlendFunc:()V
+         3: return
+
+  private void restoreRenderState();
+    Code:
+         0: fconst_1
+         1: invokestatic  #324                // Method com/mojang/blaze3d/systems/RenderSystem.lineWidth:(F)V
+         4: sipush        2848
+         7: invokestatic  #550                // Method org/lwjgl/opengl/GL11.glDisable:(I)V
+        10: iconst_1
+        11: invokestatic  #507                // Method com/mojang/blaze3d/systems/RenderSystem.depthMask:(Z)V
+        14: invokestatic  #553                // Method com/mojang/blaze3d/systems/RenderSystem.enableCull:()V
+        17: invokestatic  #503                // Method com/mojang/blaze3d/systems/RenderSystem.enableDepthTest:()V
+        20: invokestatic  #547                // Method com/mojang/blaze3d/systems/RenderSystem.defaultBlendFunc:()V
+        23: invokestatic  #556                // Method com/mojang/blaze3d/systems/RenderSystem.disableBlend:()V
+        26: fconst_1
+        27: fconst_1
+        28: fconst_1
+        29: fconst_1
+        30: invokestatic  #560                // Method com/mojang/blaze3d/systems/RenderSystem.setShaderColor:(FFFF)V
+        33: return
+
+  private void updateGlyphs();
+    Code:
+         0: aload_0
+         1: getfield      #140                // Field glyphs:Ljava/util/List;
+         4: invokeinterface #201,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+         9: astore_1
+        10: aload_1
+        11: invokeinterface #206,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        16: ifeq          49
+        19: aload_1
+        20: invokeinterface #209,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        25: checkcast     #7                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath
+        28: astore_2
+        29: aload_2
+        30: invokevirtual #563                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath.update:()V
+        33: aload_2
+        34: invokevirtual #566                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath.isDead:()Z
+        37: ifeq          46
+        40: aload_1
+        41: invokeinterface #569,  1          // InterfaceMethod java/util/Iterator.remove:()V
+        46: goto          10
+        49: return
+
+  private void maintainGlyphCount();
+    Code:
+         0: aload_0
+         1: invokevirtual #574                // Method maxGlyphCount:()I
+         4: istore_1
+         5: aload_0
+         6: invokevirtual #577                // Method countActiveGlyphs:()I
+         9: istore_2
+        10: iload_2
+        11: iload_1
+        12: if_icmpge     51
+        15: aload_0
+        16: getfield      #140                // Field glyphs:Ljava/util/List;
+        19: new           #7                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath
+        22: dup
+        23: aload_0
+        24: aload_0
+        25: invokevirtual #581                // Method randomGlyphSpawnPos:()Lnet/minecraft/class_2382;
+        28: aload_0
+        29: bipush        7
+        31: bipush        12
+        33: invokevirtual #585                // Method randInt:(II)I
+        36: invokespecial #588                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath."<init>":(Lfun/wonderful/client/modules/impl/render/LineGlyphes;Lnet/minecraft/class_2382;I)V
+        39: invokeinterface #222,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        44: pop
+        45: iinc          2, 1
+        48: goto          10
+        51: iload_2
+        52: iload_1
+        53: if_icmple     113
+        56: aload_0
+        57: getfield      #140                // Field glyphs:Ljava/util/List;
+        60: invokeinterface #201,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        65: astore_3
+        66: aload_3
+        67: invokeinterface #206,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        72: ifeq          113
+        75: aload_3
+        76: invokeinterface #209,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        81: checkcast     #7                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath
+        84: astore        4
+        86: iload_2
+        87: iload_1
+        88: if_icmpgt     94
+        91: goto          113
+        94: aload         4
+        96: invokevirtual #591                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath.isRemoving:()Z
+        99: ifne          110
+       102: aload         4
+       104: invokevirtual #594                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath.setWantToRemove:()V
+       107: iinc          2, -1
+       110: goto          66
+       113: return
+
+  private int countActiveGlyphs();
+    Code:
+         0: iconst_0
+         1: istore_1
+         2: aload_0
+         3: getfield      #140                // Field glyphs:Ljava/util/List;
+         6: invokeinterface #201,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        11: astore_2
+        12: aload_2
+        13: invokeinterface #206,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        18: ifeq          44
+        21: aload_2
+        22: invokeinterface #209,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        27: checkcast     #7                  // class fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath
+        30: astore_3
+        31: aload_3
+        32: invokevirtual #591                // Method fun/wonderful/client/modules/impl/render/LineGlyphes$GlyphPath.isRemoving:()Z
+        35: ifne          41
+        38: iinc          1, 1
+        41: goto          12
+        44: iload_1
+        45: ireturn
+
+  private int maxGlyphCount();
+    Code:
+         0: iconst_1
+         1: aload_0
+         2: getfield      #78                 // Field glyphsCount:Lfun/wonderful/client/modules/settings/implement/FloatSetting;
+         5: invokevirtual #306                // Method fun/wonderful/client/modules/settings/implement/FloatSetting.get:()F
+         8: invokestatic  #600                // Method java/lang/Math.round:(F)I
+        11: invokestatic  #602                // Method java/lang/Math.max:(II)I
+        14: ireturn
+
+  private net.minecraft.class_2382 randomGlyphSpawnPos();
+    Code:
+         0: bipush        6
+         2: istore_1
+         3: bipush        24
+         5: istore_2
+         6: iconst_0
+         7: istore_3
+         8: bipush        12
+        10: istore        4
+        12: aload_0
+        13: invokevirtual #605                // Method getCameraPos:()Lnet/minecraft/class_243;
+        16: astore        5
+        18: iconst_0
+        19: istore        6
+        21: iload         6
+        23: bipush        16
+        25: if_icmpge     183
+        28: aload_0
+        29: bipush        6
+        31: bipush        25
+        33: invokevirtual #585                // Method randInt:(II)I
+        36: istore        7
+        38: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+        41: getfield      #169                // Field net/minecraft/class_310.field_1724:Lnet/minecraft/class_746;
+        44: ifnull        59
+        47: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+        50: getfield      #169                // Field net/minecraft/class_310.field_1724:Lnet/minecraft/class_746;
+        53: invokevirtual #610                // Method net/minecraft/class_746.method_36454:()F
+        56: goto          60
+        59: fconst_0
+        60: fstore        8
+        62: fload         8
+        64: aload_0
+        65: ldc_w         #611                // float -135.0f
+        68: ldc_w         #612                // float 135.0f
+        71: invokevirtual #615                // Method randFloat:(FF)F
+        74: fadd
+        75: fstore        9
+        77: fload         9
+        79: f2d
+        80: invokestatic  #618                // Method java/lang/Math.toRadians:(D)D
+        83: d2f
+        84: fstore        10
+        86: fload         10
+        88: invokestatic  #622                // Method net/minecraft/class_3532.method_15374:(F)F
+        91: iload         7
+        93: i2f
+        94: fmul
+        95: fneg
+        96: f2i
+        97: istore        11
+        99: aload_0
+       100: iconst_0
+       101: bipush        13
+       103: invokevirtual #585                // Method randInt:(II)I
+       106: istore        12
+       108: fload         10
+       110: invokestatic  #625                // Method net/minecraft/class_3532.method_15362:(F)F
+       113: iload         7
+       115: i2f
+       116: fmul
+       117: f2i
+       118: istore        13
+       120: new           #627                // class net/minecraft/class_2382
+       123: dup
+       124: aload         5
+       126: getfield      #241                // Field net/minecraft/class_243.field_1352:D
+       129: invokestatic  #630                // Method java/lang/Math.floor:(D)D
+       132: d2i
+       133: iload         11
+       135: iadd
+       136: aload         5
+       138: getfield      #244                // Field net/minecraft/class_243.field_1351:D
+       141: invokestatic  #630                // Method java/lang/Math.floor:(D)D
+       144: d2i
+       145: iload         12
+       147: iadd
+       148: aload         5
+       150: getfield      #247                // Field net/minecraft/class_243.field_1350:D
+       153: invokestatic  #630                // Method java/lang/Math.floor:(D)D
+       156: d2i
+       157: iload         13
+       159: iadd
+       160: invokespecial #633                // Method net/minecraft/class_2382."<init>":(III)V
+       163: astore        14
+       165: aload_0
+       166: aload         14
+       168: invokevirtual #637                // Method isSpawnPosFree:(Lnet/minecraft/class_2382;)Z
+       171: ifeq          177
+       174: aload         14
+       176: areturn
+       177: iinc          6, 1
+       180: goto          21
+       183: new           #627                // class net/minecraft/class_2382
+       186: dup
+       187: aload         5
+       189: getfield      #241                // Field net/minecraft/class_243.field_1352:D
+       192: invokestatic  #630                // Method java/lang/Math.floor:(D)D
+       195: d2i
+       196: aload         5
+       198: getfield      #244                // Field net/minecraft/class_243.field_1351:D
+       201: invokestatic  #630                // Method java/lang/Math.floor:(D)D
+       204: d2i
+       205: aload         5
+       207: getfield      #247                // Field net/minecraft/class_243.field_1350:D
+       210: invokestatic  #630                // Method java/lang/Math.floor:(D)D
+       213: d2i
+       214: invokespecial #633                // Method net/minecraft/class_2382."<init>":(III)V
+       217: areturn
+
+  private boolean isSpawnPosFree(net.minecraft.class_2382);
+    Code:
+         0: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+         3: getfield      #173                // Field net/minecraft/class_310.field_1687:Lnet/minecraft/class_638;
+         6: ifnonnull     11
+         9: iconst_1
+        10: ireturn
+        11: new           #653                // class net/minecraft/class_2338
+        14: dup
+        15: aload_1
+        16: invokevirtual #656                // Method net/minecraft/class_2382.method_10263:()I
+        19: aload_1
+        20: invokevirtual #659                // Method net/minecraft/class_2382.method_10264:()I
+        23: aload_1
+        24: invokevirtual #662                // Method net/minecraft/class_2382.method_10260:()I
+        27: invokespecial #663                // Method net/minecraft/class_2338."<init>":(III)V
+        30: astore_2
+        31: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+        34: getfield      #173                // Field net/minecraft/class_310.field_1687:Lnet/minecraft/class_638;
+        37: aload_2
+        38: invokevirtual #669                // Method net/minecraft/class_638.method_8320:(Lnet/minecraft/class_2338;)Lnet/minecraft/class_2680;
+        41: astore_3
+        42: aload_3
+        43: invokevirtual #674                // Method net/minecraft/class_2680.method_26215:()Z
+        46: ifeq          51
+        49: iconst_1
+        50: ireturn
+        51: aload_3
+        52: invokevirtual #678                // Method net/minecraft/class_2680.method_26227:()Lnet/minecraft/class_3610;
+        55: invokevirtual #683                // Method net/minecraft/class_3610.method_15769:()Z
+        58: ifne          63
+        61: iconst_0
+        62: ireturn
+        63: aload_3
+        64: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+        67: getfield      #173                // Field net/minecraft/class_310.field_1687:Lnet/minecraft/class_638;
+        70: aload_2
+        71: invokevirtual #687                // Method net/minecraft/class_2680.method_26220:(Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;)Lnet/minecraft/class_265;
+        74: invokevirtual #692                // Method net/minecraft/class_265.method_1110:()Z
+        77: ireturn
+
+  private net.minecraft.class_243 getCameraPos();
+    Code:
+         0: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+         3: getfield      #700                // Field net/minecraft/class_310.field_1773:Lnet/minecraft/class_757;
+         6: ifnull        21
+         9: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+        12: getfield      #700                // Field net/minecraft/class_310.field_1773:Lnet/minecraft/class_757;
+        15: invokevirtual #705                // Method net/minecraft/class_757.method_19418:()Lnet/minecraft/class_4184;
+        18: goto          22
+        21: aconst_null
+        22: astore_1
+        23: aload_1
+        24: ifnull        32
+        27: aload_1
+        28: invokevirtual #232                // Method net/minecraft/class_4184.method_19326:()Lnet/minecraft/class_243;
+        31: areturn
+        32: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+        35: getfield      #169                // Field net/minecraft/class_310.field_1724:Lnet/minecraft/class_746;
+        38: ifnull        53
+        41: getstatic     #163                // Field mc:Lnet/minecraft/class_310;
+        44: getfield      #169                // Field net/minecraft/class_310.field_1724:Lnet/minecraft/class_746;
+        47: invokevirtual #708                // Method net/minecraft/class_746.method_19538:()Lnet/minecraft/class_243;
+        50: goto          56
+        53: getstatic     #711                // Field net/minecraft/class_243.field_1353:Lnet/minecraft/class_243;
+        56: areturn
+
+  private net.minecraft.class_2382 randomAxisDirection();
+    Code:
+         0: getstatic     #716                // Field AXIS_DIRECTIONS:[Lnet/minecraft/class_2382;
+         3: aload_0
+         4: getfield      #134                // Field rand:Ljava/util/Random;
+         7: getstatic     #716                // Field AXIS_DIRECTIONS:[Lnet/minecraft/class_2382;
+        10: arraylength
+        11: invokevirtual #720                // Method java/util/Random.nextInt:(I)I
+        14: aaload
+        15: areturn
+
+  private net.minecraft.class_2382 nextOrthogonalDirection(net.minecraft.class_2382);
+    Code:
+         0: iconst_0
+         1: istore_2
+         2: iload_2
+         3: bipush        12
+         5: if_icmpge     57
+         8: aload_0
+         9: invokevirtual #725                // Method randomAxisDirection:()Lnet/minecraft/class_2382;
+        12: astore_3
+        13: aload_3
+        14: invokevirtual #656                // Method net/minecraft/class_2382.method_10263:()I
+        17: aload_1
+        18: invokevirtual #656                // Method net/minecraft/class_2382.method_10263:()I
+        21: imul
+        22: aload_3
+        23: invokevirtual #659                // Method net/minecraft/class_2382.method_10264:()I
+        26: aload_1
+        27: invokevirtual #659                // Method net/minecraft/class_2382.method_10264:()I
+        30: imul
+        31: iadd
+        32: aload_3
+        33: invokevirtual #662                // Method net/minecraft/class_2382.method_10260:()I
+        36: aload_1
+        37: invokevirtual #662                // Method net/minecraft/class_2382.method_10260:()I
+        40: imul
+        41: iadd
+        42: istore        4
+        44: iload         4
+        46: ifne          51
+        49: aload_3
+        50: areturn
+        51: iinc          2, 1
+        54: goto          2
+        57: aload_0
+        58: invokevirtual #725                // Method randomAxisDirection:()Lnet/minecraft/class_2382;
+        61: areturn
+
+  private int randInt(int, int);
+    Code:
+         0: iload_2
+         1: iload_1
+         2: if_icmpgt     7
+         5: iload_1
+         6: ireturn
+         7: aload_0
+         8: getfield      #134                // Field rand:Ljava/util/Random;
+        11: iload_2
+        12: iload_1
+        13: isub
+        14: invokevirtual #720                // Method java/util/Random.nextInt:(I)I
+        17: iload_1
+        18: iadd
+        19: ireturn
+
+  private float randFloat(float, float);
+    Code:
+         0: fload_2
+         1: fload_1
+         2: fcmpg
+         3: ifgt          8
+         6: fload_1
+         7: freturn
+         8: fload_1
+         9: aload_0
+        10: getfield      #134                // Field rand:Ljava/util/Random;
+        13: invokevirtual #733                // Method java/util/Random.nextFloat:()F
+        16: fload_2
+        17: fload_1
+        18: fsub
+        19: fmul
+        20: fadd
+        21: freturn
+
+  private float moveAdvanceFromTicks(int, int, float);
+    Code:
+         0: iload_1
+         1: ifgt          6
+         4: fconst_1
+         5: freturn
+         6: fconst_1
+         7: iload_2
+         8: i2f
+         9: fload_3
+        10: fsub
+        11: iload_1
+        12: i2f
+        13: fdiv
+        14: fsub
+        15: fstore        4
+        17: fload         4
+        19: fconst_0
+        20: fconst_1
+        21: invokestatic  #458                // Method net/minecraft/class_3532.method_15363:(FFF)F
+        24: freturn
+
+  private static double lerp(double, double, double);
+    Code:
+         0: dload_0
+         1: dload_2
+         2: dload_0
+         3: dsub
+         4: dload         4
+         6: dmul
+         7: dadd
+         8: dreturn
+
+  private java.lang.Boolean lambda$new$0();
+    Code:
+         0: aload_0
+         1: getfield      #91                 // Field applyStippleLines:Lfun/wonderful/client/modules/settings/implement/BooleanSetting;
+         4: invokevirtual #257                // Method fun/wonderful/client/modules/settings/implement/BooleanSetting.isState:()Z
+         7: invokestatic  #749                // Method java/lang/Boolean.valueOf:(Z)Ljava/lang/Boolean;
+        10: areturn
+
+  static {};
+    Code:
+         0: new           #2                  // class fun/wonderful/client/modules/impl/render/LineGlyphes
+         3: dup
+         4: invokespecial #751                // Method "<init>":()V
+         7: putstatic     #753                // Field INSTANCE:Lfun/wonderful/client/modules/impl/render/LineGlyphes;
+        10: bipush        6
+        12: anewarray     #627                // class net/minecraft/class_2382
+        15: dup
+        16: iconst_0
+        17: new           #627                // class net/minecraft/class_2382
+        20: dup
+        21: iconst_1
+        22: iconst_0
+        23: iconst_0
+        24: invokespecial #633                // Method net/minecraft/class_2382."<init>":(III)V
+        27: aastore
+        28: dup
+        29: iconst_1
+        30: new           #627                // class net/minecraft/class_2382
+        33: dup
+        34: iconst_m1
+        35: iconst_0
+        36: iconst_0
+        37: invokespecial #633                // Method net/minecraft/class_2382."<init>":(III)V
+        40: aastore
+        41: dup
+        42: iconst_2
+        43: new           #627                // class net/minecraft/class_2382
+        46: dup
+        47: iconst_0
+        48: iconst_1
+        49: iconst_0
+        50: invokespecial #633                // Method net/minecraft/class_2382."<init>":(III)V
+        53: aastore
+        54: dup
+        55: iconst_3
+        56: new           #627                // class net/minecraft/class_2382
+        59: dup
+        60: iconst_0
+        61: iconst_m1
+        62: iconst_0
+        63: invokespecial #633                // Method net/minecraft/class_2382."<init>":(III)V
+        66: aastore
+        67: dup
+        68: iconst_4
+        69: new           #627                // class net/minecraft/class_2382
+        72: dup
+        73: iconst_0
+        74: iconst_0
+        75: iconst_1
+        76: invokespecial #633                // Method net/minecraft/class_2382."<init>":(III)V
+        79: aastore
+        80: dup
+        81: iconst_5
+        82: new           #627                // class net/minecraft/class_2382
+        85: dup
+        86: iconst_0
+        87: iconst_0
+        88: iconst_m1
+        89: invokespecial #633                // Method net/minecraft/class_2382."<init>":(III)V
+        92: aastore
+        93: putstatic     #716                // Field AXIS_DIRECTIONS:[Lnet/minecraft/class_2382;
+        96: return
+}
+Compiled from "LineGlyphes.java"
+class fun.wonderful.client.modules.impl.render.LineGlyphes$GlyphPath {
+  private final java.util.List<net.minecraft.class_2382> points;
+
+  private final fun.wonderful.api.utils.animation.AnimationUtils alpha;
+
+  private net.minecraft.class_2382 lastDirection;
+
+  private int currentStepTicks;
+
+  private int lastStepSet;
+
+  private int stepsLeft;
+
+  private boolean removing;
+
+  final fun.wonderful.client.modules.impl.render.LineGlyphes this$0;
+
+  fun.wonderful.client.modules.impl.render.LineGlyphes$GlyphPath(fun.wonderful.client.modules.impl.render.LineGlyphes, net.minecraft.class_2382, int);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: putfield      #29                 // Field this$0:Lfun/wonderful/client/modules/impl/render/LineGlyphes;
+         5: aload_0
+         6: invokespecial #32                 // Method java/lang/Object."<init>":()V
+         9: aload_0
+        10: new           #34                 // class java/util/ArrayList
+        13: dup
+        14: invokespecial #35                 // Method java/util/ArrayList."<init>":()V
+        17: putfield      #37                 // Field points:Ljava/util/List;
+        20: aload_0
+        21: new           #39                 // class fun/wonderful/api/utils/animation/AnimationUtils
+        24: dup
+        25: fconst_0
+        26: ldc           #40                 // float 8.0f
+        28: getstatic     #46                 // Field fun/wonderful/api/utils/animation/Easings.QUAD_OUT:Lfun/wonderful/api/utils/animation/Easing;
+        31: invokespecial #49                 // Method fun/wonderful/api/utils/animation/AnimationUtils."<init>":(FFLfun/wonderful/api/utils/animation/Easing;)V
+        34: putfield      #51                 // Field alpha:Lfun/wonderful/api/utils/animation/AnimationUtils;
+        37: aload_0
+        38: getfield      #37                 // Field points:Ljava/util/List;
+        41: aload_2
+        42: invokeinterface #57,  2           // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        47: pop
+        48: aload_0
+        49: aload_1
+        50: invokevirtual #61                 // Method fun/wonderful/client/modules/impl/render/LineGlyphes.randomAxisDirection:()Lnet/minecraft/class_2382;
+        53: putfield      #63                 // Field lastDirection:Lnet/minecraft/class_2382;
+        56: aload_0
+        57: iload_3
+        58: putfield      #65                 // Field stepsLeft:I
+        61: aload_0
+        62: getfield      #51                 // Field alpha:Lfun/wonderful/api/utils/animation/AnimationUtils;
+        65: fconst_0
+        66: invokevirtual #69                 // Method fun/wonderful/api/utils/animation/AnimationUtils.setValue:(F)V
+        69: return
+
+  void update();
+    Code:
+         0: aload_0
+         1: getfield      #51                 // Field alpha:Lfun/wonderful/api/utils/animation/AnimationUtils;
+         4: aload_0
+         5: getfield      #74                 // Field removing:Z
+         8: ifeq          15
+        11: fconst_0
+        12: goto          16
+        15: fconst_1
+        16: invokevirtual #76                 // Method fun/wonderful/api/utils/animation/AnimationUtils.update:(F)V
+        19: aload_0
+        20: getfield      #74                 // Field removing:Z
+        23: ifeq          27
+        26: return
+        27: aload_0
+        28: getfield      #65                 // Field stepsLeft:I
+        31: ifgt          39
+        34: aload_0
+        35: invokevirtual #79                 // Method setWantToRemove:()V
+        38: return
+        39: aload_0
+        40: getfield      #81                 // Field currentStepTicks:I
+        43: ifle          86
+        46: aload_0
+        47: dup
+        48: getfield      #81                 // Field currentStepTicks:I
+        51: aload_0
+        52: getfield      #29                 // Field this$0:Lfun/wonderful/client/modules/impl/render/LineGlyphes;
+        55: getfield      #85                 // Field fun/wonderful/client/modules/impl/render/LineGlyphes.slowSpeed:Lfun/wonderful/client/modules/settings/implement/BooleanSetting;
+        58: invokevirtual #91                 // Method fun/wonderful/client/modules/settings/implement/BooleanSetting.isState:()Z
+        61: ifeq          68
+        64: iconst_1
+        65: goto          69
+        68: iconst_2
+        69: isub
+        70: putfield      #81                 // Field currentStepTicks:I
+        73: aload_0
+        74: getfield      #81                 // Field currentStepTicks:I
+        77: ifge          85
+        80: aload_0
+        81: iconst_0
+        82: putfield      #81                 // Field currentStepTicks:I
+        85: return
+        86: aload_0
+        87: getfield      #37                 // Field points:Ljava/util/List;
+        90: aload_0
+        91: getfield      #37                 // Field points:Ljava/util/List;
+        94: invokeinterface #95,  1           // InterfaceMethod java/util/List.size:()I
+        99: iconst_1
+       100: isub
+       101: invokeinterface #99,  2           // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+       106: checkcast     #101                // class net/minecraft/class_2382
+       109: astore_1
+       110: iconst_0
+       111: istore_2
+       112: iconst_0
+       113: istore_3
+       114: iload_3
+       115: bipush        8
+       117: if_icmpge     255
+       120: aload_0
+       121: getfield      #29                 // Field this$0:Lfun/wonderful/client/modules/impl/render/LineGlyphes;
+       124: aload_0
+       125: getfield      #63                 // Field lastDirection:Lnet/minecraft/class_2382;
+       128: invokevirtual #105                // Method fun/wonderful/client/modules/impl/render/LineGlyphes.nextOrthogonalDirection:(Lnet/minecraft/class_2382;)Lnet/minecraft/class_2382;
+       131: astore        4
+       133: aload_0
+       134: getfield      #29                 // Field this$0:Lfun/wonderful/client/modules/impl/render/LineGlyphes;
+       137: iconst_1
+       138: iconst_4
+       139: invokevirtual #109                // Method fun/wonderful/client/modules/impl/render/LineGlyphes.randInt:(II)I
+       142: istore        5
+       144: new           #101                // class net/minecraft/class_2382
+       147: dup
+       148: aload_1
+       149: invokevirtual #112                // Method net/minecraft/class_2382.method_10263:()I
+       152: aload         4
+       154: invokevirtual #112                // Method net/minecraft/class_2382.method_10263:()I
+       157: iload         5
+       159: imul
+       160: iadd
+       161: aload_1
+       162: invokevirtual #115                // Method net/minecraft/class_2382.method_10264:()I
+       165: aload         4
+       167: invokevirtual #115                // Method net/minecraft/class_2382.method_10264:()I
+       170: iload         5
+       172: imul
+       173: iadd
+       174: aload_1
+       175: invokevirtual #118                // Method net/minecraft/class_2382.method_10260:()I
+       178: aload         4
+       180: invokevirtual #118                // Method net/minecraft/class_2382.method_10260:()I
+       183: iload         5
+       185: imul
+       186: iadd
+       187: invokespecial #121                // Method net/minecraft/class_2382."<init>":(III)V
+       190: astore        6
+       192: aload_0
+       193: getfield      #29                 // Field this$0:Lfun/wonderful/client/modules/impl/render/LineGlyphes;
+       196: aload         6
+       198: invokevirtual #125                // Method fun/wonderful/client/modules/impl/render/LineGlyphes.isSpawnPosFree:(Lnet/minecraft/class_2382;)Z
+       201: ifeq          249
+       204: aload_0
+       205: aload         4
+       207: putfield      #63                 // Field lastDirection:Lnet/minecraft/class_2382;
+       210: aload_0
+       211: iload         5
+       213: putfield      #127                // Field lastStepSet:I
+       216: aload_0
+       217: iload         5
+       219: putfield      #81                 // Field currentStepTicks:I
+       222: aload_0
+       223: getfield      #37                 // Field points:Ljava/util/List;
+       226: aload         6
+       228: invokeinterface #57,  2           // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       233: pop
+       234: aload_0
+       235: dup
+       236: getfield      #65                 // Field stepsLeft:I
+       239: iconst_1
+       240: isub
+       241: putfield      #65                 // Field stepsLeft:I
+       244: iconst_1
+       245: istore_2
+       246: goto          255
+       249: iinc          3, 1
+       252: goto          114
+       255: iload_2
+       256: ifne          263
+       259: aload_0
+       260: invokevirtual #79                 // Method setWantToRemove:()V
+       263: return
+
+  java.util.List<net.minecraft.class_243> getSmoothedPositions(float);
+    Code:
+         0: new           #34                 // class java/util/ArrayList
+         3: dup
+         4: aload_0
+         5: getfield      #37                 // Field points:Ljava/util/List;
+         8: invokeinterface #95,  1           // InterfaceMethod java/util/List.size:()I
+        13: invokespecial #140                // Method java/util/ArrayList."<init>":(I)V
+        16: astore_2
+        17: aload_0
+        18: getfield      #29                 // Field this$0:Lfun/wonderful/client/modules/impl/render/LineGlyphes;
+        21: aload_0
+        22: getfield      #127                // Field lastStepSet:I
+        25: aload_0
+        26: getfield      #81                 // Field currentStepTicks:I
+        29: fload_1
+        30: invokevirtual #144                // Method fun/wonderful/client/modules/impl/render/LineGlyphes.moveAdvanceFromTicks:(IIF)F
+        33: fstore_3
+        34: iconst_0
+        35: istore        4
+        37: iload         4
+        39: aload_0
+        40: getfield      #37                 // Field points:Ljava/util/List;
+        43: invokeinterface #95,  1           // InterfaceMethod java/util/List.size:()I
+        48: if_icmpge     216
+        51: aload_0
+        52: getfield      #37                 // Field points:Ljava/util/List;
+        55: iload         4
+        57: invokeinterface #99,  2           // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+        62: checkcast     #101                // class net/minecraft/class_2382
+        65: astore        5
+        67: aload         5
+        69: invokevirtual #112                // Method net/minecraft/class_2382.method_10263:()I
+        72: i2d
+        73: dstore        6
+        75: aload         5
+        77: invokevirtual #115                // Method net/minecraft/class_2382.method_10264:()I
+        80: i2d
+        81: dstore        8
+        83: aload         5
+        85: invokevirtual #118                // Method net/minecraft/class_2382.method_10260:()I
+        88: i2d
+        89: dstore        10
+        91: aload_0
+        92: getfield      #37                 // Field points:Ljava/util/List;
+        95: invokeinterface #95,  1           // InterfaceMethod java/util/List.size:()I
+       100: iconst_2
+       101: if_icmplt     190
+       104: iload         4
+       106: aload_0
+       107: getfield      #37                 // Field points:Ljava/util/List;
+       110: invokeinterface #95,  1           // InterfaceMethod java/util/List.size:()I
+       115: iconst_1
+       116: isub
+       117: if_icmpne     190
+       120: aload_0
+       121: getfield      #37                 // Field points:Ljava/util/List;
+       124: aload_0
+       125: getfield      #37                 // Field points:Ljava/util/List;
+       128: invokeinterface #95,  1           // InterfaceMethod java/util/List.size:()I
+       133: iconst_2
+       134: isub
+       135: invokeinterface #99,  2           // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+       140: checkcast     #101                // class net/minecraft/class_2382
+       143: astore        12
+       145: aload         12
+       147: invokevirtual #112                // Method net/minecraft/class_2382.method_10263:()I
+       150: i2d
+       151: dload         6
+       153: fload_3
+       154: f2d
+       155: invokestatic  #148                // Method fun/wonderful/client/modules/impl/render/LineGlyphes.lerp:(DDD)D
+       158: dstore        6
+       160: aload         12
+       162: invokevirtual #115                // Method net/minecraft/class_2382.method_10264:()I
+       165: i2d
+       166: dload         8
+       168: fload_3
+       169: f2d
+       170: invokestatic  #148                // Method fun/wonderful/client/modules/impl/render/LineGlyphes.lerp:(DDD)D
+       173: dstore        8
+       175: aload         12
+       177: invokevirtual #118                // Method net/minecraft/class_2382.method_10260:()I
+       180: i2d
+       181: dload         10
+       183: fload_3
+       184: f2d
+       185: invokestatic  #148                // Method fun/wonderful/client/modules/impl/render/LineGlyphes.lerp:(DDD)D
+       188: dstore        10
+       190: aload_2
+       191: new           #150                // class net/minecraft/class_243
+       194: dup
+       195: dload         6
+       197: dload         8
+       199: dload         10
+       201: invokespecial #153                // Method net/minecraft/class_243."<init>":(DDD)V
+       204: invokeinterface #57,  2           // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       209: pop
+       210: iinc          4, 1
+       213: goto          37
+       216: aload_2
+       217: areturn
+
+  int getPointCount();
+    Code:
+         0: aload_0
+         1: getfield      #37                 // Field points:Ljava/util/List;
+         4: invokeinterface #95,  1           // InterfaceMethod java/util/List.size:()I
+         9: ireturn
+
+  float getAlpha();
+    Code:
+         0: aload_0
+         1: getfield      #51                 // Field alpha:Lfun/wonderful/api/utils/animation/AnimationUtils;
+         4: invokevirtual #170                // Method fun/wonderful/api/utils/animation/AnimationUtils.getValue:()F
+         7: fconst_0
+         8: fconst_1
+         9: invokestatic  #176                // Method net/minecraft/class_3532.method_15363:(FFF)F
+        12: freturn
+
+  boolean isRemoving();
+    Code:
+         0: aload_0
+         1: getfield      #74                 // Field removing:Z
+         4: ireturn
+
+  void setWantToRemove();
+    Code:
+         0: aload_0
+         1: iconst_1
+         2: putfield      #74                 // Field removing:Z
+         5: return
+
+  boolean isDead();
+    Code:
+         0: aload_0
+         1: getfield      #74                 // Field removing:Z
+         4: ifeq          21
+         7: aload_0
+         8: invokevirtual #180                // Method getAlpha:()F
+        11: ldc           #181                // float 0.03f
+        13: fcmpg
+        14: ifgt          21
+        17: iconst_1
+        18: goto          22
+        21: iconst_0
+        22: ireturn
+}
+Compiled from "LineGlyphes.java"
+class fun.wonderful.client.modules.impl.render.LineGlyphes$VertexData {
+  final float x;
+
+  final float y;
+
+  final float z;
+
+  final int r;
+
+  final int g;
+
+  final int b;
+
+  final int a;
+
+  fun.wonderful.client.modules.impl.render.LineGlyphes$VertexData(float, float, float, int);
+    Code:
+         0: aload_0
+         1: invokespecial #23                 // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: fload_1
+         6: putfield      #25                 // Field x:F
+         9: aload_0
+        10: fload_2
+        11: putfield      #27                 // Field y:F
+        14: aload_0
+        15: fload_3
+        16: putfield      #29                 // Field z:F
+        19: aload_0
+        20: iload         4
+        22: bipush        24
+        24: ishr
+        25: sipush        255
+        28: iand
+        29: putfield      #31                 // Field a:I
+        32: aload_0
+        33: iload         4
+        35: bipush        16
+        37: ishr
+        38: sipush        255
+        41: iand
+        42: putfield      #33                 // Field r:I
+        45: aload_0
+        46: iload         4
+        48: bipush        8
+        50: ishr
+        51: sipush        255
+        54: iand
+        55: putfield      #35                 // Field g:I
+        58: aload_0
+        59: iload         4
+        61: sipush        255
+        64: iand
+        65: putfield      #37                 // Field b:I
+        68: return
+}

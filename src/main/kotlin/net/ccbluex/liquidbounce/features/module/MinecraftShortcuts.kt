@@ -1,0 +1,47 @@
+/*
+ * This file is part of LiquidBounce (https://github.com/CCBlueX/LiquidBounce)
+ *
+ * Copyright (c) 2015 - 2025 CCBlueX
+ *
+ * LiquidBounce is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * LiquidBounce is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
+ */
+package net.ccbluex.liquidbounce.features.module
+import net.ccbluex.liquidbounce.utils.entity.*
+
+import net.minecraft.client.Minecraft
+import net.minecraft.client.multiplayer.ClientPacketListener
+import net.minecraft.client.player.LocalPlayer
+import net.minecraft.client.multiplayer.MultiPlayerGameMode
+import net.minecraft.client.multiplayer.ClientLevel
+
+/**
+ * Collection of the most used variables
+ * to make the code more readable.
+ *
+ * However, we do not check for nulls here, because
+ * we are sure that the client is in-game, if not
+ * fiddling with the handler code.
+ */
+interface MinecraftShortcuts {
+    val mc: Minecraft
+        get() = net.ccbluex.liquidbounce.utils.client.mc
+    val player: LocalPlayer
+        get() = mc.player!!
+    val world: ClientLevel
+        get() = mc.level!!
+    val network: ClientPacketListener
+        get() = mc.connection!!
+    val interaction: MultiPlayerGameMode
+        get() = mc.gameMode!!
+}

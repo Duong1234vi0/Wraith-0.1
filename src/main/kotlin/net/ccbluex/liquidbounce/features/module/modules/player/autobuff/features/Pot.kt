@@ -1,0 +1,259 @@
+/*
+ * This file is part of LiquidBounce (https://github.com/CCBlueX/LiquidBounce)
+ *
+ * Copyright (c) 2015 - 2025 CCBlueX
+ *
+ * LiquidBounce is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * LiquidBounce is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
+ *
+ *
+ */
+
+package net.ccbluex.liquidbounce.features.module.modules.player.autobuff.features
+import net.ccbluex.liquidbounce.utils.entity.*
+
+import net.ccbluex.liquidbounce.config.types.nesting.ToggleableConfigurable
+import net.ccbluex.liquidbounce.event.Sequence
+import net.ccbluex.liquidbounce.features.module.modules.player.autobuff.Buff
+import net.ccbluex.liquidbounce.features.module.modules.player.autobuff.ModuleAutoBuff
+import net.ccbluex.liquidbounce.features.module.modules.player.autobuff.ModuleAutoBuff.AutoBuffRotationsConfigurable.RotationTimingMode.*
+import net.ccbluex.liquidbounce.utils.aiming.RotationManager
+import net.ccbluex.liquidbounce.utils.aiming.RotationManager.currentRotation
+import net.ccbluex.liquidbounce.utils.aiming.RotationTarget
+import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
+import net.ccbluex.liquidbounce.utils.aiming.features.MovementCorrection
+import net.ccbluex.liquidbounce.utils.aiming.utils.withFixedYaw
+import net.ccbluex.liquidbounce.utils.client.MovePacketType
+import net.ccbluex.liquidbounce.utils.combat.shouldBeAttacked
+import net.ccbluex.liquidbounce.utils.entity.FallingPlayer
+import net.ccbluex.liquidbounce.utils.entity.rotation
+import net.ccbluex.liquidbounce.utils.inventory.HotbarItemSlot
+import net.ccbluex.liquidbounce.utils.inventory.useHotbarSlotOrOffhand
+import net.ccbluex.liquidbounce.utils.item.getPotionEffects
+import net.ccbluex.liquidbounce.utils.item.isNothing
+import net.ccbluex.liquidbounce.utils.kotlin.Priority
+import net.ccbluex.liquidbounce.utils.kotlin.random
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket
+import net.minecraft.world.entity.AreaEffectCloud
+import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.effect.MobEffectInstance
+import net.minecraft.world.effect.MobEffects
+import net.minecraft.world.entity.projectile.throwableitemprojectile.AbstractThrownPotion
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.LingeringPotionItem
+import net.minecraft.world.item.SplashPotionItem
+
+object Pot : Buff("Pot") {
+
+    private const val BENEFICIAL_SQUARE_RANGE = 16.0
+    private const val THROW_PITCH = 90f
+    private const val READY_PITCH = 84.5f
+
+    override val passesRequirements: Boolean
+        get() {
+            if (doNotBenefitOthers) {
+                // Check if there is any entity that we care about that can benefit from the potion
+                // This means we will only care about entities that are our enemies and are close enough to us
+                // That means we will still throw the potion if there is a friendly friend or team member nearby
+                val benefits = world.entitiesForRendering().filterIsInstance<LivingEntity>().any {
+                    it.shouldBeAttacked() && hasBenefit(it)
+                }
+
+                if (benefits) {
+                    return false
+                }
+            }
+
+            if (isStandingInsideLingering()) {
+                return false
+            }
+
+            val collisionBlock = FallingPlayer.fromPlayer(player).findCollision(20)?.pos
+            val isCloseGround = player.y - (collisionBlock?.y ?: 0) <= tillGroundDistance
+
+            // Do not check for health pass requirements, because this is already done in the potion check
+            return isCloseGround && !isSplashNearby()
+        }
+
+
+    private object HealthPotion : ToggleableConfigurable(Pot, "HealthPotion", true) {
+        private val healthPercent by int("Health", 40, 1..100, "%HP")
+
+        val health
+            get() = player.maxHealth * healthPercent / 100
+
+    }
+
+    private object RegenPotion : ToggleableConfigurable(Pot, "RegenPotion", true) {
+        private val healthPercent by int("Health", 70, 1..100, "%HP")
+
+        val health
+            get() = player.maxHealth * healthPercent / 100
+
+    }
+
+    init {
+        tree(HealthPotion)
+        tree(RegenPotion)
+    }
+
+    private val strengthPotion by boolean("StrengthPotion", true)
+    private val speedPotion by boolean("SpeedPotion", true)
+    private val fireResistancePotion by boolean("FireResistancePotion", true)
+
+    private val tillGroundDistance by float("TillGroundDistance", 2f, 1f..5f)
+    private val doNotBenefitOthers by boolean("DoNotBenefitOthers", true)
+
+    private val allowLingering by boolean("AllowLingering", false)
+
+    override suspend fun execute(sequence: Sequence, slot: HotbarItemSlot) {
+        // TODO: Use movement prediction to splash against walls and away from the player
+        //   See https://github.com/CCBlueX/LiquidBounce/issues/2051
+        var rotation = Rotation(player.yaw, THROW_PITCH)
+
+        when (ModuleAutoBuff.rotations.rotationTiming) {
+            NORMAL -> {
+                RotationManager.setRotationTarget(
+                    rotation,
+                    considerInventory = false,
+                    configurable = ModuleAutoBuff.rotations,
+                    provider = ModuleAutoBuff,
+                    priority = Priority.IMPORTANT_FOR_PLAYER_LIFE
+                )
+
+                sequence.waitConditional(3) {
+                    (currentRotation?.pitch ?: -90f) >= READY_PITCH
+                }
+
+                rotation = (currentRotation ?: rotation).normalize()
+            }
+            ON_TICK -> {
+                rotation = rotation.normalize()
+                network.sendPacket(movePacket(rotation.yaw, rotation.pitch))
+            }
+            ON_USE -> {
+                rotation = rotation.normalize()
+            }
+        }
+
+        useHotbarSlotOrOffhand(
+            slot,
+            yaw = rotation.yaw,
+            pitch = rotation.pitch,
+        )
+
+        when (ModuleAutoBuff.rotations.rotationTiming) {
+            NORMAL -> {
+                holdUseRotation(rotation)
+                sequence.waitTicks(1)
+            }
+            ON_TICK -> {
+                sequence.waitTicks(1)
+                network.sendPacket(movePacket(
+                    player.withFixedYaw(currentRotation ?: player.rotation),
+                    currentRotation?.pitch ?: player.pitch
+                ))
+            }
+            else -> { }
+        }
+
+        // Wait at least 1 tick to make sure, we do not continue with something else too early
+        sequence.waitTicks(1)
+    }
+
+    private fun holdUseRotation(rotation: Rotation) {
+        RotationManager.setRotationTarget(
+            RotationTarget(
+                rotation = rotation,
+                ticksUntilReset = 2,
+                resetThreshold = 180f,
+                considerInventory = false,
+                movementCorrection = MovementCorrection.SILENT
+            ),
+            priority = Priority.IMPORTANT_FOR_PLAYER_LIFE,
+            provider = ModuleAutoBuff
+        )
+    }
+
+    private fun movePacket(yaw: Float, pitch: Float) = ServerboundMovePlayerPacket.PosRot(
+        player.x,
+        player.y,
+        player.z,
+        yaw,
+        pitch,
+        player.onGround(),
+        player.horizontalCollision
+    )
+
+    override fun isValidItem(stack: ItemStack, forUse: Boolean): Boolean {
+        if (stack.isNothing() || !isValidPotion(stack)) {
+            return false
+        }
+
+        val health = if (forUse) player.health else 0f
+        return stack.getPotionEffects().any { foundTargetEffect(it, health) }
+    }
+
+    private fun isValidPotion(stack: ItemStack) =
+        stack.item is SplashPotionItem || stack.item is LingeringPotionItem && allowLingering
+
+    private fun foundTargetEffect(effect: MobEffectInstance, playerHealth: Float) =
+        when (effect.effectType) {
+            MobEffects.INSTANT_HEALTH -> HealthPotion.enabled && playerHealth <= HealthPotion.health
+            MobEffects.REGENERATION -> RegenPotion.enabled && playerHealth <= RegenPotion.health
+                && !player.hasStatusEffect(MobEffects.REGENERATION)
+            MobEffects.STRENGTH -> strengthPotion && !player.hasStatusEffect(MobEffects.STRENGTH)
+            MobEffects.SPEED -> speedPotion && !player.hasStatusEffect(MobEffects.SPEED)
+            MobEffects.FIRE_RESISTANCE -> fireResistancePotion &&
+                !player.hasStatusEffect(MobEffects.FIRE_RESISTANCE)
+            else -> false
+        }
+
+
+    private fun hasBenefit(entity: LivingEntity): Boolean {
+        if (!entity.isAffectedBySplashPotions) {
+            return false
+        }
+
+        // If we look down about 90 degrees, the closet position of the potion is at the player foot
+        val squareRange = entity.squaredDistanceTo(player)
+
+        if (squareRange > BENEFICIAL_SQUARE_RANGE) {
+            return false
+        }
+
+        return true
+
+    }
+
+    /**
+     * Check if the player is standing inside a lingering potion cloud
+     */
+    private fun isStandingInsideLingering() =
+        world.entitiesForRendering().filterIsInstance<AreaEffectCloud>().any {
+            it.squaredDistanceTo(player) <= BENEFICIAL_SQUARE_RANGE &&
+                it.potionContentsComponent.effects.any { effect ->
+                effect.effectType == MobEffects.REGENERATION || effect.effectType == MobEffects.INSTANT_HEALTH
+                    || effect.effectType == MobEffects.STRENGTH
+            }
+        }
+
+    /**
+     * Check if splash potion is nearby to prevent throwing a potion that is not needed
+     */
+    private fun isSplashNearby() =
+        world.entitiesForRendering().filterIsInstance<AbstractThrownPotion>().any {
+            it.squaredDistanceTo(player) <= BENEFICIAL_SQUARE_RANGE
+        }
+
+}
