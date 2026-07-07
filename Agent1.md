@@ -4781,3 +4781,81 @@ User requested a significant visual-quality pass for the **current HUD only**:
 - New fallback pipelines live in `render/popchams/PopChamsPipelines.kt`.
 - Build passed with `assemble -x detekt`.
 - FCL result: working.
+
+## HandShader — AlphaDLC port (2026-07-07)
+
+Ported AlphaDLC `HandShader` to Minecraft 26.1.2.
+
+### Implementation
+
+Modes:
+
+- Full
+- Partial
+- WebShader
+- Plasma
+
+Settings and shader equations match AlphaDLC.
+
+HandShader uses a dedicated color setting with default `#9682FF`.
+It does not use ThemeSystem.
+
+### Render path
+
+The module hooks around the actual:
+
+`GameRenderer.renderItemInHand(CameraRenderState, float, Matrix4fc)`
+
+Frame flow:
+
+1. Capture main color before hand rendering.
+2. Vanilla renders first-person hand/item.
+3. Capture color after hand rendering.
+4. Sample after-hand color and main depth texture.
+5. Run one fullscreen post-process.
+6. Copy the result back to the main target.
+
+The original AlphaDLC depth mask is preserved:
+
+```glsl
+depth >= 0.001 && depth < 0.9999
+No stencil, color-difference, fixed screen region, CPU blur, duplicate hand rendering, or visual fallback was added.
+GPU adaptations
+Legacy framebuffer API → TextureTarget and current CommandEncoder
+Shader JSON → ShaderSource and RenderPipeline
+Separate GLSL uniforms → std140 UBO
+Fullscreen quad → fullscreen triangle
+Pipeline precompiled through MixinShaderManager
+Capture targets are reused and resized safely. No per-frame shader compilation or framebuffer allocation.
+Important WebShader note
+AlphaDLC WebShader is a screen-space procedural web/vein pattern clipped by the hand/item depth mask.
+It does not use item UVs, model coordinates, surface normals, or world position.
+On thin pixel-extruded items such as a Diamond Sword, it may appear as segmented lines or rectangular sections. Do not rewrite it to imitate Plasma.
+The smooth wave effect from the reference video was Plasma, not WebShader.
+Files
+ModuleHandShader.kt
+HandShaderPipeline.kt
+resources/liquidbounce/shaders/hand_shader/
+MixinGameRenderer.java
+MixinShaderManager.java
+ModuleManager.kt
+Deviations
+AlphaDLC color presets were not recreated.
+Mode-dependent setting visibility was not recreated.
+These are UI differences only.
+Verification
+git diff --check: passed
+assemble -x detekt: passed
+WebShader tested on FCL
+Remaining full FCL tests: Full, Partial, Plasma, offhand/both hands, map, crossbow, Iris, resize, resource reload
+Future-edit rules
+Do not add or replace the implementation with:
+generic/CPU blur
+fallback rendering
+Iris emissive paths
+shaderpack bloom
+ThemeSystem colors
+secondary gradients
+replacement textures
+duplicate hand rendering
+For visual bugs, inspect depth mask, fullscreen UVs, output-target coverage, and MobileGlues precision before changing shader equations.

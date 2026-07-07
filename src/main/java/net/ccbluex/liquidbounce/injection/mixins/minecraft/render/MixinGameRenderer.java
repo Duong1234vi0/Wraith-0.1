@@ -9,6 +9,7 @@ import net.ccbluex.liquidbounce.event.events.PerspectiveEvent;
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleCustomAmbience;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleTracers;
+import net.ccbluex.liquidbounce.features.module.modules.render.handshader.ModuleHandShader;
 import net.ccbluex.liquidbounce.utils.render.WorldToScreen;
 import net.minecraft.client.Camera;
 import net.minecraft.client.CameraType;
@@ -76,6 +77,29 @@ public abstract class MixinGameRenderer {
                 this.mainCamera,
                 deltaTracker.getGameTimeDeltaPartialTick(false)
         ));
+    }
+
+    @Inject(
+        method = "renderLevel",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/GameRenderer;renderItemInHand(Lnet/minecraft/client/renderer/state/level/CameraRenderState;FLorg/joml/Matrix4fc;)V"
+        )
+    )
+    private void hookHandShaderBeforeHandRender(DeltaTracker deltaTracker, CallbackInfo ci) {
+        ModuleHandShader.INSTANCE.beginHandCapture(this.minecraft.getMainRenderTarget());
+    }
+
+    @Inject(
+        method = "renderLevel",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/GameRenderer;renderItemInHand(Lnet/minecraft/client/renderer/state/level/CameraRenderState;FLorg/joml/Matrix4fc;)V",
+            shift = At.Shift.AFTER
+        )
+    )
+    private void hookHandShaderAfterHandRender(DeltaTracker deltaTracker, CallbackInfo ci) {
+        ModuleHandShader.INSTANCE.finishHandCapture(this.minecraft.getMainRenderTarget());
     }
 
     @ModifyArg(

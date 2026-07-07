@@ -52,6 +52,7 @@ import net.ccbluex.liquidbounce.features.module.modules.player.autobuff.ModuleAu
 import net.ccbluex.liquidbounce.features.module.modules.player.offhand.ModuleOffhand
 import net.ccbluex.liquidbounce.features.module.modules.render.*
 import net.ccbluex.liquidbounce.features.module.modules.render.esp.ModuleESP
+import net.ccbluex.liquidbounce.features.module.modules.render.handshader.ModuleHandShader
 import net.ccbluex.liquidbounce.features.module.modules.render.hats.ModuleHats
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.ModuleNameTags
 import net.ccbluex.liquidbounce.features.module.modules.render.popchams.ModulePopChams
@@ -248,6 +249,7 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleFreeCam,
             ModuleFreeLook,
             ModuleFullBright,
+            ModuleHandShader,
             ModuleHats,
             ModuleHud,
             ModuleItemESP,
