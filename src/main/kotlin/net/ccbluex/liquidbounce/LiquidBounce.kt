@@ -236,12 +236,11 @@ object LiquidBounce : EventListener {
      * Prepares the GUI stage of the client.
      */
     private fun prepareGuiStage() {
-        // Prepare glyph manager
         val duration = measureTime {
-            FontManager.createGlyphManager()
+            FontManager.initialize()
         }
-        logger.info("Completed loading fonts in ${duration.inWholeMilliseconds} ms.")
-        logger.info("Fonts: [ ${FontManager.fontFaces.joinToString { face -> face.name }} ]")
+        logger.info("Completed loading MSDF fonts in ${duration.inWholeMilliseconds} ms.")
+        logger.info("MSDF fonts: [ ${FontManager.requiredFontNames().joinToString()} ]")
     }
 
     /**
@@ -309,6 +308,13 @@ object LiquidBounce : EventListener {
      */
     object ClientInitializer : PreparableReloadListener {
         fun run() {
+            if (isInitialized) {
+                runCatching(FontManager::reload).onFailure {
+                    ErrorHandler.fatal(it, additionalMessage = "Client font resource reload")
+                }
+                return
+            }
+
             runCatching(::initializeClient).onSuccess {
                 logger.info("$CLIENT_NAME has been successfully initialized.")
             }.onFailure {

@@ -20,16 +20,13 @@ package net.ccbluex.liquidbounce.features.module.modules.render.gui
 
 import com.mojang.blaze3d.vertex.PoseStack
 import net.ccbluex.liquidbounce.render.FontManager
-import net.ccbluex.liquidbounce.render.engine.type.Color4b
-import net.ccbluex.liquidbounce.render.gui.drawCustomFontText
+import net.ccbluex.liquidbounce.render.font.msdf.FontRenderer
 import net.ccbluex.liquidbounce.render.gui.drawGradientGlowRect
 import net.ccbluex.liquidbounce.render.gui.drawGlowRect
 import net.ccbluex.liquidbounce.render.gui.drawRoundedGradientOutline
 import net.ccbluex.liquidbounce.render.gui.drawRoundedOutline
 import net.ccbluex.liquidbounce.render.gui.drawRoundedRect
 import net.ccbluex.liquidbounce.render.gui.drawRoundedRectVerticalRadii
-import net.ccbluex.liquidbounce.render.renderEnvironmentForGUI
-import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.entity.drawContextForMatrices
 import kotlin.math.PI
 import kotlin.math.cos
@@ -281,63 +278,9 @@ object ExosGuiRenderer {
             return
         }
 
-        val context = drawContextForMatrices(matrices)
-        if (context != null) {
-            // Pixel size of one logical font unit on screen. Vanilla's bitmap
-            // font reads cleanly down to ~8px so prefer it whenever the custom
-            // glyph atlas would alias.
-            val effectivePixels = size * mc.window.guiScale.toFloat()
-            val customFontReady = effectivePixels >= MIN_CUSTOM_FONT_PIXELS &&
-                FontManager.glyphManagerOrNull() != null
-            if (customFontReady) {
-                runCatching {
-                    context.drawCustomFontText(
-                        FontManager.FONT_RENDERER,
-                        text,
-                        x,
-                        y,
-                        color,
-                        size,
-                        shadow,
-                    )
-                }.onFailure {
-                    context.text(mc.font, text, Math.round(x), Math.round(y), color, shadow)
-                }
-            } else {
-                context.text(mc.font, text, Math.round(x), Math.round(y), color, shadow)
-            }
-            return
-        }
-
-        renderEnvironmentForGUI(matrices) {
-            FontManager.FONT_RENDERER.withBuffers { buffers ->
-                draw(
-                    process(text, Color4b(color, hasAlpha = true)),
-                    x,
-                    y,
-                    shadow = shadow,
-                    scale = size / FontManager.DEFAULT_FONT_SIZE,
-                )
-                commit(buffers)
-            }
-        }
+        drawWithRenderer(matrices, FontManager.default(size), text, x, y, color, shadow)
     }
 
-    /**
-     * Threshold (in physical screen pixels per font unit) below which the
-     * custom Inter atlas turns blurry. Below this we fall back to the
-     * vanilla bitmap font which scales much more cleanly at low GUI
-     * scales / low resolutions.
-     */
-    private const val MIN_CUSTOM_FONT_PIXELS = 22f
-
-    /**
-     * #Edit By Claude: like [text] but ALWAYS uses the custom Inter atlas,
-     * ignoring the [MIN_CUSTOM_FONT_PIXELS] gate. The TargetHud wants the
-     * styled font even at small sizes (the vanilla bitmap font looked out of
-     * place). Falls back to vanilla only if the glyph manager isn't ready or
-     * the draw throws.
-     */
     fun textInter(
         matrices: PoseStack,
         text: String,
@@ -350,62 +293,29 @@ object ExosGuiRenderer {
         if (text.isEmpty()) {
             return
         }
-        val context = drawContextForMatrices(matrices) ?: return
-        if (FontManager.glyphManagerOrNull() != null) {
-            runCatching {
-                context.drawCustomFontText(FontManager.FONT_RENDERER, text, x, y, color, size, shadow)
-            }.onFailure {
-                context.text(mc.font, text, Math.round(x), Math.round(y), color, shadow)
-            }
-        } else {
-            context.text(mc.font, text, Math.round(x), Math.round(y), color, shadow)
-        }
+
+        drawWithRenderer(matrices, FontManager.default(size), text, x, y, color, shadow)
     }
 
-    /**
-     * #Edit By Claude 2026-06-17: draw text with a SPECIFIC custom-font renderer
-     * (montserrat for titles, pixel for body), always using the custom glyph atlas
-     * and ignoring the [MIN_CUSTOM_FONT_PIXELS] gate. Falls back to vanilla bitmap
-     * font only when the glyph manager isn't ready or the draw throws. Shared by
-     * [title] and [body].
-     */
     private fun drawWithRenderer(
         matrices: PoseStack,
-        renderer: net.ccbluex.liquidbounce.render.engine.font.FontRenderer,
+        renderer: FontRenderer,
         text: String,
         x: Float,
         y: Float,
         color: Int,
-        size: Float,
         shadow: Boolean,
     ) {
         if (text.isEmpty()) {
             return
         }
         val context = drawContextForMatrices(matrices) ?: return
-        if (FontManager.glyphManagerOrNull() != null) {
-            runCatching {
-                context.drawCustomFontText(renderer, text, x, y, color, size, shadow)
-            }.onFailure {
-                context.text(mc.font, text, Math.round(x), Math.round(y), color, shadow)
-            }
-        } else {
-            context.text(mc.font, text, Math.round(x), Math.round(y), color, shadow)
+        if (shadow) {
+            // AlphaDLC's MSDF font renderer does not add a shader-side shadow.
         }
+        renderer.drawString(context, text, x, y, color)
     }
 
-    /**
-     * #Edit By Claude 2026-06-17: per-font visual normalisation. Existing UI sizes were tuned for
-     * Inter (cap-height ratio ≈ 0.727 of the size). The Celestial faces differ:
-     *   Montserrat Bold cap-height ratio ≈ 0.700 (≈ Inter, but the Bold weight reads "a bit big")
-     *   Pixel "Bit Cell" cap-height ratio ≈ 0.438 (only ~60% of Inter → looked tiny/unreadable)
-     * So title text is scaled DOWN slightly and body text is scaled UP to match Inter's optical size.
-     * Both the draw and the width helpers apply the SAME factor, so truncation/layout stay consistent.
-     */
-    private const val TITLE_FONT_SCALE = 0.92f
-    private const val BODY_FONT_SCALE = 1.6f
-
-    /** #Edit By Claude 2026-06-17: title font (Celestial montserrat) — module names, headers, logo. */
     fun title(
         matrices: PoseStack,
         text: String,
@@ -414,9 +324,8 @@ object ExosGuiRenderer {
         color: Int,
         size: Float = 15f,
         shadow: Boolean = false,
-    ) = drawWithRenderer(matrices, FontManager.TITLE_FONT_RENDERER, text, x, y, color, size * TITLE_FONT_SCALE, shadow)
+    ) = drawWithRenderer(matrices, FontManager.title(size), text, x, y, color, shadow)
 
-    /** #Edit By Claude 2026-06-17: body font (Celestial pixel) — descriptions, setting values, notes. */
     fun body(
         matrices: PoseStack,
         text: String,
@@ -425,25 +334,33 @@ object ExosGuiRenderer {
         color: Int,
         size: Float = 15f,
         shadow: Boolean = false,
-    ) = drawWithRenderer(matrices, FontManager.BODY_FONT_RENDERER, text, x, y, color, size * BODY_FONT_SCALE, shadow)
+    ) = drawWithRenderer(matrices, FontManager.body(size), text, x, y, color, shadow)
 
-    /** #Edit By Claude 2026-06-17: measured width for the montserrat title font (matches [title] scale). */
     fun titleWidth(text: String, size: Float = 15f): Float {
         if (text.isEmpty()) {
             return 0f
         }
-        val font = FontManager.TITLE_FONT_RENDERER
-        return font.getStringWidth(font.process(text), false) * (size * TITLE_FONT_SCALE / FontManager.DEFAULT_FONT_SIZE)
+
+        return FontManager.title(size).getStringWidth(text)
     }
 
-    /** #Edit By Claude 2026-06-17: measured width for the pixel body font (matches [body] scale). */
     fun bodyWidth(text: String, size: Float = 15f): Float {
         if (text.isEmpty()) {
             return 0f
         }
-        val font = FontManager.BODY_FONT_RENDERER
-        return font.getStringWidth(font.process(text), false) * (size * BODY_FONT_SCALE / FontManager.DEFAULT_FONT_SIZE)
+
+        return FontManager.body(size).getStringWidth(text)
     }
+
+    fun titleHeight(text: String = "A", size: Float = 15f): Float =
+        FontManager.title(size).getStringHeight(text)
+
+    fun titleHeight(size: Float): Float = titleHeight("A", size)
+
+    fun bodyHeight(text: String = "A", size: Float = 15f): Float =
+        FontManager.body(size).getStringHeight(text)
+
+    fun bodyHeight(size: Float): Float = bodyHeight("A", size)
 
     /** #Edit By Claude: scissor helpers so callers can clip effects (e.g. the
      * TargetHud sheen) to a region. Coordinates are screen-space pixels. */
@@ -462,9 +379,13 @@ object ExosGuiRenderer {
             return 0f
         }
 
-        val font = FontManager.FONT_RENDERER
-        return font.getStringWidth(font.process(text), false) * (size / FontManager.DEFAULT_FONT_SIZE)
+        return FontManager.default(size).getStringWidth(text)
     }
+
+    fun textHeight(text: String = "A", size: Float = 15f): Float =
+        FontManager.default(size).getStringHeight(text)
+
+    fun textHeight(size: Float): Float = textHeight("A", size)
 
     fun withAlpha(color: Int, alpha: Int): Int =
         (alpha.coerceIn(0, 255) shl 24) or (color and 0x00FFFFFF)

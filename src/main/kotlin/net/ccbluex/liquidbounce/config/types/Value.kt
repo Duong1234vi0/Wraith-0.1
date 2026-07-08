@@ -388,7 +388,7 @@ class ChooseListValue<T : NamedChoice>(
     }
 
     override fun setByString(string: String) {
-        val newValue = choices.firstOrNull { it.choiceName == string }
+        val newValue = choices.firstOrNull { it.choiceName == string || string in it.choiceAliases }
 
         if (newValue == null) {
             throw IllegalArgumentException(
@@ -409,6 +409,8 @@ class ChooseListValue<T : NamedChoice>(
 
 interface NamedChoice {
     val choiceName: String
+    val choiceAliases: Array<String>
+        get() = emptyArray()
 }
 
 enum class ValueType(

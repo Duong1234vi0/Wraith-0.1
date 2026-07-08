@@ -17,7 +17,7 @@ public class MixinHeadFeatureRenderer<S extends LivingEntityRenderState> {
             at = @At("HEAD"),
             cancellable = true
     ) private void onRender(PoseStack matrixStack, SubmitNodeCollector submitNodeCollector, int i, S livingEntityRenderState, float f, float g, CallbackInfo ci) {
-        if (ModuleCustomModels.shouldHidePlayerFeature(livingEntityRenderState)) {
+        if (ModuleCustomModels.shouldHideArmor(livingEntityRenderState)) {
             ci.cancel();
         }
     }

@@ -38,7 +38,7 @@ public class MixinHeldItemFeatureRenderer {
             method = "submitArmWithItem",
             at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;translate(FFF)V")
     )
-    private void hookRabbitHeldItemOffset(
+    private void hookCustomModelHeldItemOffset(
             Args args,
             ArmedEntityRenderState state,
             ItemStackRenderState item,
@@ -48,13 +48,13 @@ public class MixinHeldItemFeatureRenderer {
             SubmitNodeCollector submitNodeCollector,
             int light
     ) {
-        if (!ModuleCustomModels.shouldUseRabbit(state)) {
+        float[] transform = ModuleCustomModels.customHeldItemTransform(state, arm);
+        if (transform == null) {
             return;
         }
 
-        boolean left = arm == HumanoidArm.LEFT;
-        args.set(0, ((left ? -4.0F : 0.9F) / 16.0F) + 0.1F);
-        args.set(1, 0.125F);
-        args.set(2, -0.9F);
+        args.set(0, transform[0]);
+        args.set(1, transform[1]);
+        args.set(2, transform[2]);
     }
 }

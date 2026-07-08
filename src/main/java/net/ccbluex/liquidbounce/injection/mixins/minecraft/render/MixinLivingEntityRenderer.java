@@ -111,7 +111,7 @@ public abstract class MixinLivingEntityRenderer<T extends LivingEntity, S extend
     )
     private RenderType hookCustomModelsHideVanillaBody(RenderType original, S state, PoseStack poseStack,
                                                        SubmitNodeCollector submitNodeCollector, CameraRenderState camera) {
-        return ModuleCustomModels.shouldUseRabbit(state) ? null : original;
+        return ModuleCustomModels.shouldUseCustomModel(state) ? null : original;
     }
 
     @Inject(method = "submit", at = @At("HEAD"))
@@ -128,13 +128,13 @@ public abstract class MixinLivingEntityRenderer<T extends LivingEntity, S extend
                     shift = At.Shift.BEFORE
             )
     )
-    private void hookCustomModelsRabbit(S state, PoseStack poseStack, SubmitNodeCollector submitNodeCollector,
+    private void hookCustomModelsSubmit(S state, PoseStack poseStack, SubmitNodeCollector submitNodeCollector,
                                         CameraRenderState camera, CallbackInfo ci) {
         if (!this.liquid_bounce$customModelSubmitted
                 && state instanceof AvatarRenderState avatarState
                 && this.model instanceof PlayerModel playerModel
-                && ModuleCustomModels.shouldUseRabbit(avatarState)) {
-            ModuleCustomModels.renderRabbit(playerModel, poseStack, submitNodeCollector, avatarState);
+                && ModuleCustomModels.shouldUseCustomModel(avatarState)) {
+            ModuleCustomModels.renderCustomModel(playerModel, poseStack, submitNodeCollector, avatarState);
         }
         this.liquid_bounce$customModelSubmitted = true;
     }

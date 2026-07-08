@@ -68,9 +68,6 @@ object ModuleDebug : ClientModule("Debug", Category.RENDER) {
 
     private val expireTime by int("Expires", 5, 1..30, "secs")
 
-    private val fontRenderer
-        get() = FontManager.FONT_RENDERER
-
     object RenderSimulatedPlayer : ToggleableConfigurable(this, "SimulatedPlayer", false) {
 
         private val ticksToPredict by int("TicksToPredict", 20, 5..100)
@@ -133,72 +130,61 @@ object ModuleDebug : ClientModule("Debug", Category.RENDER) {
             return@handler
         }
 
-        renderEnvironmentForGUI {
-            fontRenderer.withBuffers { buffers ->
-                /**
-                 * Separate the debugged owner from its parameter
-                 * Structure should be like this:
-                 * Owner ->
-                 *   Parameter Name: Parameter Value
-                 *   Parameter Name: Parameter Value
-                 *   Parameter Name: Parameter Value
-                 */
-                val textList = mutableListOf<Component>()
+        val titleFont = FontManager.default(13.0f)
+        val lineSize = 7.3f
+        val lineFont = FontManager.default(lineSize)
 
-                val debuggedOwners = debugParameters.keys.groupBy { it.owner }
+        /**
+         * Separate the debugged owner from its parameter
+         * Structure should be like this:
+         * Owner ->
+         *   Parameter Name: Parameter Value
+         *   Parameter Name: Parameter Value
+         *   Parameter Name: Parameter Value
+         */
+        val textList = mutableListOf<Component>()
 
-                val currentTime = System.currentTimeMillis()
+        val debuggedOwners = debugParameters.keys.groupBy { it.owner }
 
-                fun ownerName(owner: Any): MutableComponent {
-                    return when (owner) {
-                        is ClientModule -> owner.name.asText().formatted(ChatFormatting.GOLD).bold(true)
-                        is Command -> "Command ${owner.name}".asText().formatted(ChatFormatting.GOLD).underline(true)
-                        is EventListener -> owner.parent()?.let { ownerName(it) } ?: "".asText()
-                                .append("::".asText().formatted(ChatFormatting.GRAY))
-                                .append(
-                                    owner.javaClass.simpleName.asText().formatted(ChatFormatting.DARK_AQUA).italic(true)
-                                )
-                        is Sequence -> ownerName(owner.owner)
-                        else -> owner.javaClass.simpleName.asText().formatted(ChatFormatting.BLUE)
-                    }
-                }
+        val currentTime = System.currentTimeMillis()
 
-                debuggedOwners.forEach { (owner, parameter) ->
-                    textList += ownerName(owner)
-
-                    parameter.forEach { debuggedParameter ->
-                        val parameterName = debuggedParameter.name
-                        val parameterCapture = debugParameters[debuggedParameter] ?: return@forEach
-                        val duration = (currentTime - parameterCapture.time) / 1000
-                        textList += "$parameterName: ".asText().formatted(ChatFormatting.WHITE)
-                            .append(parameterCapture.value.toString().asText().formatted(ChatFormatting.GREEN))
-                            .append(" [${duration}s ago]".asText().formatted(ChatFormatting.GRAY))
-                    }
-                }
-
-                draw(
-                    process("Debugging".asText()),
-                    120f,
-                    22f,
-                    shadow = true,
-                    z = 0f,
-                    scale = 0.3f
-                )
-
-                // Draw text line one by one
-                textList.forEachIndexed { index, text ->
-                    draw(
-                        process(text),
-                        120f,
-                        40 + ((fontRenderer.height * 0.17f) * index).toFloat(),
-                        shadow = true,
-                        z = 0f,
-                        scale = 0.17f
-                    )
-                }
-
-                commit(buffers)
+        fun ownerName(owner: Any): MutableComponent {
+            return when (owner) {
+                is ClientModule -> owner.name.asText().formatted(ChatFormatting.GOLD).bold(true)
+                is Command -> "Command ${owner.name}".asText().formatted(ChatFormatting.GOLD).underline(true)
+                is EventListener -> owner.parent()?.let { ownerName(it) } ?: "".asText()
+                        .append("::".asText().formatted(ChatFormatting.GRAY))
+                        .append(
+                            owner.javaClass.simpleName.asText().formatted(ChatFormatting.DARK_AQUA).italic(true)
+                        )
+                is Sequence -> ownerName(owner.owner)
+                else -> owner.javaClass.simpleName.asText().formatted(ChatFormatting.BLUE)
             }
+        }
+
+        debuggedOwners.forEach { (owner, parameter) ->
+            textList += ownerName(owner)
+
+            parameter.forEach { debuggedParameter ->
+                val parameterName = debuggedParameter.name
+                val parameterCapture = debugParameters[debuggedParameter] ?: return@forEach
+                val duration = (currentTime - parameterCapture.time) / 1000
+                textList += "$parameterName: ".asText().formatted(ChatFormatting.WHITE)
+                    .append(parameterCapture.value.toString().asText().formatted(ChatFormatting.GREEN))
+                    .append(" [${duration}s ago]".asText().formatted(ChatFormatting.GRAY))
+            }
+        }
+
+        titleFont.drawText(context, "Debugging".asText(), 120f, 22f, -1)
+
+        textList.forEachIndexed { index, text ->
+            lineFont.drawText(
+                context,
+                text,
+                120f,
+                40f + lineSize * index,
+                -1
+            )
         }
     }
 

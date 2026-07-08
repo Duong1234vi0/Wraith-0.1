@@ -20,21 +20,13 @@
 
 package net.ccbluex.liquidbounce.render.gui
 
-import net.ccbluex.liquidbounce.utils.client.mc
 import net.minecraft.client.gui.GuiGraphicsExtractor
-import net.minecraft.client.gui.navigation.ScreenRectangle
-import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.resources.Identifier
-import org.joml.Matrix3x2f
-import kotlin.math.ceil
-import kotlin.math.floor
-import kotlin.math.max
 
 /**
  * Draws a player skin FACE (head front + hat overlay) into the GUI through
  * vanilla 1.26.2's batched render path ([GuiGraphicsExtractor.guiRenderState]),
- * the only custom-texture path that composites correctly on this fork. Mirrors
- * the [GuiGraphicsExtractor.drawCustomFontText] idiom in CustomFontGui.kt.
+ * the only custom-texture path that composites correctly on this fork.
  *
  * The skin [Identifier] is resolved to its GPU [textureView]/[sampler] exactly
  * like `RenderCompat.bindTextureIfNeeded`. Standard 64x64 skin layout is
@@ -50,31 +42,35 @@ fun GuiGraphicsExtractor.drawSkinFace(
     size: Float,
     argb: Int = 0xFFFFFFFF.toInt(),
 ): Boolean {
-    val texture = runCatching { mc.textureManager.getTexture(skinId) }.getOrNull() ?: return false
-    val view = texture.textureView ?: return false
-    val sampler = texture.sampler ?: return false
-
-    val pose = Matrix3x2f(this.pose())
-    val scissor = this.scissorStack.peek()
-    val setup = TextureSetup.singleTexture(view, sampler)
-    val pipeline = GlyphGuiElementRenderState.defaultPipeline()
-    val bounds = quadBounds(x, y, x + size, y + size, pose, scissor)
-
-    // Base face: u/v 8..16 of 64 -> 0.125..0.25
-    this.guiRenderState.addGuiElement(
-        GlyphGuiElementRenderState(
-            x, y, x + size, y + size,
-            FACE_U0, FACE_V0, FACE_U1, FACE_V1,
-            argb, pipeline, setup, pose, scissor, bounds,
-        )
+    val drewFace = drawRoundedTexture(
+        skinId,
+        x,
+        y,
+        size,
+        size,
+        0f,
+        argb,
+        FACE_U0,
+        FACE_V0,
+        FACE_U1,
+        FACE_V1,
     )
-    // Hat overlay on top: u 40..48 / v 8..16 -> u 0.625..0.75, v 0.125..0.25
-    this.guiRenderState.addGuiElement(
-        GlyphGuiElementRenderState(
-            x, y, x + size, y + size,
-            HAT_U0, HAT_V0, HAT_U1, HAT_V1,
-            argb, pipeline, setup, pose, scissor, bounds,
-        )
+    if (!drewFace) {
+        return false
+    }
+
+    drawRoundedTexture(
+        skinId,
+        x,
+        y,
+        size,
+        size,
+        0f,
+        argb,
+        HAT_U0,
+        HAT_V0,
+        HAT_U1,
+        HAT_V1,
     )
     return true
 }
@@ -123,35 +119,6 @@ fun GuiGraphicsExtractor.drawRoundedSkinFace(
         HAT_V1,
     )
     return true
-}
-
-/**
- * Transforms the quad corners by [pose] and intersects the axis-aligned
- * bounding box with [scissor]. Copied from CustomFontGui.kt's glyphBounds so
- * vanilla's scissor/sort behaviour stays intact.
- */
-private fun quadBounds(
-    x0: Float,
-    y0: Float,
-    x1: Float,
-    y1: Float,
-    pose: Matrix3x2f,
-    scissor: ScreenRectangle?,
-): ScreenRectangle? {
-    val v1x = pose.m00() * x0 + pose.m10() * y0 + pose.m20()
-    val v1y = pose.m01() * x0 + pose.m11() * y0 + pose.m21()
-    val v2x = pose.m00() * x1 + pose.m10() * y0 + pose.m20()
-    val v2y = pose.m01() * x1 + pose.m11() * y0 + pose.m21()
-    val v3x = pose.m00() * x0 + pose.m10() * y1 + pose.m20()
-    val v3y = pose.m01() * x0 + pose.m11() * y1 + pose.m21()
-    val v4x = pose.m00() * x1 + pose.m10() * y1 + pose.m20()
-    val v4y = pose.m01() * x1 + pose.m11() * y1 + pose.m21()
-    val minX = floor(minOf(v1x, v2x, v3x, v4x)).toInt()
-    val minY = floor(minOf(v1y, v2y, v3y, v4y)).toInt()
-    val maxX = ceil(maxOf(v1x, v2x, v3x, v4x)).toInt()
-    val maxY = ceil(maxOf(v1y, v2y, v3y, v4y)).toInt()
-    val rect = ScreenRectangle(minX, minY, max(1, maxX - minX), max(1, maxY - minY))
-    return runCatching { scissor?.intersection(rect) ?: rect }.getOrDefault(rect)
 }
 
 private const val FACE_U0 = 8f / 64f

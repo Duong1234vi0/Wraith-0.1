@@ -21,7 +21,6 @@ import net.ccbluex.liquidbounce.utils.entity.*
 
 import net.ccbluex.liquidbounce.config.types.nesting.Configurable
 import net.ccbluex.liquidbounce.config.types.NamedChoice
-import net.ccbluex.liquidbounce.render.engine.font.BoundingBox2f
 import net.ccbluex.liquidbounce.utils.client.mc
 
 class Alignment(

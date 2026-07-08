@@ -20,225 +20,908 @@ package net.ccbluex.liquidbounce.features.module.modules.render.nametags
 
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.event.events.OverlayRenderEvent
+import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
+import net.ccbluex.liquidbounce.event.events.GameTickEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.misc.FriendManager
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
-import net.ccbluex.liquidbounce.features.module.modules.render.gui.ClientTheme
-import net.ccbluex.liquidbounce.features.module.modules.render.gui.ExosGuiRenderer
+import net.ccbluex.liquidbounce.features.module.modules.misc.antibot.ModuleAntiBot
+import net.ccbluex.liquidbounce.features.module.modules.render.alphadlc.AlphaProjection
+import net.ccbluex.liquidbounce.features.module.modules.render.gui.ClickGuiScreen
+import net.ccbluex.liquidbounce.render.font.msdf.FontRenderer
+import net.ccbluex.liquidbounce.render.font.msdf.Fonts
 import net.ccbluex.liquidbounce.utils.client.mc
-import net.ccbluex.liquidbounce.utils.client.player
-import net.ccbluex.liquidbounce.utils.entity.armorItems
-import net.ccbluex.liquidbounce.utils.entity.camera
 import net.ccbluex.liquidbounce.utils.entity.drawItem
-import net.ccbluex.liquidbounce.utils.entity.interpolateCurrentPosition
-import net.ccbluex.liquidbounce.utils.entity.matrices
-import net.ccbluex.liquidbounce.utils.render.WorldToScreen
+import net.ccbluex.liquidbounce.utils.entity.drawText
+import net.ccbluex.liquidbounce.utils.entity.getActualHealth
+import net.minecraft.ChatFormatting
 import net.minecraft.client.gui.DrawContext
-import net.minecraft.world.entity.Entity
+import net.minecraft.client.player.AbstractClientPlayer
+import net.minecraft.client.resources.DefaultPlayerSkin
+import net.minecraft.network.chat.Component
+import net.minecraft.network.chat.MutableComponent
+import net.minecraft.network.chat.Style
+import net.minecraft.network.chat.contents.PlainTextContents
+import net.minecraft.resources.Identifier
+import net.minecraft.world.entity.EquipmentSlot
+import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.entity.Mob
+import net.minecraft.world.entity.animal.Animal
+import net.minecraft.world.entity.item.ItemEntity
+import net.minecraft.world.entity.item.PrimedTnt
 import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemStack
+import net.minecraft.world.phys.AABB
 import java.util.Locale
+import java.util.UUID
 import kotlin.math.max
+import kotlin.math.sqrt
 
 /**
- * Wyvern-DLC-style compact player nametags.
+ * Source-faithful port of AlphaDLC `NameTags`.
+ *
+ * Layout constants, font sizes (via [Fonts.getSize], which halves the display
+ * size exactly like AlphaDLC), text composition, skin/armor/hand rendering, and
+ * the fixed GUI-pixel tag geometry all mirror the reference. Tags do not scale
+ * with distance.
  */
 object ModuleNameTags : ClientModule("NameTags", Category.RENDER, aliases = arrayOf("Nametags")) {
 
-    private val entityTypes by multiEnumChoice("EntityTypes", EntityType.PLAYER, EntityType.ITEM)
-    private val armor by boolean("Armor", true)
-    private val mainHand by boolean("MainHand", true)
-    private val offHand by boolean("OffHand", true)
+    private const val TAG_PADDING_TOP = 1.0f
+    private const val TAG_PADDING_BOTTOM = 0.5f
+    private const val TAG_BG_ROUND = 1.0f
+    private val TAG_BG_COLOR = argb(150, 27, 27, 30)
+    private const val ARMOR_SLOT_SIZE = 14.0f
+    private const val ARMOR_ITEM_SCALE = 0.65f
+    private const val HAND_TAG_GAP = 2.0f
 
-    @Suppress("unused")
-    private val overlayHandler = handler<OverlayRenderEvent> { event ->
-        val level = mc.level ?: return@handler
-        if (mc.player == null) {
-            return@handler
+    private const val FRIEND_RGB = 0x55FF55
+
+    private val entityTypes by multiEnumChoice("EntityTypes", EntityType.PLAYERS, EntityType.ITEMS)
+    private val playerSettings by multiEnumChoice("PlayerSettings", PlayerSetting.ARMOR, PlayerSetting.HELD_ITEMS)
+        .apply {
+            doNotIncludeWhen {
+                EntityType.PLAYERS !in entityTypes &&
+                    EntityType.MOBS !in entityTypes &&
+                    EntityType.ANIMALS !in entityTypes &&
+                    EntityType.FRIENDS !in entityTypes
+            }
         }
+    private val fontMode by enumChoice("Font", FontChoice.NEW)
+    private val blur by boolean("Blur", false)
 
-        val tags = level.players()
-            .asSequence()
-            .filter { it != player }
-            .filter { shouldRenderNametag(it) }
-            .mapNotNull { createTag(it, event.tickDelta) }
-            .sortedByDescending { it.distanceSqr }
-            .toList()
-
-        for ((index, tag) in tags.withIndex()) {
-            drawTag(event.context, tag, index)
-        }
-    }
+    private val players = ArrayList<Player>()
+    private val playerTextCache = HashMap<UUID, MutableComponent>()
+    private val playerSkinCache = HashMap<UUID, Identifier>()
+    private val armorScratch = ArrayList<ItemStack>(6)
+    private val playerLayouts = ArrayList<PlayerTagLayout>(64)
+    private val genericLayouts = ArrayList<GenericTagLayout>(128)
+    private var searchBox = AABB(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
     @JvmStatic
-    fun shouldRenderNametag(entity: Entity): Boolean {
-        return entity is Player && EntityType.PLAYER in entityTypes
-    }
-
-    @JvmStatic
-    fun shouldCancelVanillaNametag(entity: Entity): Boolean {
+    fun shouldCancelVanillaNametag(entity: net.minecraft.world.entity.Entity): Boolean {
+        // AlphaDLC PlayerEntityRendererMixin cancels vanilla PLAYER labels whenever
+        // the module is enabled, independent of the Players selection.
         return entity is Player
     }
 
-    private fun createTag(entity: Player, tickDelta: Float): Tag? {
-        val interpolated = entity.interpolateCurrentPosition(tickDelta)
-        val head = WorldToScreen.calculateScreenPos(
-            interpolated.add(0.0, entity.bbHeight.toDouble() + 0.35, 0.0)
-        ) ?: return null
-        val legs = WorldToScreen.calculateScreenPos(
-            interpolated.add(0.0, -0.35, 0.0)
-        ) ?: return null
-        if (!isVisibleDepth(head.z.toFloat()) || !isVisibleDepth(legs.z.toFloat())) {
-            return null
-        }
-
-        val cameraPos = mc.gameRenderer.camera.position()
-        val distanceSqr = cameraPos.distanceToSqr(interpolated)
-        val distance = kotlin.math.sqrt(distanceSqr)
-        val scale = (5.0 / max(distance, 5.0)).toFloat().coerceIn(0.55f, 1.35f)
-        return Tag(entity, head.x.toFloat(), head.y.toFloat(), head.z.toFloat(), distanceSqr, scale)
+    @Suppress("unused")
+    private val worldChangeHandler = handler<WorldChangeEvent> {
+        players.clear()
+        playerTextCache.clear()
+        playerSkinCache.clear()
     }
 
-    private fun drawTag(context: DrawContext, tag: Tag, zIndex: Int) {
-        if (!isVisibleDepth(tag.depth)) {
+    @Suppress("unused")
+    private val tickHandler = handler<GameTickEvent> {
+        players.clear()
+        playerTextCache.clear()
+        playerSkinCache.clear()
+        val level = mc.level ?: return@handler
+        for (player in level.players()) {
+            if (player === mc.player || isGhost(player)) {
+                continue
+            }
+            players += player
+            val friend = FriendManager.isFriend(player)
+            playerTextCache[player.uuid] = buildPlayerText(player, friend)
+            playerSkinCache[player.uuid] = resolveSkin(player)
+        }
+    }
+
+    override fun disable() {
+        playerTextCache.clear()
+        playerSkinCache.clear()
+        players.clear()
+        playerLayouts.clear()
+        genericLayouts.clear()
+        NameTagsBlur.invalidate()
+    }
+
+    @Suppress("unused", "LongMethod", "ComplexMethod")
+    private val overlayHandler = handler<OverlayRenderEvent> { event ->
+        val level = mc.level ?: return@handler
+        val localPlayer = mc.player ?: return@handler
+        if (mc.screen is ClickGuiScreen) {
+            return@handler
+        }
+        NameTagsBlur.beginFrame()
+
+        val context = event.context
+        val useCustomFont = fontMode == FontChoice.NEW
+        val font: FontRenderer? = if (useCustomFont) {
+            Fonts.getSize(13, Fonts.FontType.SUISSE_SEMIBOLD)
+        } else {
+            null
+        }
+        val bigFont: FontRenderer? = if (useCustomFont) {
+            Fonts.getSize(15, Fonts.FontType.SUISSE_MEDIUM)
+        } else {
+            null
+        }
+
+        val showPlayers = EntityType.PLAYERS in entityTypes
+        val showFriends = EntityType.FRIENDS in entityTypes
+        val showMobs = EntityType.MOBS in entityTypes
+        val showAnimals = EntityType.ANIMALS in entityTypes
+        val showItems = EntityType.ITEMS in entityTypes
+        val showTnt = EntityType.TNT in entityTypes
+        val showArmor = PlayerSetting.ARMOR in playerSettings
+        val showHands = PlayerSetting.HELD_ITEMS in playerSettings
+        val aresMine = isAresMineCompatibilityActive()
+
+        if (!(showPlayers || showFriends || showMobs || showAnimals || showItems || showTnt)) {
+            return@handler
+        }
+
+        playerLayouts.clear()
+        genericLayouts.clear()
+        val renderDistance = sqrt(AlphaProjection.maxRenderDistanceSq())
+        searchBox = localPlayer.boundingBox.inflate(renderDistance)
+
+        if (showPlayers || showFriends) {
+            collectPlayerLayouts(showPlayers, showFriends, showHands, useCustomFont, font, aresMine)
+        }
+        if (showMobs || showAnimals || showItems || showTnt) {
+            collectWorldLayouts(level, showMobs, showAnimals, showItems, showTnt, showHands, useCustomFont, font, bigFont)
+        }
+
+        for (layout in playerLayouts) {
+            queuePlayerBackgrounds(context, layout, showArmor, showHands, useCustomFont, font)
+        }
+        for (layout in genericLayouts) {
+            queueGenericBackgrounds(context, layout, showArmor, showHands, useCustomFont, font)
+        }
+
+        for (layout in playerLayouts) {
+            drawPlayerContent(context, layout, showArmor, useCustomFont, font)
+        }
+        for (layout in genericLayouts) {
+            drawGenericContent(context, layout, useCustomFont, font, bigFont, showArmor, showHands)
+        }
+    }
+
+    private fun collectPlayerLayouts(
+        showPlayers: Boolean,
+        showFriends: Boolean,
+        showHands: Boolean,
+        useCustomFont: Boolean,
+        font: FontRenderer?,
+        aresMine: Boolean
+    ) {
+        for (player in players) {
+            if (isGhost(player)) {
+                continue
+            }
+            val friend = FriendManager.isFriend(player)
+            if (!showPlayers && (!showFriends || !friend)) {
+                continue
+            }
+            if (!AlphaProjection.isWithinRenderDistance(player) || !AlphaProjection.canSee(player.boundingBox)) {
+                continue
+            }
+            val box = AlphaProjection.projectEntityBox(player, mc.deltaTracker.getGameTimeDeltaPartialTick(true))
+                ?: continue
+
+            val text = playerTextCache[player.uuid] ?: buildPlayerText(player, friend)
+            val layout = PlayerTagLayout(
+                player = player,
+                text = text,
+                centerX = box.minX + (box.maxX - box.minX) / 2.0,
+                topY = box.minY - 2.0,
+                vecY = box.minY,
+                vecW = box.maxY,
+                skin = playerSkinCache[player.uuid],
+                aresMine = aresMine
+            )
+            computePlayerTagMetrics(layout, useCustomFont, font, aresMine)
+            if (showHands && useCustomFont && font != null) {
+                computeHandLayouts(layout, player, font)
+            }
+            playerLayouts += layout
+        }
+    }
+
+    @Suppress("LongParameterList")
+    private fun collectWorldLayouts(
+        level: net.minecraft.client.multiplayer.ClientLevel,
+        showMobs: Boolean,
+        showAnimals: Boolean,
+        showItems: Boolean,
+        showTnt: Boolean,
+        showHands: Boolean,
+        useCustomFont: Boolean,
+        font: FontRenderer?,
+        bigFont: FontRenderer?
+    ) {
+        val tickDelta = mc.deltaTracker.getGameTimeDeltaPartialTick(true)
+        if (showMobs) {
+            for (mob in level.getEntitiesOfClass(Mob::class.java, searchBox) { it !is Animal }) {
+                collectLivingLayout(mob, showHands, useCustomFont, font, tickDelta)
+            }
+        }
+        if (showAnimals) {
+            for (animal in level.getEntitiesOfClass(Animal::class.java, searchBox) { true }) {
+                collectLivingLayout(animal, showHands, useCustomFont, font, tickDelta)
+            }
+        }
+        if (showItems) {
+            val items = level.getEntitiesOfClass(ItemEntity::class.java, searchBox) { true }
+            items.sortBy { it.item.hoverName.contents.let { c -> c is PlainTextContents && c.text() == "empty" } }
+            for (item in items) {
+                if (!AlphaProjection.isWithinRenderDistance(item) || !AlphaProjection.canSee(item.boundingBox)) {
+                    continue
+                }
+                val box = AlphaProjection.projectEntityBox(item, tickDelta) ?: continue
+                val stack = item.item
+                var text: Component = stack.hoverName
+                if (stack.count > 1) {
+                    text = text.copy().append(
+                        "${ChatFormatting.RESET} [${ChatFormatting.RED}${stack.count}${ChatFormatting.GRAY}x${ChatFormatting.RESET}]"
+                    )
+                }
+                val useBigFont = stack.hoverName.contents.let { it is PlainTextContents && it.text() == "empty" }
+                val layout = GenericTagLayout(
+                    type = GenericType.ITEM,
+                    text = text,
+                    centerX = box.minX + (box.maxX - box.minX) / 2.0,
+                    topY = box.minY,
+                    vecY = box.minY,
+                    vecW = box.maxY,
+                    useBigFont = useBigFont
+                )
+                computeSimpleTagMetrics(layout, useCustomFont, if (useBigFont) bigFont else font)
+                genericLayouts += layout
+            }
+        }
+        if (showTnt) {
+            for (tnt in level.getEntitiesOfClass(PrimedTnt::class.java, searchBox) { true }) {
+                if (!AlphaProjection.isWithinRenderDistance(tnt) || !AlphaProjection.canSee(tnt.boundingBox)) {
+                    continue
+                }
+                val box = AlphaProjection.projectEntityBox(tnt, tickDelta) ?: continue
+                val layout = GenericTagLayout(
+                    type = GenericType.TNT,
+                    text = tnt.getFeedbackDisplayName(),
+                    centerX = box.minX + (box.maxX - box.minX) / 2.0,
+                    topY = box.minY,
+                    vecY = box.minY,
+                    vecW = box.maxY
+                )
+                computeSimpleTagMetrics(layout, useCustomFont, font)
+                genericLayouts += layout
+            }
+        }
+    }
+
+    private fun collectLivingLayout(
+        living: LivingEntity,
+        showHands: Boolean,
+        useCustomFont: Boolean,
+        font: FontRenderer?,
+        tickDelta: Float
+    ) {
+        if (!AlphaProjection.isWithinRenderDistance(living) || !AlphaProjection.canSee(living.boundingBox)) {
+            return
+        }
+        val box = AlphaProjection.projectEntityBox(living, tickDelta) ?: return
+        val layout = GenericTagLayout(
+            type = GenericType.LIVING,
+            living = living,
+            text = buildLivingText(living),
+            centerX = box.minX + (box.maxX - box.minX) / 2.0,
+            topY = box.minY - 2.0,
+            vecY = box.minY,
+            vecW = box.maxY
+        )
+        computeSimpleTagMetrics(layout, useCustomFont, font)
+        if (showHands && useCustomFont && font != null) {
+            computeHandLayouts(layout, living, font)
+        }
+        genericLayouts += layout
+    }
+
+    private fun computePlayerTagMetrics(
+        layout: PlayerTagLayout,
+        useCustomFont: Boolean,
+        font: FontRenderer?,
+        aresMine: Boolean
+    ) {
+        if (aresMine) {
+            val headSize = 10.0f
+            val badgeSize = 8.0f
+            val textHeight = 9.0f
+            layout.headSize = headSize
+            layout.badgeSize = badgeSize
+            layout.textHeight = textHeight
+            layout.totalWidth = mc.font.width(layout.text).toFloat() + headSize + 4.0f + layout.badgeWidth
+            layout.boxHeight = tagBoxHeight(textHeight)
+            layout.contentHeight = max(headSize, textHeight)
+            layout.posX = (layout.centerX - layout.totalWidth / 2.0f).toFloat()
+            layout.boxTop = (layout.topY - layout.boxHeight).toFloat()
+            layout.vanilla = true
             return
         }
 
-        // #Edit By Codex 2026-06-28: context.matrices is only a compat key.
-        // The real 1.26 GUI extractor reads context.pose(); using PoseStack
-        // translation here made the whole tag render at the top-left corner.
-        context.pose().pushMatrix()
-        try {
-            context.pose().translate(tag.x, tag.y)
-            context.pose().scale(tag.scale, tag.scale)
-            drawPlayerTag(context, tag.entity, zIndex)
-        } finally {
-            context.pose().popMatrix()
+        val headSize = 8.0f
+        val badgeSize = 6.5f
+        layout.headSize = headSize
+        layout.badgeSize = badgeSize
+        if (useCustomFont && font != null) {
+            layout.textHeight = font.getStringHeight(layout.text)
+            layout.totalWidth = font.getStringWidth(layout.text) + headSize + 4.0f + layout.badgeWidth
+            layout.contentHeight = max(headSize, layout.textHeight)
+            layout.boxHeight = tagBoxHeight(layout.contentHeight)
+            layout.posX = (layout.centerX - layout.totalWidth / 2.0f).toFloat()
+            layout.boxTop = (layout.topY - layout.boxHeight).toFloat()
+            layout.vanilla = false
+        } else {
+            layout.textHeight = 9.0f
+            layout.totalWidth = mc.font.width(layout.text).toFloat() + headSize + 4.0f + layout.badgeWidth
+            layout.contentHeight = max(headSize, layout.textHeight)
+            layout.boxHeight = tagBoxHeight(layout.contentHeight)
+            layout.posX = (layout.centerX - layout.totalWidth / 2.0f).toFloat()
+            layout.boxTop = (layout.topY - layout.boxHeight).toFloat()
+            layout.vanilla = true
         }
     }
 
-    private fun drawPlayerTag(context: DrawContext, entity: Player, zIndex: Int) {
-        val matrices = context.matrices
-        val isFriend = FriendManager.isFriend(entity)
-        val name = entity.name.string
-        val friendPrefix = if (isFriend) "[F] " else ""
-        val healthText = "[${formatHealth(entity.health)}]"
-        val fontSize = 8.5f
-        val prefixWidth = ExosGuiRenderer.bodyWidth(friendPrefix, fontSize)
-        val nameWidth = ExosGuiRenderer.bodyWidth(name, fontSize)
-        val spaceWidth = ExosGuiRenderer.bodyWidth(" ", fontSize)
-        val healthWidth = ExosGuiRenderer.bodyWidth(healthText, fontSize)
-        val width = prefixWidth + nameWidth + spaceWidth + healthWidth + 6.0f
-        val height = 13.0f
-        val x = -width * 0.5f
-        val y = -height * 0.5f
-
-        ExosGuiRenderer.roundedRect(matrices, x, y, width, height, 2.0f, tagBackgroundColor())
-
-        var textX = x + 3.0f
-        // #Edit By Codex 2026-06-28: local Pixel font metrics sit lower than Wyvern's MSDF font.
-        // Lift the line inside the 13px plate so the name/health reads optically centered.
-        val textY = y + 1.8f
-        if (isFriend) {
-            ExosGuiRenderer.body(matrices, friendPrefix, textX, textY, 0xFF55FF55.toInt(), fontSize)
-            textX += prefixWidth
-        }
-        ExosGuiRenderer.body(matrices, name, textX, textY, 0xFFFFFFFF.toInt(), fontSize)
-        textX += nameWidth + spaceWidth
-        ExosGuiRenderer.body(matrices, healthText, textX, textY, healthColor(entity), fontSize)
-
-        if (armor) {
-            drawArmor(context, entity, 0.0f, -height * 0.5f - 13.0f, zIndex)
+    private fun computeSimpleTagMetrics(layout: GenericTagLayout, useCustomFont: Boolean, font: FontRenderer?) {
+        if (useCustomFont && font != null) {
+            layout.textHeight = font.getStringHeight(layout.text)
+            layout.totalWidth = font.getStringWidth(layout.text)
+            layout.boxHeight = tagBoxHeight(layout.textHeight)
+            layout.posX = (layout.centerX - layout.totalWidth / 2.0f).toFloat()
+            layout.boxTop = (layout.topY - layout.boxHeight).toFloat()
+            layout.vanilla = false
+        } else {
+            layout.textHeight = 9.0f
+            layout.totalWidth = mc.font.width(layout.text).toFloat()
+            layout.boxHeight = tagBoxHeight(layout.textHeight)
+            layout.posX = (layout.centerX - layout.totalWidth / 2.0f).toFloat()
+            layout.boxTop = (layout.topY - layout.boxHeight).toFloat()
+            layout.vanilla = true
         }
     }
 
-    private fun drawArmor(context: DrawContext, entity: Player, x: Float, y: Float, zIndex: Int) {
-        val stacks = equipmentStacks(entity)
-        if (stacks.isEmpty()) {
+    private fun computeHandLayouts(layout: TagWithHands, entity: LivingEntity, font: FontRenderer) {
+        val hands = ArrayList<HandTagLayout>(2)
+        var posY = layout.vecW.toFloat() + HAND_TAG_GAP
+        for (stack in handStacks(entity)) {
+            if (stack.isEmpty) {
+                continue
+            }
+            var text: MutableComponent = Component.empty().append(stack.hoverName)
+            if (stack.count > 1) {
+                text = text.append(
+                    "${ChatFormatting.RESET} [${ChatFormatting.RED}${stack.count}${ChatFormatting.GRAY}x${ChatFormatting.RESET}]"
+                )
+            }
+            val textHeight = font.getStringHeight(text)
+            val width = font.getStringWidth(text)
+            val boxHeight = tagBoxHeight(textHeight)
+            val hand = HandTagLayout(
+                text = text,
+                totalWidth = width,
+                boxHeight = boxHeight,
+                posX = (layout.centerX - width / 2.0f).toFloat(),
+                boxTop = posY
+            )
+            hands += hand
+            posY += boxHeight + HAND_TAG_GAP
+        }
+        layout.handTags = hands
+    }
+
+    private fun queuePlayerBackgrounds(
+        context: DrawContext,
+        layout: PlayerTagLayout,
+        showArmor: Boolean,
+        showHands: Boolean,
+        useCustomFont: Boolean,
+        font: FontRenderer?
+    ) {
+        if (showArmor) {
+            queueArmorBackground(context, layout.centerX, layout.vecY, layout.player)
+        }
+        if (showHands && useCustomFont && font != null) {
+            layout.handTags?.forEach { hand ->
+                renderTagBackground(context, hand.posX - 2.0f, hand.boxTop, hand.totalWidth + 4.0f, hand.boxHeight)
+            }
+        }
+        renderTagBackground(context, layout.posX - 2.0f, layout.boxTop, layout.totalWidth + 4.0f, layout.boxHeight)
+    }
+
+    private fun queueGenericBackgrounds(
+        context: DrawContext,
+        layout: GenericTagLayout,
+        showArmor: Boolean,
+        showHands: Boolean,
+        useCustomFont: Boolean,
+        font: FontRenderer?
+    ) {
+        val living = layout.living
+        if (layout.type == GenericType.LIVING && showArmor && living != null) {
+            queueArmorBackground(context, layout.centerX, layout.vecY, living)
+        }
+        if (layout.type == GenericType.LIVING && showHands && useCustomFont && font != null) {
+            layout.handTags?.forEach { hand ->
+                renderTagBackground(context, hand.posX - 2.0f, hand.boxTop, hand.totalWidth + 4.0f, hand.boxHeight)
+            }
+        }
+        renderTagBackground(context, layout.posX - 2.0f, layout.boxTop, layout.totalWidth + 4.0f, layout.boxHeight)
+    }
+
+    private fun queueArmorBackground(context: DrawContext, centerX: Double, vecY: Double, entity: LivingEntity) {
+        armorScratch.clear()
+        for (stack in armorStacks(entity)) {
+            if (!stack.isEmpty) {
+                armorScratch += stack
+            }
+        }
+        if (armorScratch.isEmpty()) {
+            return
+        }
+        val step = 15.0f
+        val totalWidth = armorScratch.size * step - 1.0f
+        val posX = (centerX - totalWidth / 2.0f).toFloat()
+        val posY = (vecY - 8.666666984558105 - 15.0).toFloat()
+        for (i in armorScratch.indices) {
+            renderTagBackground(context, posX + i * step, posY, ARMOR_SLOT_SIZE, ARMOR_SLOT_SIZE)
+        }
+    }
+
+    private fun drawPlayerContent(
+        context: DrawContext,
+        layout: PlayerTagLayout,
+        showArmor: Boolean,
+        useCustomFont: Boolean,
+        font: FontRenderer?
+    ) {
+        if (showArmor) {
+            drawArmorItems(context, layout.centerX, layout.vecY, layout.player)
+        }
+        if (layout.aresMine) {
+            val skin = layout.skin
+            if (skin != null) {
+                val headY = tagContentY(layout.boxTop, layout.contentHeight, layout.headSize)
+                drawHead(context, skin, layout.posX + 1.0f, headY, layout.headSize)
+            }
+            val textY = tagContentY(layout.boxTop, layout.contentHeight, layout.textHeight)
+            context.drawText(
+                mc.font,
+                layout.text,
+                (layout.posX + layout.headSize + 4.0f + layout.badgeWidth).toInt(),
+                textY.toInt(),
+                0xFFFFFF,
+                false
+            )
+            if (useCustomFont && font != null) {
+                drawHandTagText(context, layout, font)
+            }
             return
         }
 
-        val itemScale = 0.75f
-        val renderedItemSize = 16.0f * itemScale
-        val boxSizeItem = 13.0f
-        val paddingItem = 1.5f
-        val totalWidth = stacks.size * (boxSizeItem + paddingItem) - paddingItem
-        var iconX = x - totalWidth * 0.5f
-        val iconY = y
+        val skin = layout.skin
+        if (skin != null) {
+            val headY = tagContentY(layout.boxTop, layout.contentHeight, layout.headSize)
+            drawHead(context, skin, layout.posX + 1.0f, headY, layout.headSize)
+        }
+        // Compatible-client badge is inactive (see class docs / deviation ledger):
+        // the fork has no AlphaDLC EmotionWheel relay protocol, so badgeWidth is 0
+        // and no badge is drawn.
+        if (useCustomFont && font != null) {
+            font.drawText(
+                context,
+                layout.text,
+                layout.posX + layout.headSize + 4.0f + layout.badgeWidth,
+                customFontTextY(font, layout.boxTop, layout.boxHeight, layout.text)
+            )
+            drawHandTagText(context, layout, font)
+        } else {
+            val textY = tagContentY(layout.boxTop, layout.contentHeight, layout.textHeight)
+            context.drawText(
+                mc.font,
+                layout.text,
+                (layout.posX + layout.headSize + 4.0f + layout.badgeWidth).toInt(),
+                textY.toInt(),
+                0xFFFFFF,
+                true
+            )
+        }
+    }
 
-        for (stack in stacks) {
+    private fun drawHandTagText(context: DrawContext, layout: TagWithHands, font: FontRenderer) {
+        layout.handTags?.forEach { hand ->
+            font.drawText(context, hand.text, hand.posX, customFontTextY(font, hand.boxTop, hand.boxHeight, hand.text))
+        }
+    }
+
+    private fun drawGenericContent(
+        context: DrawContext,
+        layout: GenericTagLayout,
+        useCustomFont: Boolean,
+        font: FontRenderer?,
+        bigFont: FontRenderer?,
+        showArmor: Boolean,
+        showHands: Boolean
+    ) {
+        val living = layout.living
+        if (layout.type == GenericType.LIVING && showArmor && living != null) {
+            drawArmorItems(context, layout.centerX, layout.vecY, living)
+        }
+        if (layout.type == GenericType.LIVING && showHands && useCustomFont && font != null) {
+            layout.handTags?.forEach { hand ->
+                font.drawText(context, hand.text, hand.posX, customFontTextY(font, hand.boxTop, hand.boxHeight, hand.text))
+            }
+        }
+        val activeFont = if (layout.useBigFont && bigFont != null) bigFont else font
+        if (useCustomFont && activeFont != null) {
+            activeFont.drawText(
+                context,
+                layout.text,
+                layout.posX,
+                customFontTextY(activeFont, layout.boxTop, layout.boxHeight, layout.text)
+            )
+        } else {
+            context.drawText(
+                mc.font,
+                layout.text,
+                layout.posX.toInt(),
+                tagContentY(layout.boxTop, layout.textHeight, layout.textHeight).toInt(),
+                0xFFFFFF,
+                true
+            )
+        }
+    }
+
+    private fun drawArmorItems(context: DrawContext, centerX: Double, vecY: Double, entity: LivingEntity) {
+        armorScratch.clear()
+        for (stack in armorStacks(entity)) {
+            if (!stack.isEmpty) {
+                armorScratch += stack
+            }
+        }
+        if (armorScratch.isEmpty()) {
+            return
+        }
+        val step = 15.0f
+        val totalWidth = armorScratch.size * step - 1.0f
+        val posX = (centerX - totalWidth / 2.0f).toFloat()
+        val posY = (vecY - 8.666666984558105 - 15.0).toFloat()
+        val itemVisualSize = 10.4f
+        val itemOffset = (ARMOR_SLOT_SIZE - itemVisualSize) / 2.0f - 1.0f
+        for (i in armorScratch.indices) {
+            val itemX = posX + i * step + itemOffset
+            val itemY = posY + itemOffset
             context.pose().pushMatrix()
             try {
-                context.pose().translate(
-                    iconX + (boxSizeItem - renderedItemSize) * 0.5f,
-                    iconY + (boxSizeItem - renderedItemSize) * 0.5f
-                )
-                context.pose().scale(itemScale, itemScale)
-                context.drawItem(stack, 0, 0, zIndex)
+                context.pose().translate(itemX + 1.0f, itemY + 1.0f)
+                context.pose().scale(ARMOR_ITEM_SCALE, ARMOR_ITEM_SCALE)
+                context.drawItem(armorScratch[i], 0, 0)
             } finally {
                 context.pose().popMatrix()
             }
-            iconX += boxSizeItem + paddingItem
         }
     }
 
-    private fun equipmentStacks(entity: Player): List<ItemStack> {
-        val stacks = ArrayList<ItemStack>(6)
-        if (offHand && !entity.offhandItem.isEmpty) {
-            stacks += entity.offhandItem
+    private fun drawHead(context: DrawContext, skin: Identifier, x: Float, y: Float, size: Float) {
+        NameTagsSkin.render(context, skin, x, y, size)
+    }
+
+    private fun handStacks(entity: LivingEntity): List<ItemStack> {
+        return listOf(entity.mainHandItem, entity.offhandItem)
+    }
+
+    private fun armorStacks(entity: LivingEntity): List<ItemStack> {
+        return listOf(
+            entity.getItemBySlot(EquipmentSlot.FEET),
+            entity.getItemBySlot(EquipmentSlot.LEGS),
+            entity.getItemBySlot(EquipmentSlot.CHEST),
+            entity.getItemBySlot(EquipmentSlot.HEAD)
+        )
+    }
+
+    private fun resolveSkin(player: Player): Identifier {
+        if (player is AbstractClientPlayer) {
+            player.skin.body().texturePath()?.let { return it }
         }
-        if (armor) {
-            entity.armorItems.forEach { stack ->
-                if (!stack.isEmpty) {
-                    stacks += stack
+        mc.connection?.getPlayerInfo(player.uuid)?.skin?.body()?.texturePath()?.let { return it }
+        return DefaultPlayerSkin.get(player.uuid).body().texturePath()
+    }
+
+    private fun buildPlayerText(player: Player, friend: Boolean): MutableComponent {
+        val health = actualHealth(player)
+        val text = Component.empty()
+        if (friend) {
+            text.append("[${ChatFormatting.GREEN}F${ChatFormatting.RESET}] ")
+        }
+        if (ModuleAntiBot.isBot(player)) {
+            text.append("[${ChatFormatting.BLACK}BOT${ChatFormatting.RESET}] ")
+        }
+        val displayName = convertDisplayName(player.displayName ?: player.name)
+        text.append(if (friend) colorizeText(displayName, FRIEND_RGB) else displayName)
+        if (health > 0.0f) {
+            text.append("${ChatFormatting.RESET} [${ChatFormatting.RED}${healthString(health)}${ChatFormatting.RESET}]")
+        }
+        return text
+    }
+
+    private fun buildLivingText(entity: LivingEntity): MutableComponent {
+        val health = actualHealth(entity)
+        val text = Component.empty()
+        text.append(entity.displayName ?: entity.name)
+        if (health > 0.0f) {
+            text.append("${ChatFormatting.RESET} [${ChatFormatting.RED}${healthString(health)}${ChatFormatting.RESET}]")
+        }
+        return text
+    }
+
+    private fun actualHealth(entity: LivingEntity): Float {
+        val baseHealth = entity.getActualHealth()
+        val hp = baseHealth + entity.absorptionAmount
+        val maxHealth = max(entity.maxHealth, baseHealth) + entity.absorptionAmount
+        return hp.coerceIn(0.0f, maxHealth)
+    }
+
+    private fun healthString(hp: Float): String {
+        return String.format(java.util.Locale.US, "%.1f", hp).replace(",", ".").replace(".0", "")
+    }
+
+    private fun colorizeText(text: Component, rgb: Int): MutableComponent {
+        val result = Component.empty()
+        text.visit<Unit>({ style, content ->
+            if (content.isNotEmpty()) {
+                result.append(Component.literal(content).withStyle(style.withColor(rgb)))
+            }
+            java.util.Optional.empty()
+        }, Style.EMPTY)
+        return result
+    }
+
+    private fun convertDisplayName(original: Component): MutableComponent {
+        val result = Component.empty()
+        processTextComponent(original, result)
+        return result
+    }
+
+    private fun processTextComponent(component: Component, result: MutableComponent) {
+        val contents = component.contents
+        val content = if (contents is PlainTextContents) contents.text() else ""
+        if (content.isNotEmpty()) {
+            var foundPrefix = false
+            for ((key, info) in DONAT_PREFIXES) {
+                val keyIndex = content.indexOf(key)
+                if (keyIndex < 0) {
+                    continue
                 }
+                val prefixText = "${info.color}${info.name}"
+                val afterKey = keyIndex + key.length
+                val needsSpace = afterKey >= content.length || content[afterKey] != ' '
+                val before = content.substring(0, keyIndex)
+                val after = if (afterKey < content.length) content.substring(afterKey) else ""
+                val replaced = before + prefixText + (if (needsSpace) " " else "") + after
+                result.append(Component.literal(replaced))
+                foundPrefix = true
+                break
+            }
+            if (!foundPrefix) {
+                result.append(Component.literal(content).withStyle(component.style))
             }
         }
-        if (mainHand && !entity.mainHandItem.isEmpty) {
-            stacks += entity.mainHandItem
-        }
-        return stacks
-    }
-
-    private fun healthColor(entity: Player): Int {
-        val ratio = (entity.health / entity.maxHealth).coerceIn(0.0f, 1.0f)
-        return when {
-            ratio > 0.75f -> 0xFF55FF55.toInt()
-            ratio > 0.50f -> 0xFFFFFF55.toInt()
-            ratio > 0.25f -> 0xFFFFAA00.toInt()
-            else -> 0xFFFF5555.toInt()
+        for (sibling in component.siblings) {
+            processTextComponent(sibling, result)
         }
     }
 
-    private fun formatHealth(value: Float): String {
-        return String.format(Locale.ROOT, "%.1f", value)
+    private fun renderTagBackground(context: DrawContext, x: Float, y: Float, width: Float, height: Float) {
+        if (blur) {
+            NameTagsBlur.renderMaskedBackground(context, x, y, width, height, TAG_BG_ROUND, TAG_BG_COLOR)
+            return
+        }
+        NameTagsBackground.render(context, x, y, width, height, TAG_BG_ROUND, TAG_BG_COLOR)
     }
 
-    private fun tagBackgroundColor(): Int {
-        val color = ClientTheme.accentA
-        val r = (((color shr 16) and 0xFF) * 0.1f).toInt().coerceIn(0, 255)
-        val g = (((color shr 8) and 0xFF) * 0.1f).toInt().coerceIn(0, 255)
-        val b = ((color and 0xFF) * 0.1f).toInt().coerceIn(0, 255)
-        return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+    private fun isGhost(player: Player): Boolean {
+        return player.customName?.string?.startsWith("Ghost_") == true
     }
 
-    private fun isVisibleDepth(depth: Float): Boolean {
-        return depth >= 0.0f && depth <= 1.0f
+    /**
+     * Screen-space preview entry point for ClickGUI/HUD callers.
+     *
+     * [entityTopY] and [entityBottomY] are the already-projected vertical bounds
+     * that the world renderer normally gets from [AlphaProjection].
+     */
+    @JvmStatic
+    fun renderPreview(context: DrawContext, player: Player, centerX: Double, entityTopY: Double, entityBottomY: Double) {
+        val friend = FriendManager.isFriend(player)
+        if (EntityType.PLAYERS !in entityTypes && (EntityType.FRIENDS !in entityTypes || !friend)) {
+            return
+        }
+
+        val useCustomFont = fontMode == FontChoice.NEW
+        val font: FontRenderer? = if (useCustomFont) {
+            Fonts.getSize(13, Fonts.FontType.SUISSE_SEMIBOLD)
+        } else {
+            null
+        }
+        val showArmor = PlayerSetting.ARMOR in playerSettings
+        val showHands = PlayerSetting.HELD_ITEMS in playerSettings
+        val aresMine = isAresMineCompatibilityActive()
+
+        NameTagsBlur.beginFrame()
+        val layout = PlayerTagLayout(
+            player = player,
+            text = buildPlayerText(player, friend),
+            centerX = centerX,
+            topY = entityTopY - 2.0,
+            vecY = entityTopY,
+            vecW = entityBottomY,
+            skin = resolveSkin(player),
+            aresMine = aresMine
+        )
+        computePlayerTagMetrics(layout, useCustomFont, font, aresMine)
+        if (showHands && useCustomFont && font != null) {
+            computeHandLayouts(layout, player, font)
+        }
+
+        queuePlayerBackgrounds(context, layout, showArmor, showHands, useCustomFont, font)
+        drawPlayerContent(context, layout, showArmor, useCustomFont, font)
     }
 
-    private data class Tag(
-        val entity: Player,
-        val x: Float,
-        val y: Float,
-        val depth: Float,
-        val distanceSqr: Double,
-        val scale: Float
+    private fun isAresMineCompatibilityActive(): Boolean {
+        if (mc.hasSingleplayerServer()) {
+            return false
+        }
+
+        val address = mc.connection?.serverData?.ip ?: mc.currentServer?.ip
+        val brand = mc.connection?.serverBrand()
+
+        return address.containsAresMineMarker() || brand.containsAresMineMarker()
+    }
+
+    private fun String?.containsAresMineMarker(): Boolean {
+        return this?.lowercase(Locale.ROOT)?.contains("aresmine") == true
+    }
+
+    private fun tagBoxHeight(contentHeight: Float): Float = contentHeight + TAG_PADDING_TOP + TAG_PADDING_BOTTOM
+
+    private fun tagContentY(boxTop: Float, contentHeight: Float, elementHeight: Float): Float =
+        boxTop + TAG_PADDING_TOP + (contentHeight - elementHeight) / 2.0f
+
+    private fun customFontTextY(font: FontRenderer, boxTop: Float, boxHeight: Float, text: Component): Float =
+        font.getCenteredY(boxTop, boxHeight, text.string)
+
+    private fun argb(a: Int, r: Int, g: Int, b: Int): Int =
+        (a shl 24) or (r shl 16) or (g shl 8) or b
+
+    private interface TagWithHands {
+        val centerX: Double
+        val vecW: Double
+        var handTags: List<HandTagLayout>?
+    }
+
+    private class PlayerTagLayout(
+        val player: Player,
+        val text: MutableComponent,
+        override val centerX: Double,
+        val topY: Double,
+        val vecY: Double,
+        override val vecW: Double,
+        val skin: Identifier?,
+        val aresMine: Boolean
+    ) : TagWithHands {
+        var posX = 0.0f
+        var boxTop = 0.0f
+        var boxHeight = 0.0f
+        var totalWidth = 0.0f
+        var contentHeight = 0.0f
+        var textHeight = 0.0f
+        var headSize = 0.0f
+        var badgeSize = 0.0f
+        val badgeWidth = 0.0f
+        var vanilla = false
+        override var handTags: List<HandTagLayout>? = null
+    }
+
+    private class GenericTagLayout(
+        val type: GenericType,
+        val living: LivingEntity? = null,
+        val text: Component,
+        override val centerX: Double,
+        val topY: Double,
+        val vecY: Double,
+        override val vecW: Double,
+        val useBigFont: Boolean = false
+    ) : TagWithHands {
+        var posX = 0.0f
+        var boxTop = 0.0f
+        var boxHeight = 0.0f
+        var totalWidth = 0.0f
+        var textHeight = 0.0f
+        var vanilla = false
+        override var handTags: List<HandTagLayout>? = null
+    }
+
+    private class HandTagLayout(
+        val text: Component,
+        val totalWidth: Float,
+        val boxHeight: Float,
+        val posX: Float,
+        val boxTop: Float
     )
 
+    private enum class GenericType { LIVING, ITEM, TNT }
+
+    private data class PrefixInfo(val name: String, val color: ChatFormatting)
+
     private enum class EntityType(override val choiceName: String) : NamedChoice {
-        PLAYER("Player"),
+        PLAYERS("Players"),
         MOBS("Mobs"),
-        ITEM("Item")
+        ANIMALS("Animals"),
+        ITEMS("Items"),
+        TNT("TNT"),
+        FRIENDS("Friends")
     }
+
+    private enum class PlayerSetting(override val choiceName: String) : NamedChoice {
+        ARMOR("Armor"),
+        HELD_ITEMS("HeldItems")
+    }
+
+    private enum class FontChoice(override val choiceName: String) : NamedChoice {
+        NEW("New"),
+        STANDARD("Standard")
+    }
+
+    private val DONAT_PREFIXES: Map<String, PrefixInfo> = linkedMapOf(
+        "ꔀ" to PrefixInfo("PLAYER", ChatFormatting.GRAY),
+        "ꔄ" to PrefixInfo("HERO", ChatFormatting.DARK_PURPLE),
+        "ꔈ" to PrefixInfo("TITAN", ChatFormatting.YELLOW),
+        "ꔒ" to PrefixInfo("AVENGER", ChatFormatting.GREEN),
+        "ꔖ" to PrefixInfo("OVERLORD", ChatFormatting.DARK_RED),
+        "ꔠ" to PrefixInfo("MAGISTER", ChatFormatting.AQUA),
+        "ꔤ" to PrefixInfo("IMPERATOR", ChatFormatting.RED),
+        "ꔨ" to PrefixInfo("DRAGON", ChatFormatting.LIGHT_PURPLE),
+        "ꔲ" to PrefixInfo("BULL", ChatFormatting.GOLD),
+        "ꕒ" to PrefixInfo("RABBIT", ChatFormatting.WHITE),
+        "ꔶ" to PrefixInfo("TIGER", ChatFormatting.AQUA),
+        "ꕄ" to PrefixInfo("DRACULA", ChatFormatting.RED),
+        "ꕖ" to PrefixInfo("BUNNY", ChatFormatting.WHITE),
+        "ꕀ" to PrefixInfo("HYDRA", ChatFormatting.DARK_AQUA),
+        "ꕈ" to PrefixInfo("COBRA", ChatFormatting.GREEN),
+        "ꕅ" to PrefixInfo("VAMPIRE", ChatFormatting.RED),
+        "ꔁ" to PrefixInfo("MEDIA", ChatFormatting.DARK_PURPLE),
+        "ꔅ" to PrefixInfo("YT", ChatFormatting.RED),
+        "ꕠ" to PrefixInfo("D.HELPER", ChatFormatting.GREEN),
+        "ꔉ" to PrefixInfo("HELPER", ChatFormatting.YELLOW),
+        "ꔓ" to PrefixInfo("ML.MODER", ChatFormatting.YELLOW),
+        "ꔗ" to PrefixInfo("MODER", ChatFormatting.YELLOW),
+        "ꔡ" to PrefixInfo("MODER+", ChatFormatting.YELLOW),
+        "ꔥ" to PrefixInfo("ST.MODER", ChatFormatting.YELLOW),
+        "ꔩ" to PrefixInfo("GL.MODER", ChatFormatting.AQUA),
+        "ꔳ" to PrefixInfo("ML.ADMIN", ChatFormatting.RED),
+        "ꔷ" to PrefixInfo("ADMIN", ChatFormatting.BLACK)
+    )
 }

@@ -20,13 +20,13 @@ package net.ccbluex.liquidbounce.features.module.modules.render.gui.hud
 import net.ccbluex.liquidbounce.utils.entity.*
 
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleHud
+import net.ccbluex.liquidbounce.features.module.modules.render.gui.ExosGuiRenderer
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.GuiConfig
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.network.chat.Component
-import java.awt.Color
 
 /**
  * Native HUD configuration screen that replaces the Svelte-based implementation
@@ -98,7 +98,7 @@ class HudScreen : Screen(Component.literal("HUD Editor")) {
         
         var yOffset = 10
         for (instruction in instructions) {
-            context.drawText(textRenderer, instruction, 10, yOffset, 0xFFFFFF, false)
+            ExosGuiRenderer.body(context.matrices, instruction, 10f, yOffset.toFloat(), 0xFFFFFFFF.toInt(), 8f)
             yOffset += 12
         }
     }

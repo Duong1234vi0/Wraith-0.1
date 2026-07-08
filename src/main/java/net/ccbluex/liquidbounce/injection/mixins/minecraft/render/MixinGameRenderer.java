@@ -9,6 +9,7 @@ import net.ccbluex.liquidbounce.event.events.PerspectiveEvent;
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleCustomAmbience;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleTracers;
+import net.ccbluex.liquidbounce.features.module.modules.render.alphadlc.AlphaProjection;
 import net.ccbluex.liquidbounce.features.module.modules.render.handshader.ModuleHandShader;
 import net.ccbluex.liquidbounce.utils.render.WorldToScreen;
 import net.minecraft.client.Camera;
@@ -68,10 +69,13 @@ public abstract class MixinGameRenderer {
     private void hookWorldRender(
         DeltaTracker deltaTracker,
         CallbackInfo ci,
+        @Local(name = "cameraState") CameraRenderState cameraState,
+        @Local(name = "projectionMatrix") Matrix4f projectionMatrix,
         @Local(name = "modelViewMatrix") Matrix4fc modelViewMatrix
     ) {
         PoseStack newMatStack = new PoseStack();
         newMatStack.mulPose(modelViewMatrix);
+        AlphaProjection.INSTANCE.setMatrices(projectionMatrix, modelViewMatrix, cameraState.pos);
         EventManager.INSTANCE.callEvent(new WorldRenderEvent(
                 newMatStack,
                 this.mainCamera,

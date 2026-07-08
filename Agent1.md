@@ -4859,3 +4859,96 @@ secondary gradients
 replacement textures
 duplicate hand rendering
 For visual bugs, inspect depth mask, fullscreen UVs, output-target coverage, and MobileGlues precision before changing shader equations.
+```
+
+## BlockOverlay AlphaDLC shader fidelity correction (2026-07-07, Codex)
+
+### Request
+
+Correct the current AlphaDLC `BlockOverlay` port because the three current fragment shaders had been visually rewritten instead of API-adapted. Do not redesign, do not touch ESP or NameTags, and keep the AlphaDLC reference source read-only.
+
+### Current files checked
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleBlockOutline.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/alphadlc/AlphaDlcRenderPipelines.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/alphadlc/AlphaDlcWorldRenderer.kt`
+- `src/main/resources/resources/liquidbounce/shaders/block_overlay/block_overlay.vsh`
+- `src/main/resources/resources/liquidbounce/shaders/block_overlay/block_overlay_energy.fsh`
+- `src/main/resources/resources/liquidbounce/shaders/block_overlay/block_overlay_plasma.fsh`
+- `src/main/resources/resources/liquidbounce/shaders/block_overlay/block_overlay_honeycomb.fsh`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/render/MixinWorldRenderer.java`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/render/MixinShaderManager.java`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/render/MixinGameRenderer.java`
+
+### Reference files checked
+
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/features/impl/render/BlockOverlay.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/utils/display/render/geometry/ShaderBox3D.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/utils/display/render/geometry/Render3D.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/mixins/GameRendererMixin.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/events/render/WorldRenderEvent.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/resources/assets/mre/shaders/core/block_overlay_shader.vsh`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/resources/assets/mre/shaders/core/block_overlay_shader.fsh`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/resources/assets/mre/shaders/core/block_plasma.fsh`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/resources/assets/mre/shaders/core/block_hex.fsh`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/resources/assets/mre/shaders/core/block_overlay_shader.json`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/resources/assets/mre/shaders/core/block_plasma.json`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/resources/assets/mre/shaders/core/block_hex.json`
+
+### Root cause / source behavior
+
+The existing `block_overlay_energy/plasma/honeycomb.fsh` files contained invented shader math: custom hash constants, FBM transforms, ridged logic, plasma bands, extra color palettes, honeycomb grid scaling, and alpha multiplied by `vertexColor.a`.
+
+AlphaDLC fragment shaders use `vertexColor.rgb` as tint and compute final alpha only from `Opacity` and the source fill value. They do not multiply output alpha by vertex color alpha.
+
+### Changed
+
+Replaced only the fragment shader equations in:
+
+- `block_overlay_energy.fsh`
+- `block_overlay_plasma.fsh`
+- `block_overlay_honeycomb.fsh`
+
+The current pipeline/UBO wrapper remains as the API adaptation:
+
+- `#version 150` -> `#version 330`
+- `uniform float Time/Opacity` -> `layout(std140) uniform BlockOverlayConfig { vec4 Params; }`
+- `#define Time Params.x`
+- `#define Opacity Params.y`
+
+No module settings, smoothing, target validation, VoxelShape handling, `0.0025` expansion, depth/cull/blend setup, shader fallback, vanilla outline suppression, ESP, or NameTags code was changed.
+
+### Geometry / matrix audit
+
+`appendShaderBox` face order matches AlphaDLC `ShaderBox3D.addBox` for bottom, top, north, south, west, and east.
+
+UV mapping matches AlphaDLC:
+
+- plane 0: `u = x * 4`, `v = z * 4`
+- plane 1: `u = x * 4`, `v = y * 4`
+- plane 2: `u = z * 4`, `v = y * 4`
+
+Current vertices should remain camera-relative. AlphaDLC's `GameRendererMixin` appends `translate(-camera)` into the event matrix. This repo's `WorldRenderEvent` matrix is the raw `modelViewMatrix`, so subtracting camera from vertex positions is the equivalent current-version adaptation. UVs still use full world coordinates before camera subtraction.
+
+### Deviations
+
+None for shader math. The only syntax/API adaptations are GLSL version and current UBO access.
+
+### Verification
+
+- Forbidden-value search found no matches for:
+  `456.21`, `45.32`, `mat2(1.62`, `7.31`, `p1`, `p2`, `bands`, `uv * 3.2`, `vec3(1.0, 0.45, 0.95)`, `vec3(1.0, 0.72, 0.18)`, `vertexColor.a`.
+- Normalized shader comparison, ignoring only GLSL version, UBO declaration/access, output variable name, and whitespace:
+  - Energy: match
+  - Plasma: match
+  - Honeycomb: match
+- `git diff --check`: passed.
+- Build command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:$PATH sh ./gradlew --no-daemon clean assemble -x detekt`
+- Result: **BUILD SUCCESSFUL**.
+
+### Runtime status
+
+Current status: shader mathematics and geometry mapping are source-faithful; full BlockOverlay runtime fidelity is not yet confirmed until FCL visual testing passes.
+
+FCL visual proof is still pending. Plasma must be compared against AlphaDLC after literal shader restoration. Also test Energy, Honeycomb, opacity behavior, outline overlay, camera movement around the selected block, and shader-to-Normal fallback.

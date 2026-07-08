@@ -24,8 +24,6 @@ import net.ccbluex.liquidbounce.utils.entity.*
 import net.ccbluex.liquidbounce.render.compat.GlStateManager
 import net.ccbluex.liquidbounce.render.compat.BufferRenderer
 import net.ccbluex.liquidbounce.render.compat.RenderSystem
-import net.ccbluex.liquidbounce.render.engine.font.FontRenderer
-import net.ccbluex.liquidbounce.render.engine.font.FontRendererBuffers
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
 import net.ccbluex.liquidbounce.render.engine.type.Vec3
 import net.ccbluex.liquidbounce.utils.client.mc
@@ -87,16 +85,6 @@ sealed class RenderEnvironment(val matrixStack: PoseStack) {
         }
     }
 
-    inline fun FontRenderer.withBuffers(block: FontRenderer.(FontRendererBuffers) -> Unit) {
-        val fontBuffers = FontRendererBuffers()
-        try {
-            block(fontBuffers) // don't forget to `commit`!
-        } finally {
-            fontBuffers.draw()
-        }
-    }
-
-    fun FontRenderer.commit(buffer: FontRendererBuffers) = commit(this@RenderEnvironment, buffer)
 }
 
 class GUIRenderEnvironment(matrixStack: PoseStack) : RenderEnvironment(matrixStack) {

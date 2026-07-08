@@ -19,9 +19,14 @@
 package net.ccbluex.liquidbounce.injection.mixins.minecraft.render;
 
 import net.ccbluex.liquidbounce.render.gui.GlowRectShader;
+import net.ccbluex.liquidbounce.render.gui.MsdfFontShader;
 import net.ccbluex.liquidbounce.render.gui.RoundedRectShader;
 import net.ccbluex.liquidbounce.render.gui.RoundedTextureShader;
+import net.ccbluex.liquidbounce.features.module.modules.render.alphadlc.AlphaDlcRenderPipelines;
 import net.ccbluex.liquidbounce.features.module.modules.render.handshader.HandShaderPipeline;
+import net.ccbluex.liquidbounce.features.module.modules.render.nametags.NameTagsBackgroundShader;
+import net.ccbluex.liquidbounce.features.module.modules.render.nametags.NameTagsBlur;
+import net.ccbluex.liquidbounce.features.module.modules.render.nametags.NameTagsBlurPipelines;
 import net.ccbluex.liquidbounce.features.module.modules.render.popchams.PopChamsPipelines;
 import net.minecraft.client.renderer.ShaderManager;
 import org.spongepowered.asm.mixin.Mixin;
@@ -46,8 +51,13 @@ public abstract class MixinShaderManager {
         RoundedRectShader.INSTANCE.precompile();
         GlowRectShader.INSTANCE.precompile();
         RoundedTextureShader.INSTANCE.precompile();
+        MsdfFontShader.INSTANCE.precompile();
+        AlphaDlcRenderPipelines.INSTANCE.precompile();
         PopChamsPipelines.INSTANCE.precompile();
         HandShaderPipeline.INSTANCE.precompile();
+        NameTagsBlur.INSTANCE.invalidate();
+        NameTagsBackgroundShader.INSTANCE.precompile();
+        NameTagsBlurPipelines.INSTANCE.precompile();
         // #Edit By Codex 2026-06-22: custom main-menu pipelines were removed with the custom main screen.
     }
 }

@@ -289,7 +289,12 @@
       "Bash(unzip -o /data/data/com.termux/files/home/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-merged-deobf/26.1.2/minecraft-merged-deobf-26.1.2.jar net/minecraft/client/renderer/RenderPipelines.class -d /data/data/com.termux/files/home/.cache/rtinspect)",
       "Bash(/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin/javap -p -c -classpath /data/data/com.termux/files/home/.cache/rtinspect net.minecraft.client.renderer.RenderPipelines)",
       "Bash(echo \"=== 1.26.2 ItemInHandRenderer.renderArmWithItem source ===\")",
-      "Bash(find src/main -path \"*ItemInHandRenderer*\")"
+      "Bash(find src/main -path \"*ItemInHandRenderer*\")",
+      "Bash(unzip -l /data/data/com.termux/files/home/.gradle/caches/fabric-loom/26.1.2/minecraft-merged.jar)",
+      "Bash(unzip -o -q /data/data/com.termux/files/home/.gradle/caches/fabric-loom/26.1.2/minecraft-merged.jar net/minecraft/client/gui/screens/inventory/EffectsInInventory.class -d /data/data/com.termux/files/home/.mcjavap)",
+      "Bash(unzip -o -q /data/data/com.termux/files/home/.gradle/caches/fabric-loom/26.1.2/minecraft-merged.jar net/minecraft/client/gui/Gui.class net/minecraft/client/gui/GuiGraphicsExtractor.class -d /data/data/com.termux/files/home/.mcjavap)",
+      "Bash(unzip -o -q /data/data/com.termux/files/home/.gradle/caches/fabric-loom/26.1.2/minecraft-merged.jar net/minecraft/core/ClientAsset*.class net/minecraft/world/entity/LivingEntity.class net/minecraft/world/entity/EquipmentSlot.class -d /data/data/com.termux/files/home/.mcjavap)",
+      "Bash(unzip -o -q /data/data/com.termux/files/home/.gradle/caches/fabric-loom/26.1.2/minecraft-merged.jar net/minecraft/world/entity/Entity.class -d /data/data/com.termux/files/home/.mcjavap)"
     ]
   }
 }

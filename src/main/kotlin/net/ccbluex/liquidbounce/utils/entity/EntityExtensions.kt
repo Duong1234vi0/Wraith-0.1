@@ -55,17 +55,23 @@ import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket
 import net.minecraft.network.protocol.game.ServerboundMoveVehiclePacket
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.entity.player.Input
+import net.minecraft.ChatFormatting
+import net.minecraft.network.chat.numbers.StyledFormat
 import net.minecraft.world.phys.HitResult
 import net.minecraft.core.*
 import net.minecraft.world.phys.*
 import net.minecraft.util.Mth
+import net.minecraft.world.scores.DisplaySlot
+import net.minecraft.world.scores.ReadOnlyScoreInfo
 import net.minecraft.world.phys.shapes.Shapes
 import net.minecraft.world.Difficulty
 import net.minecraft.world.level.ClipContext
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.ServerExplosion
+import java.util.UUID
 import kotlin.math.cos
 import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -455,20 +461,153 @@ fun LivingEntity.getExposureToExplosion(
  * 1. Scoreboard
  */
 fun LivingEntity.getActualHealth(fromScoreboard: Boolean = true): Float {
+    if (this !is Player) {
+        return health.coerceIn(0.0f, maxHealth.coerceAtLeast(0.0f))
+    }
+
+    if (!isAlive || isRemoved) {
+        clearCachedScoreboardHealth(uuid)
+        return 0.0f
+    }
+
     if (fromScoreboard) {
         val health = getHealthFromScoreboard()
 
         if (health != null) {
             return health
         }
+
+        val lastKnown = lastValidScoreboardHealth[uuid]
+        if (lastKnown != null && shouldUseLastValidScoreboardHealth(lastKnown, this)) {
+            return clampHealth(lastKnown, scoreboardHealthUpperBound(this, lastKnown))
+        }
     }
 
+    return health.coerceIn(0.0f, maxHealth.coerceAtLeast(0.0f))
+}
+
+private const val EXTENDED_SCOREBOARD_HEALTH_MAX = 1000.0f
+
+private var scoreboardHealthCacheTick = Int.MIN_VALUE
+private val scoreboardHealthCache = HashMap<UUID, Float?>()
+private val lastValidScoreboardHealth = HashMap<UUID, Float>()
+private val SCOREBOARD_NUMBER_PATTERN = Regex("""[-+]?\d+(?:[\.,]\d+)?""")
+
+private fun LivingEntity.getHealthFromScoreboard(): Float? {
+    val player = this as? Player ?: return null
+    mc.level ?: run {
+        scoreboardHealthCache.clear()
+        lastValidScoreboardHealth.clear()
+        return null
+    }
+    if (mc.connection == null || mc.hasSingleplayerServer()) {
+        return null
+    }
+    if (!player.isAlive || player.isRemoved) {
+        clearCachedScoreboardHealth(player.uuid)
+        return null
+    }
+
+    updateScoreboardHealthCacheTick()
+    if (scoreboardHealthCache.containsKey(player.uuid)) {
+        return scoreboardHealthCache[player.uuid]
+    }
+
+    val health = runCatching { readScoreboardHealth(player) }
+        .getOrDefault(null)
+        ?.takeIf { it.isFinite() && it >= 0.0f }
+        ?.let { clampHealth(it, scoreboardHealthUpperBound(player, it)) }
+
+    scoreboardHealthCache[player.uuid] = health
+    if (health != null) {
+        lastValidScoreboardHealth[player.uuid] = health
+    }
 
     return health
 }
 
-private fun LivingEntity.getHealthFromScoreboard(): Float? {
-    return null
+private fun updateScoreboardHealthCacheTick() {
+    val tick = mc.player?.age ?: return
+    if (scoreboardHealthCacheTick == tick) {
+        return
+    }
+
+    scoreboardHealthCache.clear()
+    scoreboardHealthCacheTick = tick
+    pruneScoreboardHealthCaches()
+}
+
+private fun pruneScoreboardHealthCaches() {
+    val level = mc.level ?: run {
+        lastValidScoreboardHealth.clear()
+        return
+    }
+    val livePlayers = level.players()
+        .asSequence()
+        .filter { it.isAlive && !it.isRemoved }
+        .mapTo(HashSet()) { it.uuid }
+
+    lastValidScoreboardHealth.keys.retainAll(livePlayers)
+    scoreboardHealthCache.keys.retainAll(livePlayers)
+}
+
+private fun clearCachedScoreboardHealth(uuid: UUID) {
+    scoreboardHealthCache.remove(uuid)
+    lastValidScoreboardHealth.remove(uuid)
+}
+
+private fun readScoreboardHealth(player: Player): Float? {
+    val scoreboard = player.scoreboard
+    val objective = scoreboard.getDisplayObjective(DisplaySlot.BELOW_NAME) ?: return null
+    val scoreInfo = scoreboard.getPlayerScoreInfo(player, objective) ?: return null
+
+    val formatted = ReadOnlyScoreInfo
+        .safeFormatValue(scoreInfo, objective.numberFormatOrDefault(StyledFormat.NO_STYLE))
+        .string
+        .parseScoreboardHealth()
+    if (formatted != null) {
+        return formatted
+    }
+
+    val rawScore = scoreInfo.value()
+    return if (rawScore >= 0) rawScore.toFloat() else null
+}
+
+private fun String.parseScoreboardHealth(): Float? {
+    val stripped = ChatFormatting.stripFormatting(this)?.trim()?.replace(',', '.') ?: return null
+    if (stripped.isEmpty()) {
+        return null
+    }
+
+    stripped.toFloatOrNull()?.let { return it }
+
+    val matches = SCOREBOARD_NUMBER_PATTERN.findAll(stripped).toList()
+    if (matches.size != 1) {
+        return null
+    }
+
+    return matches.single().value.replace(',', '.').toFloatOrNull()
+}
+
+private fun shouldUseLastValidScoreboardHealth(health: Float, player: Player): Boolean {
+    return health.isFinite() && health > player.maxHealth && mc.connection != null && !mc.hasSingleplayerServer()
+}
+
+private fun scoreboardHealthUpperBound(entity: LivingEntity, health: Float): Float {
+    val vanillaMax = entity.maxHealth.coerceAtLeast(0.0f)
+    return if (health > vanillaMax) {
+        max(vanillaMax, EXTENDED_SCOREBOARD_HEALTH_MAX)
+    } else {
+        vanillaMax
+    }
+}
+
+private fun clampHealth(health: Float, upperBound: Float): Float {
+    if (!health.isFinite()) {
+        return 0.0f
+    }
+
+    return health.coerceIn(0.0f, upperBound.coerceAtLeast(0.0f))
 }
 
 fun Entity.getBoundingBoxAt(pos: Vec3): AABB {

@@ -27,7 +27,6 @@ import net.ccbluex.liquidbounce.features.module.modules.render.WyvernHudElement
 import net.ccbluex.liquidbounce.features.module.modules.render.WyvernHudMode
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.ClientTheme
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.ExosGuiRenderer
-import net.ccbluex.liquidbounce.render.FontManager
 import net.ccbluex.liquidbounce.render.gui.CORNER_BOTTOM_RIGHT
 import net.ccbluex.liquidbounce.render.gui.CORNER_BOTTOM_LEFT
 import net.ccbluex.liquidbounce.render.gui.CORNER_TOP_LEFT
@@ -1921,18 +1920,18 @@ private object HudDraw {
     }
 
     fun title(context: DrawContext, text: String, x: Float, y: Float, size: Float, color: Int) {
-        ExosGuiRenderer.textInter(context.matrices, text, x, y, color, size)
+        ExosGuiRenderer.title(context.matrices, text, x, y, color, size)
     }
 
     fun body(context: DrawContext, text: String, x: Float, y: Float, size: Float, color: Int) {
-        ExosGuiRenderer.textInter(context.matrices, text, x, y, color, size)
+        ExosGuiRenderer.body(context.matrices, text, x, y, color, size)
     }
 
-    fun titleWidth(text: String, size: Float): Float = ExosGuiRenderer.textWidth(text, size)
+    fun titleWidth(text: String, size: Float): Float = ExosGuiRenderer.titleWidth(text, size)
 
-    fun bodyWidth(text: String, size: Float): Float = ExosGuiRenderer.textWidth(text, size)
+    fun bodyWidth(text: String, size: Float): Float = ExosGuiRenderer.bodyWidth(text, size)
 
-    fun textHeight(size: Float): Float = FontManager.FONT_RENDERER.height * (size / FontManager.DEFAULT_FONT_SIZE)
+    fun textHeight(size: Float): Float = ExosGuiRenderer.bodyHeight(size)
 
     fun centeredTextY(centerY: Float, size: Float): Float = centerY - textHeight(size) * 0.5f
 

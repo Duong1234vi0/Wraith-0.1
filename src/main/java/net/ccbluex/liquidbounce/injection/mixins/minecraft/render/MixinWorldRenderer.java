@@ -1,14 +1,19 @@
 package net.ccbluex.liquidbounce.injection.mixins.minecraft.render;
 
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.framegraph.FrameGraphBuilder;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.resource.ResourceHandle;
+import net.ccbluex.liquidbounce.features.module.modules.render.ModuleBlockOutline;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleCubes;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleCustomAmbience;
+import net.ccbluex.liquidbounce.features.module.modules.render.alphadlc.AlphaProjection;
 import net.ccbluex.liquidbounce.features.module.modules.render.popchams.ModulePopChams;
 import net.ccbluex.liquidbounce.features.module.modules.render.targetesp.ModuleTargetESP;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.util.profiling.ProfilerFiller;
 import org.joml.Matrix4fc;
@@ -16,6 +21,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LevelRenderer.class)
@@ -28,6 +34,27 @@ public abstract class MixinWorldRenderer {
     private int injectCustomAmbienceClearColor(int original) {
         int color = ModuleCustomAmbience.FogConfigurable.INSTANCE.modifyClearColor(original);
         return ModuleCustomAmbience.ModifyWorld.INSTANCE.modifyColor(color);
+    }
+
+    @Inject(method = "addMainPass", at = @At("HEAD"))
+    private void liquidbounce$captureAlphaFrustum(
+            FrameGraphBuilder frameGraphBuilder,
+            Frustum frustum,
+            Matrix4fc matrix4fc,
+            GpuBufferSlice terrainFog,
+            boolean renderOutline,
+            LevelRenderState levelRenderState,
+            DeltaTracker deltaTracker,
+            ProfilerFiller profiler,
+            ChunkSectionsToRender chunkSectionsToRender,
+            CallbackInfo ci
+    ) {
+        AlphaProjection.INSTANCE.setFrustum(frustum);
+    }
+
+    @ModifyVariable(method = "lambda$addMainPass$0", at = @At("HEAD"), argsOnly = true, ordinal = 0)
+    private boolean liquidbounce$suppressVanillaBlockOutline(boolean renderOutline) {
+        return renderOutline && !ModuleBlockOutline.shouldSuppressVanillaOutline();
     }
 
     @Inject(

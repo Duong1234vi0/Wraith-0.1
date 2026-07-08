@@ -84,6 +84,7 @@
     "minecraft.render.MixinEntityRenderDispatcher",
     "minecraft.render.MixinEntityRenderer",
     "minecraft.render.MixinGameRenderer",
+    "minecraft.render.MixinGuiRenderer",
     "minecraft.render.MixinInactivityFpsLimiter",
     "minecraft.render.MixinInGameOverlayRenderer",
     "minecraft.render.MixinItemEntityRenderer",

@@ -19,6 +19,7 @@
 package net.ccbluex.liquidbounce.features.module.modules.render.gui.menu
 import net.ccbluex.liquidbounce.utils.entity.*
 
+import net.ccbluex.liquidbounce.features.module.modules.render.gui.ExosGuiRenderer
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screens.Screen
@@ -53,13 +54,22 @@ class AltManagerScreen(private val parent: Screen) : Screen(Component.literal("A
         
         // Title
         val title = "Alt Manager"
-        val titleWidth = textRenderer.getWidth(title)
-        context.drawText(textRenderer, title, (width - titleWidth) / 2, 20, 0xFFFFFF, true)
+        val titleSize = 15f
+        val titleWidth = ExosGuiRenderer.titleWidth(title, titleSize)
+        ExosGuiRenderer.title(context.matrices, title, (width - titleWidth) * 0.5f, 20f, 0xFFFFFFFF.toInt(), titleSize)
         
         // Placeholder text
         val placeholder = "Alt Manager functionality will be implemented here"
-        val placeholderWidth = textRenderer.getWidth(placeholder)
-        context.drawText(textRenderer, placeholder, (width - placeholderWidth) / 2, height / 2 - 40, 0xAAAAAA, false)
+        val placeholderSize = 8f
+        val placeholderWidth = ExosGuiRenderer.bodyWidth(placeholder, placeholderSize)
+        ExosGuiRenderer.body(
+            context.matrices,
+            placeholder,
+            (width - placeholderWidth) * 0.5f,
+            height / 2f - 40f,
+            0xFFAAAAAA.toInt(),
+            placeholderSize
+        )
         
         super.extractRenderState(context, mouseX, mouseY, delta)
     }
@@ -86,8 +96,9 @@ class LiquidBounceSettingsScreen(private val parent: Screen) : Screen(Component.
         
         // Title
         val title = "LiquidBounce Settings"
-        val titleWidth = textRenderer.getWidth(title)
-        context.drawText(textRenderer, title, (width - titleWidth) / 2, 20, 0xFFFFFF, true)
+        val titleSize = 15f
+        val titleWidth = ExosGuiRenderer.titleWidth(title, titleSize)
+        ExosGuiRenderer.title(context.matrices, title, (width - titleWidth) * 0.5f, 20f, 0xFFFFFFFF.toInt(), titleSize)
         
         // Settings categories
         val categories = listOf(
@@ -99,14 +110,22 @@ class LiquidBounceSettingsScreen(private val parent: Screen) : Screen(Component.
         
         var yOffset = 60
         for (category in categories) {
-            context.drawText(textRenderer, "• $category", 50, yOffset, 0xCCCCCC, false)
+            ExosGuiRenderer.body(context.matrices, "• $category", 50f, yOffset.toFloat(), 0xFFCCCCCC.toInt(), 8f)
             yOffset += 25
         }
         
         // Placeholder text
         val placeholder = "Settings implementation coming soon"
-        val placeholderWidth = textRenderer.getWidth(placeholder)
-        context.drawText(textRenderer, placeholder, (width - placeholderWidth) / 2, height - 100, 0xAAAAAA, false)
+        val placeholderSize = 8f
+        val placeholderWidth = ExosGuiRenderer.bodyWidth(placeholder, placeholderSize)
+        ExosGuiRenderer.body(
+            context.matrices,
+            placeholder,
+            (width - placeholderWidth) * 0.5f,
+            height - 100f,
+            0xFFAAAAAA.toInt(),
+            placeholderSize
+        )
         
         super.extractRenderState(context, mouseX, mouseY, delta)
     }

@@ -17,7 +17,7 @@ public class MixinArmorFeatureRenderer<S extends HumanoidRenderState> {
             at = @At("HEAD"),
             cancellable = true
     ) private void onRender(PoseStack matrixStack, SubmitNodeCollector submitNodeCollector, int i, S bipedEntityRenderState, float f, float g, CallbackInfo ci) {
-        if (ModuleCustomModels.shouldHidePlayerFeature(bipedEntityRenderState)) {
+        if (ModuleCustomModels.shouldHideArmor(bipedEntityRenderState)) {
             ci.cancel();
         }
     }

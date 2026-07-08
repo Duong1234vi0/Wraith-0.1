@@ -1,7 +1,6 @@
 package net.ccbluex.liquidbounce.injection.mixins.minecraft.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.ccbluex.liquidbounce.features.module.modules.render.esp.ModuleESP;
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.ModuleNameTags;
 import net.ccbluex.liquidbounce.interfaces.EntityRenderStateAddition;
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -20,10 +19,7 @@ public abstract class MixinEntityRenderer<T extends Entity, S extends EntityRend
     @Inject(method = "submitNameDisplay(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/CameraRenderState;I)V", at = @At("HEAD"), cancellable = true)
     private void disableDuplicateNametags(S state, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, CameraRenderState camera, int offset, CallbackInfo ci) {
         var entity = ((EntityRenderStateAddition) state).liquid_bounce$getEntity();
-        if (entity != null && (
-            ModuleNameTags.INSTANCE.getRunning() && ModuleNameTags.shouldCancelVanillaNametag(entity)
-                || ModuleESP.shouldCancelVanillaNametag(entity)
-        )) {
+        if (entity != null && ModuleNameTags.INSTANCE.getRunning() && ModuleNameTags.shouldCancelVanillaNametag(entity)) {
             ci.cancel();
         }
     }

@@ -1,0 +1,36 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package code.alphadlc.display.screens.clickgui.components.implement.window.implement.settings;
+
+import code.alphadlc.display.screens.clickgui.components.implement.window.implement.AbstractBindWindow;
+import code.alphadlc.features.module.setting.implement.BooleanSetting;
+
+public class BindCheckboxWindow
+extends AbstractBindWindow {
+    private final BooleanSetting setting;
+
+    @Override
+    protected int getKey() {
+        return this.setting.getKey();
+    }
+
+    @Override
+    protected void setKey(int key) {
+        this.setting.setKey(key);
+    }
+
+    @Override
+    protected int getType() {
+        return this.setting.getType();
+    }
+
+    @Override
+    protected void setType(int type) {
+        this.setting.setType(type);
+    }
+
+    public BindCheckboxWindow(BooleanSetting setting) {
+        this.setting = setting;
+    }
+}

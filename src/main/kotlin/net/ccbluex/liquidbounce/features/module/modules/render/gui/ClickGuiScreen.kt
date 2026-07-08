@@ -878,6 +878,10 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             renderChooseListValue(context, rect, entry.value, mouseX, mouseY)
             return
         }
+        if (entry.value is MultiChooseListValue<*>) {
+            renderMultiChooseListValue(context, rect, entry.value, mouseX, mouseY)
+            return
+        }
 
         val hovered = rect.contains(mouseX, mouseY)
         if (hovered) {
@@ -892,7 +896,6 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         when (val value = entry.value) {
             is BindValue -> drawBind(context, rect, value)
             is RangedValue<*> -> drawRanged(context, rect, value)
-            is MultiChooseListValue<*> -> drawChoice(context, rect, "${value.get().size}/${value.choices.size}")
             else -> when (value.type()) {
                 ValueType.BOOLEAN -> drawToggle(context, Rect(rect.right - 34f, rect.y + 7f, 34f, 17f),
                     value.get() == true, value)
@@ -1023,6 +1026,73 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             ExosGuiRenderer.body(context.matrices, truncate(option.choice.choiceName,
                 option.rect.right - textX - 7f, 7.1f, ExosGuiRenderer::bodyWidth), textX,
                 option.rect.y + 5.2f, if (selected) TEXT_PRIMARY else TEXT_SECONDARY, 7.1f)
+        }
+    }
+
+    private fun renderMultiChooseListValue(
+        context: DrawContext,
+        rect: Rect,
+        value: MultiChooseListValue<*>,
+        mouseX: Int,
+        mouseY: Int
+    ) {
+        val hovered = rect.contains(mouseX, mouseY)
+        if (hovered) {
+            ExosGuiRenderer.roundedRect(context.matrices, rect.x - 6f, rect.y - 3f, rect.w + 12f, rect.h + 6f,
+                5f, HOVER_FILL)
+        }
+
+        ExosGuiRenderer.body(context.matrices, displayName(value.name), rect.x, rect.y + 5f,
+            TEXT_PRIMARY, 8.3f)
+
+        val frame = multiChooseFrameRect(rect, value)
+        ExosGuiRenderer.roundedRect(context.matrices, frame.x, frame.y, frame.w, frame.h, 5f, CHOICE_FRAME_FILL)
+        ExosGuiRenderer.roundedOutline(context.matrices, frame.x, frame.y, frame.w, frame.h, 5f,
+            BORDER_SOFT, 0.75f)
+
+        multiChooseOptionRects(frame, value).forEach { option ->
+            val selected = option.choice in value.get()
+            val optionHovered = option.rowRect.contains(mouseX, mouseY)
+            val rowFill = when {
+                selected -> ExosGuiRenderer.withAlpha(ClientTheme.accentA, 28)
+                optionHovered -> HOVER_FILL
+                else -> INPUT_FILL
+            }
+            ExosGuiRenderer.roundedRect(context.matrices, option.rowRect.x, option.rowRect.y,
+                option.rowRect.w, option.rowRect.h, 4f, rowFill)
+            ExosGuiRenderer.roundedOutline(context.matrices, option.rowRect.x, option.rowRect.y,
+                option.rowRect.w, option.rowRect.h, 4f,
+                if (selected || optionHovered) BORDER_SOFT_STRONG else BORDER_SOFT,
+                if (optionHovered) 0.78f else 0.58f)
+
+            val checkboxFill = when {
+                selected -> CHOICE_SELECTED_FILL
+                optionHovered -> HOVER_FILL
+                else -> INPUT_FILL
+            }
+            ExosGuiRenderer.roundedRect(context.matrices, option.checkboxRect.x, option.checkboxRect.y,
+                option.checkboxRect.w, option.checkboxRect.h, 3f, checkboxFill)
+            ExosGuiRenderer.roundedOutline(context.matrices, option.checkboxRect.x, option.checkboxRect.y,
+                option.checkboxRect.w, option.checkboxRect.h, 3f,
+                if (selected) ACCENT_BORDER else if (optionHovered) BORDER_SOFT_STRONG else BORDER_SOFT,
+                if (selected) 0.9f else 0.68f)
+
+            if (selected) {
+                val tickSize = MULTI_CHOOSE_TICK_SIZE
+                renderTickIcon(
+                    context,
+                    option.checkboxRect.x + (option.checkboxRect.w - tickSize) * 0.5f,
+                    option.checkboxRect.y + (option.checkboxRect.h - tickSize) * 0.5f,
+                    tickSize,
+                    ACCENT_TEXT
+                )
+            }
+
+            val textX = option.checkboxRect.right + MULTI_CHOOSE_TEXT_GAP
+            val text = truncate(multiChoiceDisplayName(option.choice),
+                option.rowRect.right - textX - MULTI_CHOOSE_OPTION_PAD, 7.1f, ExosGuiRenderer::bodyWidth)
+            ExosGuiRenderer.body(context.matrices, text, textX, option.rowRect.y + 5.2f,
+                if (selected) TEXT_ENABLED else TEXT_SECONDARY, 7.1f)
         }
     }
 
@@ -1314,6 +1384,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             is ToggleableConfigurable -> value.enabled = !value.enabled
             is ChoiceConfigurable<*> -> handleChoiceClick(value, rect, mouseX, mouseY)
             is ChooseListValue<*> -> handleChooseClick(value, rect, mouseX, mouseY)
+            is MultiChooseListValue<*> -> handleMultiChooseClick(value, rect, mouseX, mouseY)
             is BindValue -> bindListening = value
             is RangedValue<*> -> {
                 draggingSlider = entry
@@ -1342,6 +1413,13 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             ?.choice
             ?.choiceName
             ?.let(value::setByString)
+    }
+
+    private fun handleMultiChooseClick(value: MultiChooseListValue<*>, rect: Rect, mouseX: Float, mouseY: Float) {
+        val frame = multiChooseFrameRect(rect, value)
+        multiChooseOptionRects(frame, value).firstOrNull {
+            it.rowRect.contains(mouseX.toInt(), mouseY.toInt())
+        }?.choice?.let { toggleMultiChoice(value, it) }
     }
 
     private fun updateSlider(value: RangedValue<*>, rect: Rect, mouseX: Float) {
@@ -1496,6 +1574,80 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     private fun choiceColumns(choiceCount: Int): Int =
         if (choiceCount <= 1) 1 else 2
 
+    private fun multiChooseFrameRect(rect: Rect, value: MultiChooseListValue<*>): Rect {
+        val rows = multiChooseRows(rect.w, value)
+        val height = CHOICE_FRAME_PAD * 2f + rows * MULTI_CHOOSE_OPTION_H +
+            max(0, rows - 1) * MULTI_CHOOSE_OPTION_GAP
+        return Rect(rect.x, rect.y + 25f, rect.w, height)
+    }
+
+    private fun multiChooseOptionRects(
+        frame: Rect,
+        value: MultiChooseListValue<*>
+    ): List<MultiChooseOptionRect> {
+        val choices = value.choices.toList()
+        val result = ArrayList<MultiChooseOptionRect>(choices.size)
+        val columns = multiChooseColumnCount(frame.w, choices)
+        val cellW = (frame.w - CHOICE_FRAME_PAD * 2f - MULTI_CHOOSE_COLUMN_GAP * (columns - 1)) / columns
+
+        choices.forEachIndexed { index, choice ->
+            val column = index % columns
+            val row = index / columns
+            val rowRect = Rect(
+                frame.x + CHOICE_FRAME_PAD + column * (cellW + MULTI_CHOOSE_COLUMN_GAP),
+                frame.y + CHOICE_FRAME_PAD + row * (MULTI_CHOOSE_OPTION_H + MULTI_CHOOSE_OPTION_GAP),
+                cellW,
+                MULTI_CHOOSE_OPTION_H
+            )
+            val checkboxRect = Rect(
+                rowRect.x + MULTI_CHOOSE_OPTION_PAD,
+                rowRect.y + (rowRect.h - MULTI_CHOOSE_CHECKBOX_SIZE) * 0.5f,
+                MULTI_CHOOSE_CHECKBOX_SIZE,
+                MULTI_CHOOSE_CHECKBOX_SIZE
+            )
+            result += MultiChooseOptionRect(choice, rowRect, checkboxRect)
+        }
+
+        return result
+    }
+
+    private fun multiChooseRows(width: Float, value: MultiChooseListValue<*>): Int {
+        val choices = value.choices.toList()
+        val columns = multiChooseColumnCount(width, choices)
+        return ceil(choices.size / columns.toFloat()).toInt().coerceAtLeast(1)
+    }
+
+    private fun multiChooseColumnCount(width: Float, choices: List<*>): Int {
+        if (choices.size <= 1) {
+            return 1
+        }
+
+        val twoColumnW = (width - CHOICE_FRAME_PAD * 2f - MULTI_CHOOSE_COLUMN_GAP) * 0.5f
+        val labelW = twoColumnW - MULTI_CHOOSE_OPTION_PAD * 2f - MULTI_CHOOSE_CHECKBOX_SIZE -
+            MULTI_CHOOSE_TEXT_GAP
+        if (twoColumnW < MULTI_CHOOSE_MIN_COLUMN_W || labelW < MULTI_CHOOSE_MIN_LABEL_W) {
+            return 1
+        }
+
+        val longest = choices.maxOfOrNull {
+            ExosGuiRenderer.bodyWidth(multiChoiceDisplayName(it), 7.1f)
+        } ?: 0f
+
+        return if (longest <= labelW * MULTI_CHOOSE_TWO_COLUMN_READABLE_FACTOR) 2 else 1
+    }
+
+    private fun multiChoiceDisplayName(choice: Any?): String = when (choice) {
+        is NamedChoice -> choice.choiceName
+        is String -> choice
+        null -> ""
+        else -> choice.toString()
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun toggleMultiChoice(value: MultiChooseListValue<*>, choice: Any?) {
+        (value as MultiChooseListValue<Any?>).toggle(choice)
+    }
+
     private fun formatRanged(value: RangedValue<*>): String = when (val current = value.get()) {
         is Float -> String.format(Locale.US, "%.2f%s", current, value.suffix)
         is Int -> "${current}${value.suffix}"
@@ -1582,6 +1734,12 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         is ChooseListValue<*> -> {
             val rows = choiceRows(entry.value.choices.size)
             val frame = rows * CHOICE_BOX_H + max(0, rows - 1) * CHOICE_BOX_GAP +
+                CHOICE_FRAME_PAD * 2f
+            31f + frame + 8f
+        }
+        is MultiChooseListValue<*> -> {
+            val rows = multiChooseRows(detachedSettingsWidth() - SETTINGS_PAD * 2f - entry.depth * 10f, entry.value)
+            val frame = rows * MULTI_CHOOSE_OPTION_H + max(0, rows - 1) * MULTI_CHOOSE_OPTION_GAP +
                 CHOICE_FRAME_PAD * 2f
             31f + frame + 8f
         }
@@ -1720,7 +1878,21 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             return
         }
 
-        ExosGuiRenderer.body(context.matrices, "V", x, y - 1f, color, size.toFloat())
+        val stroke = (size / 4f).coerceAtLeast(1f)
+        context.fill(
+            (x + size * 0.18f).toInt(),
+            (y + size * 0.53f).toInt(),
+            (x + size * 0.18f + stroke).toInt(),
+            (y + size * 0.84f).toInt(),
+            color
+        )
+        context.fill(
+            (x + size * 0.18f).toInt(),
+            (y + size * 0.72f).toInt(),
+            (x + size * 0.78f).toInt(),
+            (y + size * 0.72f + stroke).toInt(),
+            color
+        )
     }
 
     private fun renderSearchIcon(context: DrawContext, rect: Rect, color: Int) {
@@ -2073,6 +2245,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
     private data class ChoiceOptionRect(val choice: Choice, val rect: Rect)
     private data class ChooseOptionRect(val choice: NamedChoice, val rect: Rect)
+    private data class MultiChooseOptionRect(val choice: Any?, val rowRect: Rect, val checkboxRect: Rect)
 
     private data class Rect(val x: Float, val y: Float, val w: Float, val h: Float) {
         val right: Float get() = x + w
@@ -2132,6 +2305,16 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         private const val CHOICE_FRAME_PAD = 6f
         private const val CHOICE_BOX_H = 20f
         private const val CHOICE_BOX_GAP = 5f
+        private const val MULTI_CHOOSE_OPTION_H = 20f
+        private const val MULTI_CHOOSE_OPTION_GAP = 5f
+        private const val MULTI_CHOOSE_COLUMN_GAP = 7f
+        private const val MULTI_CHOOSE_OPTION_PAD = 7f
+        private const val MULTI_CHOOSE_CHECKBOX_SIZE = 12f
+        private const val MULTI_CHOOSE_TICK_SIZE = 8
+        private const val MULTI_CHOOSE_TEXT_GAP = 5f
+        private const val MULTI_CHOOSE_MIN_COLUMN_W = 92f
+        private const val MULTI_CHOOSE_MIN_LABEL_W = 44f
+        private const val MULTI_CHOOSE_TWO_COLUMN_READABLE_FACTOR = 1.2f
         private const val SLIDER_KNOB = 9f
 
         private val ACCENT: Int
@@ -2172,6 +2355,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         private val PROFILE_FILL = 0x66191F27
         private val HOVER_FILL = 0x222A3340
         private val BORDER_SOFT = 0x553E4652
+        private val BORDER_SOFT_STRONG = 0x774A5564
         private val DIVIDER = 0x223E4652
         private val DIVIDER_STRONG = 0x443E4652
     }

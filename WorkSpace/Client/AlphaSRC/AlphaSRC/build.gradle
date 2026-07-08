@@ -1,0 +1,98 @@
+plugins {
+    id 'fabric-loom' version '1.9-SNAPSHOT'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+loom {
+    // Source code uses Intermediary names (class_XXX / method_XXXX / field_XXXX).
+    // We set the intermediate mappings target so loom provides the intermediary-mapped
+    // minecraft jar on the compile classpath, which exposes these names directly.
+    intermediaryUrl = "https://maven.fabricmc.net/net/fabricmc/intermediary/%1\$s/intermediary-%1\$s-v2.jar"
+}
+
+repositories {
+    maven { url "https://maven.fabricmc.net/" }
+    maven { url "https://maven.shedaniel.me/" }
+    maven { url "https://maven.terraformersmc.com/releases/" }
+    maven { url "https://jitpack.io" }
+}
+
+configurations {
+    intermediaryCompile
+}
+
+dependencies {
+    // Minecraft & Fabric — use yarn so loom sets up the game,
+    // but we write code against intermediary names.
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.layered {
+        // Intermediary layer provides class_XXX / method_XXXX names for compilation
+        // Yarn adds human-readable aliases on top (used in Mixin annotations)
+        mappings "net.fabricmc:intermediary:${project.minecraft_version}:v2"
+    }
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // MixinExtras (bundled)
+    include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:0.5.3")))
+
+    // WebSocket client
+    include(implementation("org.java-websocket:Java-WebSocket:1.5.4"))
+
+    // Netty proxy support (bundled in original jar)
+    include(implementation("io.netty:netty-codec-socks:4.1.82.Final"))
+    include(implementation("io.netty:netty-handler-proxy:4.1.82.Final"))
+
+    // Lombok
+    compileOnly "org.projectlombok:lombok:1.18.30"
+    annotationProcessor "org.projectlombok:lombok:1.18.30"
+
+    // Baritone API (compile-only stubs — local jar)
+    compileOnly fileTree(dir: 'libs', include: ['*.jar'])
+
+    // Guava (already in Minecraft, just for IDE)
+    compileOnly 'com.google.guava:guava:33.0-jre'
+}
+
+// Provide intermediary-mapped minecraft jar on compile classpath
+// so that class_XXX names resolve during javac
+configurations.compileClasspath.resolutionStrategy.dependencySubstitution {
+    // nothing extra needed — loom already puts minecraft on classpath
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+    it.options.encoding = "UTF-8"
+    // Suppress Mixin annotation processor errors about unresolved targets
+    // (code uses intermediary names, Mixin AP expects yarn/obf names)
+    it.options.compilerArgs += [
+        "-AdefaultRequire=0",
+        "-Amixin.checks.interfaces=false"
+    ]
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    withSourcesJar()
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${project.archivesBaseName}" }
+    }
+}

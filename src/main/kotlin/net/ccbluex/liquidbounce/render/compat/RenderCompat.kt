@@ -19,6 +19,7 @@ import net.minecraft.resources.Identifier
 import org.joml.Matrix4f
 import org.joml.Vector3f
 import org.joml.Vector4f
+import org.lwjgl.opengl.GL11C
 import org.lwjgl.system.MemoryUtil
 import java.nio.ByteBuffer
 import java.util.EnumMap
@@ -73,7 +74,9 @@ object RenderSystem {
         depthTest = false
     }
     fun depthMask(mask: Boolean) = Unit
-    fun lineWidth(width: Float) = Unit
+    fun lineWidth(width: Float) {
+        GL11C.glLineWidth(width)
+    }
     fun setShader(shader: ShaderProgramKey) {
         currentShader = shader
     }

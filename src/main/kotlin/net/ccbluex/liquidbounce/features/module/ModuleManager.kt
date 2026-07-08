@@ -56,6 +56,7 @@ import net.ccbluex.liquidbounce.features.module.modules.render.handshader.Module
 import net.ccbluex.liquidbounce.features.module.modules.render.hats.ModuleHats
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.ModuleNameTags
 import net.ccbluex.liquidbounce.features.module.modules.render.popchams.ModulePopChams
+import net.ccbluex.liquidbounce.features.module.modules.render.skeletonesp.ModuleSkeletonESP
 import net.ccbluex.liquidbounce.features.module.modules.render.targetesp.ModuleTargetESP
 import net.ccbluex.liquidbounce.features.module.modules.render.trajectories.ModulePredictions
 import net.ccbluex.liquidbounce.features.module.modules.world.*
@@ -268,6 +269,7 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleCustomAmbience,
             ModuleRotations,
             ModuleSilentHotbar,
+            ModuleSkeletonESP,
             ModuleStorageESP,
             ModuleAnimations,
             ModuleTracers,
