@@ -21,6 +21,10 @@ package net.ccbluex.liquidbounce.features.module.modules.render
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.math.Axis
 import net.ccbluex.liquidbounce.config.types.NamedChoice
+import net.ccbluex.liquidbounce.event.events.DisconnectEvent
+import net.ccbluex.liquidbounce.event.events.GameTickEvent
+import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
+import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
@@ -41,6 +45,7 @@ import net.minecraft.world.item.Items
 import net.minecraft.world.item.ShieldItem
 import net.minecraft.world.item.ShovelItem
 import net.minecraft.world.item.TridentItem
+import java.util.EnumMap
 import kotlin.math.PI
 import kotlin.math.pow
 import kotlin.math.sin
@@ -70,8 +75,11 @@ object ModuleAnimations : ClientModule(
     private val newLeftHand by boolean("NewLeftHand", false)
         .visibleWhen { mode == Mode.NEW }
 
-    private var newPrimarySlash = false
-    private var newWasSwinging = false
+    private val newHandStates = EnumMap<InteractionHand, NewHandState>(InteractionHand::class.java).apply {
+        InteractionHand.values().forEach { this[it] = NewHandState() }
+    }
+
+    private var lastNewPlayer: AbstractClientPlayer? = null
 
     val mode: Mode
         @JvmStatic get() = modeValue.get()
@@ -85,8 +93,34 @@ object ModuleAnimations : ClientModule(
     private fun auraReady(): Boolean =
         !onlyAura || (ModuleKillAura.running && ModuleKillAura.targetTracker.target != null)
 
+    private fun isNewHandEnabled(hand: InteractionHand): Boolean =
+        mode == Mode.NEW && (hand == InteractionHand.MAIN_HAND || newLeftHand)
+
     @JvmStatic
     fun shouldApply(): Boolean = running && auraReady()
+
+    override fun enable() {
+        resetNewAnimationState()
+    }
+
+    override fun disable() {
+        resetNewAnimationState()
+    }
+
+    @Suppress("unused")
+    private val tickHandler = handler<GameTickEvent> {
+        tickNewAnimationState()
+    }
+
+    @Suppress("unused")
+    private val worldChangeHandler = handler<WorldChangeEvent> {
+        resetNewAnimationState()
+    }
+
+    @Suppress("unused")
+    private val disconnectHandler = handler<DisconnectEvent> {
+        resetNewAnimationState()
+    }
 
     @JvmStatic
     fun resolveMainArm(player: AbstractClientPlayer): HumanoidArm {
@@ -107,7 +141,11 @@ object ModuleAnimations : ClientModule(
         }
 
         val hand = swingingArm ?: InteractionHand.MAIN_HAND
-        return if (hand == InteractionHand.MAIN_HAND) swingSmoothnessValue.get() else original
+        return if (hand == InteractionHand.MAIN_HAND || isNewHandEnabled(hand)) {
+            swingSmoothnessValue.get()
+        } else {
+            original
+        }
     }
 
     @JvmStatic
@@ -116,7 +154,7 @@ object ModuleAnimations : ClientModule(
         hand: InteractionHand,
         item: ItemStack
     ): Float {
-        if (!shouldApply() || hand != InteractionHand.MAIN_HAND) {
+        if (!shouldApply() || (hand != InteractionHand.MAIN_HAND && !isNewHandEnabled(hand))) {
             return original
         }
 
@@ -134,9 +172,12 @@ object ModuleAnimations : ClientModule(
         hand: InteractionHand,
         arm: HumanoidArm,
         item: ItemStack,
-        swingProgress: Float
+        swingProgress: Float,
+        tickDelta: Float
     ): Boolean {
-        if (!shouldApply() || hand != InteractionHand.MAIN_HAND || item.isEmpty ||
+        if (!shouldApply() ||
+            (hand != InteractionHand.MAIN_HAND && !isNewHandEnabled(hand)) ||
+            item.isEmpty ||
             item.has(DataComponents.MAP_ID) || item.item == Items.CROSSBOW) {
             return false
         }
@@ -220,7 +261,17 @@ object ModuleAnimations : ClientModule(
                 matrices.mulPose(Axis.ZP.rotationDegrees(anim * rotate))
             }
 
-            Mode.NEW -> return applyNewSlashTransform(matrices, player, hand, item, isLeft, swingProgress)
+            Mode.NEW -> {
+                val state = stateFor(hand)
+                observeNewRenderedItem(state, item)
+                return applyNewSlashTransform(
+                    matrices,
+                    item,
+                    isLeft,
+                    interpolatedSwing(state, tickDelta, swingProgress),
+                    state
+                )
+            }
 
             Mode.FADE -> {
                 val direction = if (isLeft) -1.0F else 1.0F
@@ -265,10 +316,12 @@ object ModuleAnimations : ClientModule(
 
         if (player.isUsingItem && player.useItemRemainingTicks > 0 && player.usedItemHand == hand) {
             val useAnimation = effectiveUseAnimation(item)
-            if (hand == InteractionHand.MAIN_HAND &&
-                useAnimation != ItemUseAnimation.EAT &&
-                useAnimation != ItemUseAnimation.DRINK &&
-                useAnimation != ItemUseAnimation.BLOCK) {
+            if (useAnimation == ItemUseAnimation.BOW || useAnimation == ItemUseAnimation.CROSSBOW ||
+                useAnimation == ItemUseAnimation.SPYGLASS) {
+                return false
+            }
+
+            if (!isNewSupportedUseAnimation(useAnimation)) {
                 return false
             }
         }
@@ -293,8 +346,16 @@ object ModuleAnimations : ClientModule(
         equipProgress: Float,
         swingProgress: Float
     ): NewArmRender? {
+        val state = stateFor(hand)
+        observeNewRenderedItem(state, item)
+        val visualSwingProgress = interpolatedSwing(state, tickDelta, swingProgress)
+        val visualEquipProgress = finiteUnit(equipProgress)
+        val switchProgress = interpolatedSwitchProgress(state, tickDelta)
+
+        applyNewSwitchTransform(matrices, arm, item, switchProgress)
+
         if (item.isEmpty) {
-            return applyNewEmptyArmPose(matrices, player, arm, equipProgress, swingProgress)
+            return applyNewEmptyArmPose(matrices, player, arm, visualEquipProgress, visualSwingProgress)
         }
 
         val usingThisHand = player.isUsingItem && player.useItemRemainingTicks > 0 && player.usedItemHand == hand
@@ -302,53 +363,63 @@ object ModuleAnimations : ClientModule(
             val useTicks = item.getUseDuration(player) - (player.useItemRemainingTicks - tickDelta + 1.0F)
             when (effectiveUseAnimation(item)) {
                 ItemUseAnimation.EAT,
-                ItemUseAnimation.DRINK -> {
+                ItemUseAnimation.DRINK,
+                ItemUseAnimation.TOOT_HORN -> {
                     applyNewEatDrinkHandPose(matrices, arm, useTicks)
-                    return NewArmRender(0.0F, swingProgress)
+                    return NewArmRender(0.0F, visualSwingProgress)
                 }
 
                 ItemUseAnimation.BLOCK -> {
                     applyNewBlockHandPose(matrices, arm, useTicks)
-                    return NewArmRender(0.0F, swingProgress)
+                    return NewArmRender(0.0F, visualSwingProgress)
+                }
+
+                ItemUseAnimation.BRUSH -> {
+                    applyNewBrushHandPose(matrices, arm, useTicks)
+                    return NewArmRender(0.0F, visualSwingProgress)
+                }
+
+                ItemUseAnimation.TRIDENT,
+                ItemUseAnimation.SPEAR -> {
+                    applyNewSpearUseHandPose(matrices, arm, useTicks)
+                    return NewArmRender(0.0F, visualSwingProgress)
                 }
 
                 else -> {
                     if (hand == InteractionHand.MAIN_HAND) {
                         return null
                     }
-                    applyNewHandBase(matrices, equipProgress, arm)
+                    applyNewHandBase(matrices, visualEquipProgress, arm)
                     return NewArmRender(0.0F, 0.0F)
                 }
             }
         }
 
-        if (hand == InteractionHand.MAIN_HAND && !applyNewSlashTransform(matrices, player, hand, item, arm == HumanoidArm.LEFT, swingProgress)) {
+        if (!applyNewSlashTransform(matrices, item, arm == HumanoidArm.LEFT, visualSwingProgress, state)) {
             return null
         }
 
-        applyNewHandBase(matrices, equipProgress, arm)
+        applyNewHandBase(matrices, visualEquipProgress, arm)
         return NewArmRender(0.0F, 0.0F)
     }
 
     @JvmStatic
-    fun applyNewSpecialItemPose(matrices: PoseStack, arm: HumanoidArm, item: ItemStack) {
+    fun applyNewSpecialItemPose(matrices: PoseStack, hand: InteractionHand, arm: HumanoidArm, item: ItemStack, tickDelta: Float) {
         applyNewCommonItemAnchor(matrices, arm)
         applyNewItemPose(matrices, arm, item)
+        applyNewThrowableSwitchItemPose(matrices, hand, arm, item, tickDelta)
     }
 
     private fun applyNewSlashTransform(
         matrices: PoseStack,
-        player: AbstractClientPlayer,
-        hand: InteractionHand,
         item: ItemStack,
         isLeft: Boolean,
-        swingProgress: Float
+        swingProgress: Float,
+        state: NewHandState
     ): Boolean {
         if (item.isEmpty) {
             return false
         }
-
-        updateNewSlashState(swingProgress)
 
         val direction = if (isLeft) -1.0F else 1.0F
         val swingRot = newSwingRot(swingProgress)
@@ -359,7 +430,7 @@ object ModuleAnimations : ClientModule(
         val tool = isGeneralDiggerTool(item)
         val spear = isSpearLike(item)
         val block = effectiveUseAnimation(item) == ItemUseAnimation.BLOCK
-        val primarySlash = newPrimarySlash || axe || spear || block
+        val primarySlash = state.primarySlash || axe || spear || block
 
         if (primarySlash && !shovel) {
             if (sword || axe) {
@@ -534,6 +605,31 @@ object ModuleAnimations : ClientModule(
         matrices.scale(0.9F, 0.9F, 0.9F)
     }
 
+    private fun applyNewBrushHandPose(matrices: PoseStack, arm: HumanoidArm, useTicks: Float) {
+        val direction = if (arm == HumanoidArm.RIGHT) 1.0F else -1.0F
+        val progress = easeInOutBack(Mth.clamp(useTicks / 5.0F, 0.0F, 1.0F))
+        val sweep = sin((useTicks / 6.0F - 0.5F) * 4.14F).toFloat()
+
+        applyNewHandBase(matrices, 0.0F, arm)
+        matrices.translate(0.0, 0.0, -0.03 * progress)
+        matrices.mulPose(Axis.XP.rotationDegrees(-30.0F * progress))
+        matrices.mulPose(Axis.ZP.rotationDegrees(15.0F * direction * sweep * progress))
+    }
+
+    private fun applyNewSpearUseHandPose(matrices: PoseStack, arm: HumanoidArm, useTicks: Float) {
+        val direction = if (arm == HumanoidArm.RIGHT) 1.0F else -1.0F
+        val charge = Mth.clamp(useTicks / 10.0F, 0.0F, 1.0F)
+        val eased = easeInOutBack(charge)
+
+        applyNewHandBase(matrices, 0.0F, arm)
+        matrices.translate(0.0, -0.15 * eased, -0.3 * eased)
+        matrices.mulPose(Axis.XP.rotationDegrees(65.0F * eased))
+        matrices.mulPose(Axis.ZP.rotationDegrees(10.0F * direction * eased))
+        matrices.translate(0.25 * direction * eased, 0.2 * eased, -0.15 * eased)
+        matrices.mulPose(Axis.YP.rotationDegrees(25.0F * direction * eased))
+        matrices.mulPose(Axis.XP.rotationDegrees(-30.0F * eased))
+    }
+
     private fun applyNewCommonItemAnchor(matrices: PoseStack, arm: HumanoidArm) {
         val direction = if (arm == HumanoidArm.RIGHT) 1.0F else -1.0F
         matrices.translate(-0.3 * direction, 0.65, -0.1)
@@ -608,12 +704,62 @@ object ModuleAnimations : ClientModule(
         }
     }
 
-    private fun updateNewSlashState(swingProgress: Float) {
-        val swinging = swingProgress > 0.01F
-        if (swinging && !newWasSwinging) {
-            newPrimarySlash = !newPrimarySlash
+    private fun applyNewSwitchTransform(matrices: PoseStack, arm: HumanoidArm, item: ItemStack, switchProgress: Float) {
+        if (switchProgress >= 0.999F) {
+            return
         }
-        newWasSwinging = swinging
+
+        val direction = if (arm == HumanoidArm.RIGHT) 1.0F else -1.0F
+        val switchItems = easeInOutBack(sin(Mth.clamp(switchProgress, 0.0F, 0.5F) * PI).toFloat())
+        val switchFast = sin(Mth.clamp(switchProgress, 0.0F, 0.125F) * 12.56F).toFloat()
+        val crossbow = effectiveUseAnimation(item) == ItemUseAnimation.CROSSBOW
+
+        if (crossbow) {
+            matrices.translate(0.0, -0.25 * switchFast, 0.0)
+        }
+
+        matrices.translate(0.0, 0.0, -0.2 * switchFast)
+        matrices.mulPose(Axis.YP.rotationDegrees(25.0F * direction * switchFast))
+        matrices.mulPose(Axis.XP.rotationDegrees(-55.0F * switchFast))
+        matrices.mulPose(Axis.ZP.rotationDegrees(40.0F * direction * switchFast))
+        matrices.mulPose(Axis.ZP.rotationDegrees(-40.0F * direction * switchItems))
+        matrices.mulPose(Axis.XP.rotationDegrees(55.0F * switchItems))
+        matrices.mulPose(Axis.YP.rotationDegrees(-25.0F * direction * switchItems))
+
+        if (crossbow) {
+            matrices.translate(0.0, 0.25 * switchItems, 0.0)
+        }
+
+        matrices.translate(0.0, 0.0, 0.2 * switchItems)
+    }
+
+    private fun applyNewThrowableSwitchItemPose(
+        matrices: PoseStack,
+        hand: InteractionHand,
+        arm: HumanoidArm,
+        item: ItemStack,
+        tickDelta: Float
+    ) {
+        if (!isThrowableSwitchItem(item)) {
+            return
+        }
+
+        val switchProgress = interpolatedSwitchProgress(stateFor(hand), tickDelta)
+        if (switchProgress >= 0.999F) {
+            return
+        }
+
+        val direction = if (arm == HumanoidArm.RIGHT) 1.0F else -1.0F
+        val switchVariable = easeInBack(
+            sin(Mth.clamp(switchProgress, 0.09723F, 0.60632F) * 3.24F * 1.65F - 0.1F).toFloat()
+        )
+        val clampedSwitch = Mth.clamp(switchProgress * 1.2F, 0.0F, 1.0F)
+
+        matrices.mulPose(Axis.XP.rotationDegrees(-10.0F * switchVariable))
+        matrices.translate(0.0, 0.62 * switchVariable, 0.0)
+        matrices.mulPose(Axis.ZP.rotationDegrees(
+            -7.0F * direction * sin(Mth.clamp(clampedSwitch, 0.0943F, 0.66791F) * 7.07F * 1.5F - 0.8F).toFloat()
+        ))
     }
 
     private fun newSwingRot(swingProgress: Float): Float =
@@ -632,6 +778,21 @@ object ModuleAnimations : ClientModule(
             (((2.0F * x - 2.0F).pow(2.0F) * ((c2 + 1.0F) * (x * 2.0F - 2.0F) + c2) + 2.0F) / 2.0F)
         }
     }
+
+    private fun easeInBack(x: Float): Float {
+        val c1 = 1.70158F
+        val c3 = c1 + 1.0F
+        return c3 * x * x * x - c1 * x * x
+    }
+
+    private fun isNewSupportedUseAnimation(useAnimation: ItemUseAnimation): Boolean =
+        useAnimation == ItemUseAnimation.EAT ||
+            useAnimation == ItemUseAnimation.DRINK ||
+            useAnimation == ItemUseAnimation.TOOT_HORN ||
+            useAnimation == ItemUseAnimation.BLOCK ||
+            useAnimation == ItemUseAnimation.BRUSH ||
+            useAnimation == ItemUseAnimation.TRIDENT ||
+            useAnimation == ItemUseAnimation.SPEAR
 
     private fun effectiveUseAnimation(stack: ItemStack): ItemUseAnimation = stack.useAnimation
 
@@ -673,6 +834,22 @@ object ModuleAnimations : ClientModule(
     private fun isTorchLike(item: Item): Boolean =
         item == Items.TORCH || item == Items.SOUL_TORCH || item == Items.REDSTONE_TORCH
 
+    private fun isThrowableSwitchItem(stack: ItemStack): Boolean {
+        val item = stack.item
+        return item == Items.ENDER_PEARL ||
+            item == Items.ENDER_EYE ||
+            item == Items.SNOWBALL ||
+            item == Items.EGG ||
+            item == Items.BLUE_EGG ||
+            item == Items.BROWN_EGG ||
+            item == Items.EXPERIENCE_BOTTLE ||
+            item == Items.SPLASH_POTION ||
+            item == Items.LINGERING_POTION ||
+            item == Items.FIRE_CHARGE ||
+            item == Items.WIND_CHARGE ||
+            item == Items.BUNDLE
+    }
+
     private fun isThinNewItem(stack: ItemStack): Boolean {
         val item = stack.item
         val block = (item as? BlockItem)?.block
@@ -693,6 +870,201 @@ object ModuleAnimations : ClientModule(
             item is BucketItem ||
             (!isWeaponLike(stack) && item !is BlockItem)
     }
+
+    @JvmStatic
+    fun markNextNewSwing(hand: InteractionHand, interact: Boolean, force: Boolean) {
+        if (!isNewStateReady(hand)) {
+            return
+        }
+
+        stateFor(hand).apply {
+            pendingInteract = interact
+            pendingForce = force
+        }
+    }
+
+    @JvmStatic
+    fun recordNewSwing(entity: Any, hand: InteractionHand) {
+        if (entity !== mc.player || !isNewStateReady(hand)) {
+            return
+        }
+
+        val state = stateFor(hand)
+        val force = state.pendingForce
+        val interact = state.pendingInteract
+        state.pendingForce = false
+        state.pendingInteract = false
+        startNewSwing(hand, state, interact, force)
+    }
+
+    private fun startNewSwing(hand: InteractionHand, state: NewHandState, interact: Boolean, force: Boolean) {
+        val duration = newSwingDuration(hand)
+        if (force || !state.swinging || state.swingTicks >= duration / 2 || state.swingTicks < 0) {
+            state.swingTicks = 0
+            state.swinging = true
+            state.primarySlash = !state.primarySlash
+            state.swingEvent = !state.swingEvent
+            state.interactEvent = interact
+        }
+    }
+
+    private fun tickNewAnimationState() {
+        val player = mc.player
+        if (player == null || mc.level == null || mode != Mode.NEW || !auraReady()) {
+            resetNewAnimationState()
+            return
+        }
+
+        if (lastNewPlayer !== player) {
+            resetNewAnimationState()
+            lastNewPlayer = player
+        }
+
+        InteractionHand.values().forEach { hand ->
+            val state = stateFor(hand)
+            if (!isNewHandEnabled(hand)) {
+                state.reset()
+                return@forEach
+            }
+
+            if (!state.hasFiniteProgress()) {
+                state.reset()
+            }
+
+            state.previousSwingProgress = state.swingProgress
+            state.previousItemSwitchProgress = state.itemSwitchProgress
+            state.itemSwitchEvent = false
+
+            if (state.swinging) {
+                state.swingTicks++
+                if (state.swingTicks >= newSwingDuration(hand)) {
+                    state.swingTicks = 0
+                    state.swinging = false
+                }
+            } else {
+                state.swingTicks = 0
+                state.interactEvent = false
+            }
+
+            state.swingProgress = if (state.swinging) {
+                state.swingTicks.toFloat() / newSwingDuration(hand).toFloat()
+            } else {
+                0.0F
+            }
+
+            state.itemSwitchProgress = Mth.clamp(
+                state.itemSwitchProgress + NEW_SWITCH_PROGRESS_PER_TICK,
+                0.0F,
+                1.0F
+            )
+        }
+    }
+
+    private fun resetNewAnimationState() {
+        newHandStates.values.forEach { it.reset() }
+        lastNewPlayer = null
+    }
+
+    private fun isNewStateReady(hand: InteractionHand): Boolean =
+        running && auraReady() && isNewHandEnabled(hand) && mc.player != null
+
+    private fun stateFor(hand: InteractionHand): NewHandState =
+        newHandStates.getValue(hand)
+
+    private fun newSwingDuration(hand: InteractionHand): Int {
+        val item = when (hand) {
+            InteractionHand.MAIN_HAND -> mc.player?.mainHandItem
+            InteractionHand.OFF_HAND -> mc.player?.offhandItem
+        } ?: ItemStack.EMPTY
+
+        return newSwingDuration(item)
+    }
+
+    private fun newSwingDuration(item: ItemStack): Int =
+        swingSmoothnessValue.get().coerceAtLeast(1)
+
+    private fun interpolatedSwing(state: NewHandState, tickDelta: Float, fallback: Float): Float {
+        val previous = finiteUnit(state.previousSwingProgress)
+        val current = finiteUnit(state.swingProgress)
+        val delta = if (current - previous < 0.0F) current - previous + 1.0F else current - previous
+        val interpolated = previous + delta * finiteUnit(tickDelta)
+        return finiteUnit(if (state.swinging || interpolated > 0.0F) interpolated else fallback)
+    }
+
+    private fun interpolatedSwitchProgress(state: NewHandState, tickDelta: Float): Float {
+        val previous = finiteUnit(state.previousItemSwitchProgress, 1.0F)
+        val current = finiteUnit(state.itemSwitchProgress, 1.0F)
+        return finiteUnit(Mth.lerp(finiteUnit(tickDelta), previous, current), 1.0F)
+    }
+
+    private fun observeNewRenderedItem(state: NewHandState, item: ItemStack) {
+        if (isSameVisualStack(state.renderedItem, item)) {
+            return
+        }
+
+        state.renderedItem = if (item.isEmpty) ItemStack.EMPTY else item.copy()
+        state.itemSwitchEvent = true
+        state.previousItemSwitchProgress = 0.0F
+        state.itemSwitchProgress = 0.0F
+    }
+
+    private fun isSameVisualStack(previous: ItemStack, current: ItemStack): Boolean {
+        if (previous.isEmpty && current.isEmpty) {
+            return true
+        }
+
+        if (!ItemStack.isSameItem(previous, current)) {
+            return false
+        }
+
+        return previous.get(DataComponents.ITEM_MODEL) == current.get(DataComponents.ITEM_MODEL) &&
+            previous.get(DataComponents.CUSTOM_MODEL_DATA) == current.get(DataComponents.CUSTOM_MODEL_DATA) &&
+            previous.get(DataComponents.MAP_ID) == current.get(DataComponents.MAP_ID) &&
+            previous.get(DataComponents.CHARGED_PROJECTILES) == current.get(DataComponents.CHARGED_PROJECTILES)
+    }
+
+    private fun finiteUnit(value: Float, default: Float = 0.0F): Float =
+        if (value.isFinite()) value.coerceIn(0.0F, 1.0F) else default
+
+    private data class NewHandState(
+        var swingTicks: Int = 0,
+        var swinging: Boolean = false,
+        var previousSwingProgress: Float = 0.0F,
+        var swingProgress: Float = 0.0F,
+        var primarySlash: Boolean = false,
+        var swingEvent: Boolean = false,
+        var interactEvent: Boolean = false,
+        var itemSwitchEvent: Boolean = false,
+        var previousItemSwitchProgress: Float = 1.0F,
+        var itemSwitchProgress: Float = 1.0F,
+        var renderedItem: ItemStack = ItemStack.EMPTY,
+        var pendingInteract: Boolean = false,
+        var pendingForce: Boolean = false
+    ) {
+        fun reset() {
+            swingTicks = 0
+            swinging = false
+            previousSwingProgress = 0.0F
+            swingProgress = 0.0F
+            primarySlash = false
+            swingEvent = false
+            interactEvent = false
+            itemSwitchEvent = false
+            previousItemSwitchProgress = 1.0F
+            itemSwitchProgress = 1.0F
+            renderedItem = ItemStack.EMPTY
+            pendingInteract = false
+            pendingForce = false
+        }
+
+        fun hasFiniteProgress(): Boolean =
+            previousSwingProgress.isFinite() &&
+                swingProgress.isFinite() &&
+                previousItemSwitchProgress.isFinite() &&
+                itemSwitchProgress.isFinite()
+    }
+
+    private const val NEW_SWITCH_PROGRESS_PER_TICK = 0.0225F
 
     enum class Mode(override val choiceName: String) : NamedChoice {
         MODE1("Mode1"),

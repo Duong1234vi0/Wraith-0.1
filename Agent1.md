@@ -4994,3 +4994,160 @@ FCL runtime comparison is pending for Track/Grim motion, raytrace/wall bypass be
 ### Supersedes / reverts
 
 Supersedes the 2026-05-29 journal entry that mapped V-Core Track/Grim onto generic AngleSmooth processors.
+
+## SwingAnimation New HMI-derived dual-hand first-person state (2026-07-14, Codex)
+
+### Request
+
+Enhance Wraith's existing `SwingAnimation` module `New` mode with Hold My Items 5.1.1-inspired first-person behavior for both `InteractionHand.MAIN_HAND` and `InteractionHand.OFF_HAND`, without importing HMI as a dependency, adding a Lua framework, or replacing Wraith's animation system.
+
+### Current files checked
+
+- `CHANGELOG.md`
+- `Skill/README.md`
+- `Skill/Agen.md`
+- `Skill/CLAUDE_PORT_SKID_MODULE_GUIDE.md`
+- `Skill/PORT_EVIDENCE_TEMPLATE.md`
+- `Skill/PORT_REVIEW_CHECKLIST.md`
+- `Skill/RENDER_PORTING_GUIDE.md`
+- `Skill/CODEBASE_RULES.md`
+- `Skill/AGENT1_USAGE.md`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleAnimations.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/item/MixinHeldItemRenderer.java`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/entity/MixinLivingEntityCompatibility.java`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/client/MixinMinecraftClient.java`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/network/MixinClientPlayerInteractionManager.java`
+- `src/main/resources/liquidbounce.mixins.json`
+- Current mapped Minecraft 26.1.2 sources for `ItemInHandRenderer`, `LivingEntity`, `Minecraft`, `ItemUseAnimation`, `ItemStack`, and `DataComponents`.
+
+Bounded searches covered `ModuleAnimations`, `applySwingTransform`, `shouldRenderNewSpecial`, `applyNewSpecialArmPose`, `applyNewSpecialItemPose`, `visualSwingDuration`, `transformEquipProgress`, `resolveMainArm`, `renderArmWithItem`, `renderPlayerArm`, `swingArm`, `getCurrentSwingDuration`, `InteractionHand.OFF_HAND`, `swingingArm`, `swing(`, `swingOffHand`, `getAttackAnim`, `getSwingProgress`, `ItemInHandRenderer`, current hand-selection/render-selection logic, current item-use and attack hooks, and world-change/disconnect/module-disable reset patterns.
+
+### HMI reference checked
+
+Reference JAR: `WorkSpace/Mods/HMI 5.1.1 (1.21.11).jar`.
+
+Decompiled and inspected:
+
+- `com.holdmylua.source.mixin.player.LivingEntityMixin`
+- `com.holdmylua.source.access.LivingEntityAccessor`
+- `com.holdmylua.source.mixin.render.HeldItemRendererMixin`
+- `com.holdmylua.source.mixin.render.HandRenderTypeMixin`
+- `com.holdmylua.source.mixin.client.MinecraftClientMixin`
+- `com.holdmylua.source.mixin.client.GameRendererMixin`
+- `com.holdmylua.source.mixin.property.UseDurationMixin`
+- `com.holdmylua.source.mixin.property.UsingItemMixin`
+- `com.holdmylua.source.global.LuaContext`
+- `com.holdmylua.source.global.GlobalsStorage`
+
+Bundled scripts inspected:
+
+- `resourcepacks/pack_test/assets/minecraft/holdmyitems/hand_pose.lua`
+- `resourcepacks/pack_test/assets/minecraft/holdmyitems/item_pose.lua`
+- `resourcepacks/pack_test/assets/minecraft/holdmyitems/hand_relative_pose.lua`
+
+### Root cause / source behavior
+
+Wraith's current `New` mode had partial offhand rendering through `NewLeftHand`, but the animation state was shared. `visualSwingDuration`, `transformEquipProgress`, and normal `applySwingTransform` were main-hand biased, the slash transform was gated to main hand in the special path, and the `newPrimarySlash/newWasSwinging` pair made slash alternation global instead of per logical hand.
+
+HMI maintains independent main/offhand swing ticks, previous/current swing progress, swinging flags, interaction flags, swing event flags, and item-switch events. Its renderer chooses swing progress and switch events by rendered logical hand. HMI also globally forces both hand render flags, but that was not ported because Wraith must keep vanilla/tightly gated hand selection and the current 26.1.2 renderer already renders both hands for normal non-two-handed states.
+
+### Changed
+
+- Replaced the shared `New` slash state with `EnumMap<InteractionHand, NewHandState>`.
+- Added per-hand swing ticks, previous/current swing progress, independent primary slash alternation, event flags, pending interaction flags, and item-switch progress/state.
+- Added module enable/disable, game tick, world-change, disconnect, player replacement, mode/aura gating, and non-finite-value resets.
+- Added local attack/use trigger hooks in `MixinMinecraftClient` and a local-player `LivingEntity.swing(hand, boolean)` observer in `MixinLivingEntityCompatibility`.
+- Updated `MixinHeldItemRenderer` calls so `New` mode receives tick delta and the rendered logical hand for per-hand interpolation.
+- Extended `visualSwingDuration`, `transformEquipProgress`, `applySwingTransform`, and `applyNewSpecialArmPose` to use hand-specific `New` state.
+- Removed the main-hand-only slash restriction after making slash state per hand.
+- Added independent item-switch/equip transition detection using copied stacks and visual component comparisons for item, item model, custom model data, map id, and charged projectiles.
+- Added `New` use-action handling for eat, drink, toot horn, block/shield, brush, trident, and spear use where current mappings expose stable state.
+- Preserved Wraith's existing `New` item category poses for swords, axes, shovels, generic tools, torch-like items, block-like items, and generic items while feeding them HMI-derived per-hand progress.
+- Left `liquidbounce.mixins.json` unchanged; no new mixin registration was required.
+
+### MainHand improvements
+
+Main hand now uses the same `NewHandState` model as offhand: independent interpolated swing progress, independent slash alternation, local attack/use trigger capture, copied-stack item-switch detection, and smoothed switch progress.
+
+### Offhand implementation
+
+When `SwingAnimation` is running, `Mode == New`, `NewLeftHand == true`, and the local first-person renderer is active, offhand now receives its own visual swing state, slash alternation, item-switch progress, equip/switch transform, use-action transform for supported actions, physical-arm mirroring through `newSpecialArm`, and copied-stack item identity tracking. Offhand no longer derives progress or slash direction from main hand.
+
+### Supported actions
+
+Implemented or preserved in `New` path:
+
+- idle/non-use held item
+- empty hand
+- generic swing
+- sword-like item
+- axe-like item
+- shovel-like item
+- generic digging tool
+- generic item
+- eat
+- drink
+- toot horn
+- block/shield
+- spear/trident-like use
+- brush
+- throwable item switch accent
+- generic block and torch-like item poses
+
+Vanilla fallback remains for map, bow, crossbow, spyglass/scoping, and any active use animation not explicitly supported by the constrained Wraith `New` path.
+
+### Deviations and exclusions
+
+- This is a constrained first-person adaptation of HMI behavior into Wraith's existing `New` mode, not a full Hold My Items port.
+- Did not port LuaJ, resource-pack script execution, HMI item model/property framework, particles, camera animation, sound, third-person animation, HUD/debug UI, block renderer changes, fishing/sign changes, or Iris compatibility code unrelated to first-person hands.
+- Did not globally force both hand render flags like HMI `HandRenderTypeMixin`; Wraith keeps vanilla selection except existing `NewLeftHand` special rendering where the current renderer already calls the offhand path.
+- Bow, crossbow, map, and spyglass/scoping stay vanilla to avoid duplicated two-handed items or broken scoping without HMI's wider render/model framework.
+- HMI `UseDurationMixin` and `UsingItemMixin` were inspected but not ported because they feed HMI's Lua/item-model system rather than required Wraith first-person hand pose state.
+
+### Verification
+
+- `git diff --check`: passed.
+- Final build command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:$PATH sh ./gradlew --no-daemon clean assemble -x detekt`
+- Final build result: **BUILD SUCCESSFUL**.
+- JAR path: `build/libs/liquidbounce-0.31.2.jar`
+- Confirmed no reference archive, decompiled output, cache, or HMI extraction was staged or edited.
+- Confirmed no duplicate mixin registration was added.
+- Confirmed no additional packets or gameplay interactions were introduced.
+
+### Runtime status
+
+Runtime status: not tested in FCL/in-game. Build success only proves compilation and packaging.
+
+FCL checklist to run:
+
+- Module disabled; another mode; `New` with `NewLeftHand=false`; `New` with `NewLeftHand=true`.
+- `OnlyAura=false`; `OnlyAura=true` with and without a current target.
+- Right-handed player, `RenderHand=RIGHT`, `RenderHand=LEFT`.
+- Main item only, offhand item only, both hands holding items, empty hand cases.
+- Main item switch, offhand item switch, and near-simultaneous switches.
+- Main attack, main use, offhand use, rapid alternating main/offhand interactions, and block breaking.
+- Eat, drink, shield/block, bow, crossbow, trident/spear, brush, map, generic block, torch-like item, generic tool, and empty hand.
+- Check for duplicated arm/item, missing offhand, cross-hand progress bleed, slash alternation bleed, per-frame equip restarts, progress 0/1 teleporting, wrong physical-arm mirroring, camera clipping, duplicated map/bow/crossbow, stale pose after disable/world change, scoping regression, and first-person Iris/shader regression.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleAnimations.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/item/MixinHeldItemRenderer.java`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/entity/MixinLivingEntityCompatibility.java`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/client/MixinMinecraftClient.java`
+- `Agent1.md`
+
+### Commit / push
+
+Commit hash: pending at entry time; final hash reported after commit creation.
+
+Branch: `main`
+
+Remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`
+
+Push status: pending at entry time.
+
+### Supersedes / reverts
+
+Supersedes any older Hold My Item / Hold My Items / `New` mode attempt that used shared `newPrimarySlash/newWasSwinging` state or derived offhand animation from main-hand progress. No specific older HMI entry was found in `Agent1.md`.

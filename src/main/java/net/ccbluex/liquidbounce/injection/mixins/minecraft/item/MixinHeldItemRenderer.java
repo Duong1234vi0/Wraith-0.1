@@ -113,7 +113,7 @@ public abstract class MixinHeldItemRenderer {
                 armRender.getEquipProgress(), armRender.getSwingProgress(), arm);
 
         if (!item.isEmpty()) {
-            ModuleAnimations.INSTANCE.applyNewSpecialItemPose(matrices, arm, item);
+            ModuleAnimations.INSTANCE.applyNewSpecialItemPose(matrices, hand, arm, item, tickDelta);
             renderItem(
                     player, item,
                     isRight ? ItemDisplayContext.FIRST_PERSON_RIGHT_HAND : ItemDisplayContext.FIRST_PERSON_LEFT_HAND,
@@ -155,7 +155,7 @@ public abstract class MixinHeldItemRenderer {
                                     float tickDelta, float pitch, InteractionHand hand, float swingProgress,
                                     ItemStack item, float equipProgress, PoseStack methodMatrices,
                                     SubmitNodeCollector submitNodeCollector, int light) {
-        if (ModuleAnimations.INSTANCE.applySwingTransform(matrices, player, hand, arm, item, attack)) {
+        if (ModuleAnimations.INSTANCE.applySwingTransform(matrices, player, hand, arm, item, attack, tickDelta)) {
             return;
         }
 
