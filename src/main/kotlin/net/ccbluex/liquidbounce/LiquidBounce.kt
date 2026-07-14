@@ -33,6 +33,7 @@ import net.ccbluex.liquidbounce.features.command.CommandManager
 import net.ccbluex.liquidbounce.features.misc.AccountManager
 import net.ccbluex.liquidbounce.features.misc.FriendManager
 import net.ccbluex.liquidbounce.features.module.ModuleManager
+import net.ccbluex.liquidbounce.features.module.modules.combat.backtrack.BacktrackPacketManager
 import net.ccbluex.liquidbounce.features.spoofer.SpooferManager
 import net.ccbluex.liquidbounce.lang.LanguageManager
 import net.ccbluex.liquidbounce.render.FontManager
@@ -200,6 +201,7 @@ object LiquidBounce : EventListener {
         // Utility managers
         RotationManager
         PacketQueueManager
+        BacktrackPacketManager
         CombatManager
         FriendManager
         InventoryManager

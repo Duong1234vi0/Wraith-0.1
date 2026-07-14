@@ -1,0 +1,70 @@
+---- Minecraft Crash Report ----
+// Daisy, daisy...
+
+Time: 30.05.2026, 20:01
+Description: Ticking screen
+
+java.lang.NullPointerException: Cannot invoke "mods.viaversion.viamcp.gui.VersionSelectScreen.tick()" because the return value of "mods.viaversion.viamcp.ViaMCP.getVersionSelectScreen()" is null
+	at lightning.product.q_3131_N.tick(lightningproduct:149)
+	at lightning.product.c_1404_X.f_1607_n(lightningproduct:1715)
+	at lightning.product.k_2603_m.wrapScreenError(lightningproduct:483)
+	at lightning.product.c_1404_X.w_1457_N(lightningproduct:1713)
+	at lightning.product.c_1404_X.P_1922_E(lightningproduct:995)
+	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+	at net.minecraft.client.main.Main.main(lightningproduct:225)
+	at mcp.client.Start.main(lightningproduct:13)
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Render thread
+Stacktrace:
+	at lightning.product.q_3131_N.tick(lightningproduct:149)
+	at lightning.product.c_1404_X.f_1607_n(lightningproduct:1715)
+
+-- Affected screen --
+Details:
+	Screen name: lightning.product.q_3131_N
+Stacktrace:
+	at lightning.product.k_2603_m.wrapScreenError(lightningproduct:483)
+	at lightning.product.c_1404_X.w_1457_N(lightningproduct:1713)
+	at lightning.product.c_1404_X.P_1922_E(lightningproduct:995)
+	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+	at net.minecraft.client.main.Main.main(lightningproduct:225)
+	at mcp.client.Start.main(lightningproduct:13)
+
+-- System Details --
+Details:
+	Minecraft Version: 1.16.5
+	Minecraft Version ID: 1.16.5
+	Operating System: Windows 10 (amd64) version 10.0
+	Java Version: 21.0.8, Oracle Corporation
+	Java VM Version: Java HotSpot(TM) 64-Bit Server VM (mixed mode, sharing), Oracle Corporation
+	Memory: 303406256 bytes (289 MB) / 1398800384 bytes (1334 MB) up to 4255121408 bytes (4058 MB)
+	CPUs: 28
+	JVM Flags: 1 total; -Xverify:none
+	Launched Version: mcp
+	Backend library: LWJGL version 3.2.2 build 10
+	Backend API: NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2 GL version 4.6.0 NVIDIA 581.80, NVIDIA Corporation
+	GL Caps: Using framebuffer using OpenGL 3.0
+	Using VBOs: Yes
+	Is Modded: Definitely; Client brand changed to 'Fabric'
+	Type: Client (map_client.txt)
+	Graphics mode: fancy
+	Resource Packs: 
+	Current Language: English (US)
+	CPU: 28x Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz
+	OptiFine Version: OptiFine_1.16.5_HD_U_G8
+	OptiFine Build: ~~NULL~~
+	Render Distance Chunks: 8
+	Mipmaps: 4
+	Anisotropic Filtering: 1
+	Antialiasing: 0
+	Multitexture: false
+	Shaders: null
+	OpenGlVersion: 4.6.0 NVIDIA 581.80
+	OpenGlRenderer: NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2
+	OpenGlVendor: NVIDIA Corporation
+	CpuCount: 28

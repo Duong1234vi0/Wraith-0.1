@@ -72,12 +72,21 @@ object InventoryManager : EventListener {
 
     private var recentInventoryOpen = false
     private var holdInventoryOpenUntilTick = 0
+    private var permittedRedundantCloseContainerId: Int? = null
 
     /**
      * As soon the inventory changes unexpectedly,
      * we have to update the scheduled inventory actions
      */
     private var requiresUpdate = false
+
+    internal fun permitNextRedundantClosePacket(containerId: Int) {
+        permittedRedundantCloseContainerId = containerId
+    }
+
+    internal fun clearRedundantClosePacketPermit() {
+        permittedRedundantCloseContainerId = null
+    }
 
     /**
      * We keep running during the entire time
@@ -266,8 +275,12 @@ object InventoryManager : EventListener {
         if (packet is ServerboundContainerClosePacket || packet is ClientboundContainerClosePacket || packet is ClientboundOpenScreenPacket) {
             // Prevent closing inventory (no other screen!) if it is already closed
             if (!isInventoryOpenServerSide && packet is ServerboundContainerClosePacket && packet.containerId == 0) {
-                event.cancelEvent()
-                return@handler
+                if (permittedRedundantCloseContainerId == packet.containerId) {
+                    permittedRedundantCloseContainerId = null
+                } else {
+                    event.cancelEvent()
+                    return@handler
+                }
             }
 
             isInventoryOpenServerSide = false

@@ -20,8 +20,13 @@
 
 package net.ccbluex.liquidbounce.render.gui
 
+import net.ccbluex.liquidbounce.utils.client.mc
 import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.player.AbstractClientPlayer
+import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite
+import net.minecraft.client.resources.DefaultPlayerSkin
 import net.minecraft.resources.Identifier
+import net.minecraft.world.entity.player.Player
 
 /**
  * Draws a player skin FACE (head front + hat overlay) into the GUI through
@@ -119,6 +124,54 @@ fun GuiGraphicsExtractor.drawRoundedSkinFace(
         HAT_V1,
     )
     return true
+}
+
+fun resolvePlayerSkin(player: Player): Identifier {
+    if (player is AbstractClientPlayer) {
+        player.skin.body().texturePath()?.takeUnless { it == MissingTextureAtlasSprite.getLocation() }?.let {
+            return it
+        }
+    }
+
+    mc.connection?.getPlayerInfo(player.uuid)?.skin?.body()?.texturePath()
+        ?.takeUnless { it == MissingTextureAtlasSprite.getLocation() }
+        ?.let { return it }
+    return defaultPlayerSkin(player)
+}
+
+fun GuiGraphicsExtractor.drawRoundedPlayerSkinFace(
+    player: Player,
+    x: Float,
+    y: Float,
+    size: Float,
+    radius: Float,
+    argb: Int = 0xFFFFFFFF.toInt(),
+): Boolean {
+    val resolved = resolvePlayerSkin(player)
+    if (resolved.isUsablePlayerSkinTexture() && drawRoundedSkinFace(resolved, x, y, size, radius, argb)) {
+        return true
+    }
+
+    val fallback = defaultPlayerSkin(player)
+    return fallback != resolved &&
+        fallback.isUsablePlayerSkinTexture() &&
+        drawRoundedSkinFace(fallback, x, y, size, radius, argb)
+}
+
+private fun defaultPlayerSkin(player: Player): Identifier =
+    DefaultPlayerSkin.get(player.uuid).body().texturePath()
+
+private fun Identifier.isUsablePlayerSkinTexture(): Boolean {
+    if (this == MissingTextureAtlasSprite.getLocation()) {
+        return false
+    }
+
+    return runCatching {
+        val texture = mc.textureManager.getTexture(this)
+        val view = texture.textureView ?: return false
+        texture.sampler ?: return false
+        view.getWidth(0) >= 64 && view.getHeight(0) >= 64
+    }.getOrDefault(false)
 }
 
 private const val FACE_U0 = 8f / 64f

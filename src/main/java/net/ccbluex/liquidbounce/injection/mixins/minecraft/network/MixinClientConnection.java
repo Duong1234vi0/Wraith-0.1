@@ -19,6 +19,7 @@
 package net.ccbluex.liquidbounce.injection.mixins.minecraft.network;
 
 import net.ccbluex.liquidbounce.event.EventManager;
+import net.ccbluex.liquidbounce.event.events.OutgoingPacketSentEvent;
 import net.ccbluex.liquidbounce.event.events.PacketEvent;
 import net.ccbluex.liquidbounce.event.events.TransferOrigin;
 import net.minecraft.network.Connection;
@@ -53,7 +54,10 @@ public abstract class MixinClientConnection {
 
         if (event.isCancelled()) {
             callbackInfo.cancel();
+            return;
         }
+
+        EventManager.INSTANCE.callEvent(new OutgoingPacketSentEvent(packet));
     }
 
     /**

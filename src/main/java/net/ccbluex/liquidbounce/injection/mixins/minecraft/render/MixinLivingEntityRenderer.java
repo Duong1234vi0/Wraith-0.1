@@ -5,6 +5,8 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleCustomModels;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleFreeCam;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleRotations;
+import net.ccbluex.liquidbounce.features.module.modules.render.hats.ModuleHats;
+import net.ccbluex.liquidbounce.features.module.modules.render.hats.ModuleSantaHat;
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager;
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation;
 import net.minecraft.client.Minecraft;
@@ -34,6 +36,12 @@ public abstract class MixinLivingEntityRenderer<T extends LivingEntity, S extend
 
     @Unique
     private boolean liquid_bounce$customModelSubmitted;
+
+    @Unique
+    private boolean liquid_bounce$hatSubmitted;
+
+    @Unique
+    private boolean liquid_bounce$santaHatSubmitted;
 
     @Unique
     private Rotation liquid_bounce$getRenderRotation(ModuleRotations.BodyPart bodyPart, boolean previous) {
@@ -118,6 +126,8 @@ public abstract class MixinLivingEntityRenderer<T extends LivingEntity, S extend
     private void hookCustomModelsStartSubmit(S state, PoseStack poseStack, SubmitNodeCollector submitNodeCollector,
                                              CameraRenderState camera, CallbackInfo ci) {
         this.liquid_bounce$customModelSubmitted = false;
+        this.liquid_bounce$hatSubmitted = false;
+        this.liquid_bounce$santaHatSubmitted = false;
     }
 
     @Inject(
@@ -137,6 +147,26 @@ public abstract class MixinLivingEntityRenderer<T extends LivingEntity, S extend
             ModuleCustomModels.renderCustomModel(playerModel, poseStack, submitNodeCollector, avatarState);
         }
         this.liquid_bounce$customModelSubmitted = true;
+
+        liquid_bounce$submitHats(state, poseStack, submitNodeCollector);
+    }
+
+    @Unique
+    private void liquid_bounce$submitHats(S state, PoseStack poseStack, SubmitNodeCollector submitNodeCollector) {
+        if (!(state instanceof AvatarRenderState avatarState)
+                || !(this.model instanceof PlayerModel playerModel)) {
+            return;
+        }
+
+        if (!this.liquid_bounce$hatSubmitted) {
+            this.liquid_bounce$hatSubmitted = true;
+            ModuleHats.submitHat(playerModel, poseStack, submitNodeCollector, avatarState);
+        }
+
+        if (!this.liquid_bounce$santaHatSubmitted) {
+            this.liquid_bounce$santaHatSubmitted = true;
+            ModuleSantaHat.submitHat(playerModel, poseStack, submitNodeCollector, avatarState);
+        }
     }
 
 }

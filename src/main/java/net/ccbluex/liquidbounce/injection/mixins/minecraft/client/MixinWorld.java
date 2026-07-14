@@ -21,7 +21,7 @@ package net.ccbluex.liquidbounce.injection.mixins.minecraft.client;
 import net.ccbluex.liquidbounce.common.ChunkUpdateFlag;
 import net.ccbluex.liquidbounce.event.EventManager;
 import net.ccbluex.liquidbounce.event.events.BlockChangeEvent;
-import net.ccbluex.liquidbounce.features.module.modules.render.ModuleCustomAmbience;
+import net.ccbluex.liquidbounce.features.module.modules.render.ModuleBetterWorld;
 import net.ccbluex.liquidbounce.utils.block.BlockExtensionsKt;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -47,27 +47,27 @@ public class MixinWorld {
 
     @Inject(method = "getRainLevel", cancellable = true, at = @At("HEAD"))
     private void injectOverrideWeather(float delta, CallbackInfoReturnable<Float> cir) {
-        var module = ModuleCustomAmbience.INSTANCE;
-        var desiredWeather = module.getWeather().get();
-        if (module.getRunning()) {
-            switch (desiredWeather) {
-                case SUNNY -> cir.setReturnValue(0.0f);
-                case RAINY, THUNDER -> cir.setReturnValue(1.0f);
-                case SNOWY -> cir.setReturnValue(0.9f);
-            }
+        if (liquidbounce$isClientLevel() && ModuleBetterWorld.shouldOverrideWeather()) {
+            cir.setReturnValue(ModuleBetterWorld.rainLevelOverride());
         }
     }
 
     @Inject(method = "getThunderLevel", cancellable = true, at = @At("HEAD"))
     private void injectOverrideThunder(float delta, CallbackInfoReturnable<Float> cir) {
-        var module = ModuleCustomAmbience.INSTANCE;
-        var desiredWeather = module.getWeather().get();
-        if (module.getRunning()) {
-            switch (desiredWeather) {
-                case SUNNY, RAINY, SNOWY -> cir.setReturnValue(0.0f);
-                case THUNDER -> cir.setReturnValue(1.0f);
-            }
+        if (liquidbounce$isClientLevel() && ModuleBetterWorld.shouldOverrideWeather()) {
+            cir.setReturnValue(ModuleBetterWorld.thunderLevelOverride());
         }
+    }
+
+    @Inject(method = "isRaining", cancellable = true, at = @At("HEAD"))
+    private void injectOverrideRainingState(CallbackInfoReturnable<Boolean> cir) {
+        if (liquidbounce$isClientLevel() && ModuleBetterWorld.shouldOverrideWeather()) {
+            cir.setReturnValue(ModuleBetterWorld.rainingOverride());
+        }
+    }
+
+    private boolean liquidbounce$isClientLevel() {
+        return Minecraft.getInstance().level == (Object) this;
     }
 
 }

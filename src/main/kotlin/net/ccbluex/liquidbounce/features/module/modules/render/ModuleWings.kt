@@ -19,17 +19,22 @@
 package net.ccbluex.liquidbounce.features.module.modules.render
 import net.ccbluex.liquidbounce.utils.entity.*
 
+import net.ccbluex.liquidbounce.config.types.NamedChoice
+import net.ccbluex.liquidbounce.event.events.GameTickEvent
 import net.ccbluex.liquidbounce.render.compat.GlStateManager
 import net.ccbluex.liquidbounce.render.compat.RenderSystem
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
+import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
+import net.ccbluex.liquidbounce.interfaces.EntityRenderStateAddition
 import net.ccbluex.liquidbounce.render.WorldRenderEnvironment
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
 import net.ccbluex.liquidbounce.render.renderEnvironmentForWorld
 import net.ccbluex.liquidbounce.render.utils.shiftHue
 import net.ccbluex.liquidbounce.render.withPositionRelativeToCamera
+import net.ccbluex.liquidbounce.utils.client.registerAsDynamicImageFromClientResources
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.entity.interpolateCurrentPosition
 import net.ccbluex.liquidbounce.render.compat.ShaderProgramKeys
@@ -38,6 +43,9 @@ import net.ccbluex.liquidbounce.render.compat.BufferRenderer
 import com.mojang.blaze3d.vertex.VertexFormat
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import com.mojang.blaze3d.vertex.PoseStack
+import net.minecraft.client.model.geom.ModelPart
+import net.minecraft.client.renderer.entity.state.HumanoidRenderState
+import net.minecraft.resources.Identifier
 import net.minecraft.world.entity.EquipmentSlot
 import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.Items
@@ -54,25 +62,63 @@ import kotlin.math.sin
 @Suppress("MagicNumber")
 object ModuleWings : ClientModule("Wings", Category.RENDER) {
 
-    private val self by boolean("Self", true)
-    private val players by boolean("Players", false)
-    private val size by float("Size", 1.0f, 0.75f..1.35f)
-    private val alpha by int("Alpha", 220, 60..255)
-    private val offsetX by float("OffsetX", 0.0f, -1.5f..1.5f)
-    private val offsetY by float("OffsetY", 0.0f, -1.5f..1.5f)
-    private val offsetZ by float("OffsetZ", 0.0f, -1.5f..1.5f)
-    private val customColor by boolean("CustomColor", false)
-    private val color by color("Color", Color4b(255, 100, 255))
+    private val modeValue = enumChoice("Mode", WingMode.EVAWARE).onChanged {
+        if (it == WingMode.XYETA) {
+            resetXyetaAnimation()
+        }
+    }
+    private val mode by modeValue
+
+    private val self by boolean("Self", true).visibleWhen { isEvaWareMode }
+    private val players by boolean("Players", false).visibleWhen { isEvaWareMode }
+    private val size by float("Size", 1.0f, 0.75f..1.35f).visibleWhen { isEvaWareMode }
+    private val alpha by int("Alpha", 220, 60..255).visibleWhen { isEvaWareMode }
+    private val offsetX by float("OffsetX", 0.0f, -1.5f..1.5f).visibleWhen { isEvaWareMode }
+    private val offsetY by float("OffsetY", 0.0f, -1.5f..1.5f).visibleWhen { isEvaWareMode }
+    private val offsetZ by float("OffsetZ", 0.0f, -1.5f..1.5f).visibleWhen { isEvaWareMode }
+    private val customColor by boolean("CustomColor", false).visibleWhen { isEvaWareMode }
+    private val color by color("Color", Color4b(255, 100, 255)).visibleWhen { isEvaWareMode }
+    private val xyetaTexture by enumChoice("Texture", XyetaTexture.TYPE1).visibleWhen { isXyetaMode }
 
     private var selfBodyYaw = 0.0f
     private var selfBodyYawInitialized = false
+    private val xyetaAnimation = XyetaWingAnimation()
+
+    private val isEvaWareMode: Boolean
+        get() = mode == WingMode.EVAWARE
+
+    private val isXyetaMode: Boolean
+        get() = mode == WingMode.XYETA
+
+    override fun enable() {
+        selfBodyYawInitialized = false
+        resetXyetaAnimation()
+    }
 
     override fun disable() {
         selfBodyYawInitialized = false
+        resetXyetaAnimation()
+    }
+
+    @Suppress("unused")
+    private val tickHandler = handler<GameTickEvent> {
+        if (isXyetaMode) {
+            xyetaAnimation.updatePingPong()
+        }
+    }
+
+    @Suppress("unused")
+    private val worldChangeHandler = handler<WorldChangeEvent> {
+        selfBodyYawInitialized = false
+        resetXyetaAnimation()
     }
 
     @Suppress("unused")
     private val renderHandler = handler<WorldRenderEvent> { event ->
+        if (!isEvaWareMode) {
+            return@handler
+        }
+
         val localPlayer = mc.player ?: return@handler
         val world = mc.level ?: return@handler
 
@@ -252,6 +298,37 @@ object ModuleWings : ClientModule("Wings", Category.RENDER) {
         return shiftHue(Color4b.LIQUID_BOUNCE, age * 6)
     }
 
+    @JvmStatic
+    fun shouldRenderXyeta(state: HumanoidRenderState?): Boolean {
+        if (!running || mode != WingMode.XYETA || state !is EntityRenderStateAddition) {
+            return false
+        }
+
+        return state.`liquid_bounce$getEntity`() === mc.player
+    }
+
+    @JvmStatic
+    fun selectedXyetaTexture(): Identifier = xyetaTexture.texture
+
+    @JvmStatic
+    fun applyXyetaAngles(state: HumanoidRenderState, leftWing: ModelPart, rightWing: ModelPart) {
+        val animationOutput = xyetaAnimation.output().toFloat()
+
+        leftWing.y = if (state.isCrouching) 3.0f else 0.0f
+        leftWing.xRot = state.elytraRotX - (0.2f + 0.6f * animationOutput)
+        leftWing.zRot = state.elytraRotZ - 1.4f
+        leftWing.yRot = state.elytraRotY - 0.1f
+
+        rightWing.yRot = -leftWing.yRot
+        rightWing.y = leftWing.y
+        rightWing.xRot = leftWing.xRot
+        rightWing.zRot = -leftWing.zRot
+    }
+
+    private fun resetXyetaAnimation() {
+        xyetaAnimation.reset()
+    }
+
     private fun Player.resolveBodyYaw(tickDelta: Float): Float {
         val target = Mth.rotLerp(tickDelta, yBodyRotO, yBodyRot)
         if (this != mc.player) {
@@ -389,4 +466,85 @@ object ModuleWings : ClientModule("Wings", Category.RENDER) {
     private val RIB_INDICES = intArrayOf(2, 4, 7, 9, 11)
 
     private const val DEFAULT_SPREAD = 8.0f
+
+    private enum class WingMode(override val choiceName: String) : NamedChoice {
+        EVAWARE("EvaWare"),
+        XYETA("Xyeta")
+    }
+
+    private enum class XyetaTexture(override val choiceName: String, val texture: Identifier) : NamedChoice {
+        TYPE1("Type1", "wings/xyeta/type1.png".registerAsDynamicImageFromClientResources()),
+        TYPE2("Type2", "wings/xyeta/type2.png".registerAsDynamicImageFromClientResources()),
+        TYPE3("Type3", "wings/xyeta/type3.png".registerAsDynamicImageFromClientResources())
+    }
+
+    private enum class XyetaAnimationDirection {
+        FORWARDS,
+        BACKWARDS
+    }
+
+    private class XyetaWingAnimation {
+        private var direction = XyetaAnimationDirection.FORWARDS
+        private var startMs = System.currentTimeMillis()
+
+        fun reset() {
+            direction = XyetaAnimationDirection.FORWARDS
+            startMs = System.currentTimeMillis()
+        }
+
+        fun output(): Double {
+            val elapsed = elapsedMs()
+            return when (direction) {
+                XyetaAnimationDirection.FORWARDS -> {
+                    if (elapsed >= DURATION_MS) ENDPOINT else equation(elapsed.toDouble()) * ENDPOINT
+                }
+                XyetaAnimationDirection.BACKWARDS -> {
+                    if (elapsed >= DURATION_MS) {
+                        0.0
+                    } else {
+                        equation((DURATION_MS - elapsed).toDouble()) * ENDPOINT
+                    }
+                }
+            }
+        }
+
+        fun updatePingPong() {
+            if (finished(XyetaAnimationDirection.FORWARDS)) {
+                setDirection(XyetaAnimationDirection.BACKWARDS)
+            } else if (finished(XyetaAnimationDirection.BACKWARDS)) {
+                setDirection(XyetaAnimationDirection.FORWARDS)
+            }
+        }
+
+        private fun finished(expected: XyetaAnimationDirection): Boolean {
+            return direction == expected && elapsedMs() >= DURATION_MS
+        }
+
+        private fun setDirection(next: XyetaAnimationDirection) {
+            if (direction == next) {
+                return
+            }
+
+            val elapsed = elapsedMs().coerceAtMost(DURATION_MS)
+            direction = next
+            startMs = System.currentTimeMillis() - (DURATION_MS - elapsed)
+        }
+
+        private fun elapsedMs(): Long {
+            return System.currentTimeMillis() - startMs
+        }
+
+        private fun equation(x: Double): Double {
+            val x1 = x / DURATION_MS.toDouble()
+            val shrink = EASE_AMOUNT + 1.0
+            val offset = x1 - 1.0
+            return max(0.0, 1.0 + shrink * offset * offset * offset + EASE_AMOUNT * offset * offset)
+        }
+
+        private companion object {
+            const val DURATION_MS = 550L
+            const val ENDPOINT = 0.5
+            const val EASE_AMOUNT = 0.001
+        }
+    }
 }

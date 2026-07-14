@@ -18,40 +18,54 @@
  */
 package net.ccbluex.liquidbounce.injection.mixins.minecraft.render;
 
-import net.ccbluex.liquidbounce.features.module.modules.render.ModuleCustomAmbience;
+import net.ccbluex.liquidbounce.features.module.modules.render.ModuleBetterWorld;
 import net.minecraft.client.Camera;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.fog.FogData;
 import net.minecraft.client.renderer.fog.FogRenderer;
-import org.joml.Vector4f;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(FogRenderer.class)
 public abstract class MixinBackgroundRenderer {
 
-    @Inject(method = "computeFogColor", at = @At("HEAD"), cancellable = true)
-    private void injectCustomAmbienceFogColor(
+    @Inject(method = "setupFog", at = @At("RETURN"))
+    private void injectBetterWorldFogData(
             Camera camera,
-            float partialTicks,
-            ClientLevel level,
-            int renderDistance,
+            int renderDistanceInChunks,
+            DeltaTracker deltaTracker,
             float darkenWorldAmount,
-            Vector4f dest,
-            CallbackInfo ci
+            ClientLevel level,
+            CallbackInfoReturnable<FogData> cir
     ) {
-        if (ModuleCustomAmbience.FogConfigurable.INSTANCE.modifyFogColor(dest)) {
-            ci.cancel();
-        }
+        ModuleBetterWorld.modifyFogData(cir.getReturnValue());
     }
 
-    @Inject(
+    @ModifyArg(
             method = "updateBuffer(Lnet/minecraft/client/renderer/fog/FogData;)V",
-            at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/CommandEncoder;mapBuffer(Lcom/mojang/blaze3d/buffers/GpuBuffer;ZZ)Lcom/mojang/blaze3d/buffers/GpuBuffer$MappedView;")
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/fog/FogRenderer;updateBuffer(Ljava/nio/ByteBuffer;ILorg/joml/Vector4f;FFFFFF)V"
+            ),
+            index = 3
     )
-    private void injectCustomAmbienceFogData(FogData fog, CallbackInfo ci) {
-        ModuleCustomAmbience.FogConfigurable.INSTANCE.modifyFogData(fog);
+    private float injectBetterWorldCylinderFogStart(float original) {
+        return ModuleBetterWorld.cylinderFogEnvironmentalDistance(original);
+    }
+
+    @ModifyArg(
+            method = "updateBuffer(Lnet/minecraft/client/renderer/fog/FogData;)V",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/fog/FogRenderer;updateBuffer(Ljava/nio/ByteBuffer;ILorg/joml/Vector4f;FFFFFF)V"
+            ),
+            index = 4
+    )
+    private float injectBetterWorldCylinderFogEnd(float original) {
+        return ModuleBetterWorld.cylinderFogEnvironmentalDistance(original);
     }
 }

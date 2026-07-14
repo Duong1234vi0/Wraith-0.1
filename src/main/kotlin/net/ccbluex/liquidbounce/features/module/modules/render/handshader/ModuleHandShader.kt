@@ -47,13 +47,11 @@ object ModuleHandShader : ClientModule("HandShader", Category.RENDER) {
     private val shaderSpeed by float("ShaderSpeed", 1.0f, 0.1f..3.0f)
     private val shaderScale by float("ShaderScale", 1.0f, 0.25f..4.0f)
 
-    private var beforeTarget: TextureTarget? = null
-    private var afterTarget: TextureTarget? = null
     private var outputTarget: TextureTarget? = null
-    private var captureReady = false
 
     override fun disable() {
         invalidateCapture()
+        HandPostProcessCoordinator.invalidateSharedResourcesIfUnused(this)
     }
 
     @JvmStatic
@@ -61,6 +59,7 @@ object ModuleHandShader : ClientModule("HandShader", Category.RENDER) {
         val localPlayer = mc.player ?: return false
 
         return running &&
+            HandShaderPipeline.isAvailable &&
             mc.options.cameraType == CameraType.FIRST_PERSON &&
             mc.gameRenderer.camera.submersionType == FogType.NONE &&
             !localPlayer.isUnderWater &&
@@ -70,48 +69,32 @@ object ModuleHandShader : ClientModule("HandShader", Category.RENDER) {
 
     @JvmStatic
     fun beginHandCapture(mainTarget: RenderTarget) {
-        RenderSystem.assertOnRenderThread()
-        captureReady = false
-
-        if (!shouldRender()) {
-            return
-        }
-
-        runCatching {
-            val before = ensureBeforeTarget(mainTarget) ?: return
-            copyColor(mainTarget, before)
-        }.onFailure { throwable ->
-            logger.error("HandShader before-hand capture failed.", throwable)
-            invalidateCapture()
-        }
+        HandPostProcessCoordinator.beginHandCapture(mainTarget)
     }
 
     @JvmStatic
     fun finishHandCapture(mainTarget: RenderTarget) {
+        HandPostProcessCoordinator.finishHandCapture(mainTarget)
+    }
+
+    fun renderFromRawCapture(snapshot: HandPostProcessCoordinator.Snapshot, mainTarget: RenderTarget) {
         RenderSystem.assertOnRenderThread()
 
         if (!shouldRender()) {
-            captureReady = false
             return
         }
 
         runCatching {
-            val after = ensureAfterTarget(mainTarget) ?: return
             val output = ensureOutputTarget(mainTarget) ?: return
 
-            copyColor(mainTarget, after)
-            captureReady = true
-
             HandShaderPipeline.render(
-                sourceColor = requireNotNull(after.colorTextureView) {
-                    "HandShader after target has no color texture view."
-                },
-                handDepth = requireNotNull(mainTarget.depthTextureView) {
-                    "HandShader main target has no depth texture view."
-                },
+                sourceColor = snapshot.afterColor,
+                handDepth = snapshot.handDepth,
+                handMask = snapshot.exactHandMask ?: snapshot.handDepth,
                 outputColor = requireNotNull(output.colorTextureView) {
                     "HandShader output target has no color texture view."
                 },
+                maskMode = snapshot.maskMode,
                 mode = mode,
                 tint = color,
                 blurRadius = blurRadius,
@@ -119,34 +102,19 @@ object ModuleHandShader : ClientModule("HandShader", Category.RENDER) {
                 opacity = opacity,
                 time = ((System.currentTimeMillis() % 100000L) / 1000.0f) * shaderSpeed,
                 shaderScale = shaderScale
-            )
+            ).takeIf { it } ?: return
 
-            copyColor(output, mainTarget)
+            HandPostProcessCoordinator.copyColor(output, mainTarget)
         }.onFailure { throwable ->
             logger.error("HandShader post-process failed.", throwable)
             invalidateCapture()
-        }.also {
-            captureReady = false
         }
     }
 
     @JvmStatic
     fun invalidateCapture() {
         RenderSystem.assertOnRenderThread()
-        captureReady = false
-        beforeTarget = beforeTarget.destroyAndNull()
-        afterTarget = afterTarget.destroyAndNull()
         outputTarget = outputTarget.destroyAndNull()
-    }
-
-    private fun ensureBeforeTarget(mainTarget: RenderTarget): TextureTarget? {
-        beforeTarget = ensureTarget(beforeTarget, "LiquidBounce HandShader before", mainTarget, useDepth = true)
-        return beforeTarget
-    }
-
-    private fun ensureAfterTarget(mainTarget: RenderTarget): TextureTarget? {
-        afterTarget = ensureTarget(afterTarget, "LiquidBounce HandShader after", mainTarget, useDepth = true)
-        return afterTarget
     }
 
     private fun ensureOutputTarget(mainTarget: RenderTarget): TextureTarget? {
@@ -186,19 +154,5 @@ object ModuleHandShader : ClientModule("HandShader", Category.RENDER) {
     private fun TextureTarget?.destroyAndNull(): TextureTarget? {
         this?.destroyBuffers()
         return null
-    }
-
-    private fun copyColor(source: RenderTarget, target: RenderTarget) {
-        RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(
-            requireNotNull(source.colorTexture) { "HandShader source target has no color texture." },
-            requireNotNull(target.colorTexture) { "HandShader destination target has no color texture." },
-            0,
-            0,
-            0,
-            0,
-            0,
-            target.width,
-            target.height
-        )
     }
 }

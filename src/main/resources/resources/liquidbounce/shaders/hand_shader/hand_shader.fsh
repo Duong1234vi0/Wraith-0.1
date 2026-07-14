@@ -2,6 +2,7 @@
 
 uniform sampler2D Sampler0;
 uniform sampler2D DepthSampler;
+uniform sampler2D HandMaskSampler;
 
 layout(std140) uniform HandShaderConfig {
     vec4 TintColor;
@@ -19,17 +20,28 @@ out vec4 fragColor;
 #define Time Params0.z
 #define ShaderScale Params0.w
 #define Mode Params1.x
+#define MaskMode Params1.y
+#define MASK_VANILLA_CAPTURE 0
+#define MASK_IRIS_EXACT_MASK 1
 
 float handDepth(vec2 uv) {
     return texture(DepthSampler, uv).r;
 }
 
-bool isHandPixel(vec2 uv) {
+float handMask(vec2 uv) {
+    if (MaskMode == MASK_IRIS_EXACT_MASK) {
+        return texture(HandMaskSampler, uv).r;
+    }
+
     float depth = handDepth(uv);
     if (depth < 0.001) {
-        return false;
+        return 0.0;
     }
-    return depth < 0.9999;
+    return float(depth < 0.9999);
+}
+
+bool isHandPixel(vec2 uv) {
+    return handMask(uv) > 0.01;
 }
 
 float hash(vec2 p) {

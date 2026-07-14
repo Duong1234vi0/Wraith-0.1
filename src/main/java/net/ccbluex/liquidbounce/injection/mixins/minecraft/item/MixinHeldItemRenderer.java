@@ -19,6 +19,8 @@
 package net.ccbluex.liquidbounce.injection.mixins.minecraft.item;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.features.KillAuraAutoBlock;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleAnimations;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleSilentHotbar;
@@ -69,74 +71,95 @@ public abstract class MixinHeldItemRenderer {
                                     ItemDisplayContext type, PoseStack poseStack,
                                     SubmitNodeCollector submitNodeCollector, int lightCoords);
 
+    @Shadow
+    private void renderPlayerArm(PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords,
+                                 float inverseArmHeight, float attackValue, HumanoidArm arm) {
+    }
+
     @Inject(method = "renderArmWithItem", at = @At(value = "INVOKE",
             target = "Lcom/mojang/blaze3d/vertex/PoseStack;pushPose()V", shift = At.Shift.AFTER))
     private void hookViewModel(AbstractClientPlayer player, float tickDelta, float pitch, InteractionHand hand,
                                float swingProgress, ItemStack item, float equipProgress, PoseStack matrices,
                                SubmitNodeCollector submitNodeCollector, int light, CallbackInfo ci) {
-        // #Edit By Codex 2026-06-28: when ModuleAnimations takes over this hand's full item render, it
-        // applies its own ViewModel offset inside applyVCoreTransforms, so skip this generic offset.
-        var arm = hand == InteractionHand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
-        if (ModuleAnimations.INSTANCE.shouldRenderCustom(item)) {
-            return;
-        }
-
-        var viewModel = ModuleViewModel.INSTANCE;
-        if (!viewModel.getRunning()) {
-            return;
-        }
-
-        if (arm == HumanoidArm.RIGHT) {
-            matrices.translate(viewModel.getRightX(), viewModel.getRightY(), viewModel.getRightZ());
-        } else {
-            matrices.translate(viewModel.getLeftX(), viewModel.getLeftY(), viewModel.getLeftZ());
-        }
+        var mainArm = ModuleAnimations.INSTANCE.resolveMainArm(player);
+        var arm = hand == InteractionHand.MAIN_HAND ? mainArm : mainArm.getOpposite();
+        ModuleViewModel.INSTANCE.applyTransform(matrices, arm);
     }
 
-    // #Edit By Codex 2026-06-28: VCore cancels first-person item rendering for every non-map item
-    // while Animations is active, then rebuilds crossbow/use/bow/spear/brush/normal transforms itself.
-    // The previous port only handled main-hand melee, which let KillAura and air-click paths fall back
-    // into vanilla ItemInHandRenderer branches.
     @Inject(method = "renderArmWithItem", at = @At("HEAD"), cancellable = true)
-    private void hookAnimations(AbstractClientPlayer player, float tickDelta, float pitch, InteractionHand hand,
-                                float swingProgress, ItemStack item, float equipProgress, PoseStack matrices,
-                                SubmitNodeCollector submitNodeCollector, int light, CallbackInfo ci) {
-        if (minecraft.player == null || player.isScoping() || !ModuleAnimations.INSTANCE.shouldRenderCustom(item)) {
+    private void hookNewSwingAnimation(AbstractClientPlayer player, float tickDelta, float pitch, InteractionHand hand,
+                                       float swingProgress, ItemStack item, float equipProgress, PoseStack matrices,
+                                       SubmitNodeCollector submitNodeCollector, int light, CallbackInfo ci) {
+        if (minecraft.player == null || player.isScoping()
+                || !ModuleAnimations.INSTANCE.shouldRenderNewSpecial(player, hand, item)) {
             return;
         }
 
-        HumanoidArm arm = hand == InteractionHand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
+        HumanoidArm arm = ModuleAnimations.INSTANCE.newSpecialArm(player, hand);
         boolean isRight = arm == HumanoidArm.RIGHT;
 
         matrices.pushPose();
-        ModuleAnimations.INSTANCE.applyVCoreTransforms(player, tickDelta, hand, swingProgress, item, equipProgress, matrices);
-        renderItem(
-                player, item,
-                isRight ? ItemDisplayContext.FIRST_PERSON_RIGHT_HAND : ItemDisplayContext.FIRST_PERSON_LEFT_HAND,
-                matrices, submitNodeCollector, light
+        ModuleViewModel.INSTANCE.applyTransform(matrices, arm);
+
+        ModuleAnimations.NewArmRender armRender = ModuleAnimations.INSTANCE.applyNewSpecialArmPose(
+                matrices, player, tickDelta, hand, arm, item, equipProgress, swingProgress
         );
-        matrices.popPose();
-
-        ci.cancel();
-    }
-
-    @Inject(method = "tick", at = @At("RETURN"))
-    private void hookAnimationsDisableSwap(CallbackInfo ci) {
-        if (minecraft.player == null) {
+        if (armRender == null) {
+            matrices.popPose();
             return;
         }
 
-        // #Edit By Codex 2026-06-28: VCore DisableSwapMain/Off keeps equip progress pinned at 1
-        // and refreshes the renderer's visible stack, preventing vanilla slot-swap dip/shrink.
-        if (ModuleAnimations.INSTANCE.shouldDisableSwapMain() && mainHandHeight <= 1.0F) {
-            mainHandHeight = 1.0F;
-            mainHandItem = minecraft.player.getMainHandItem();
+        renderPlayerArm(matrices, submitNodeCollector, light,
+                armRender.getEquipProgress(), armRender.getSwingProgress(), arm);
+
+        if (!item.isEmpty()) {
+            ModuleAnimations.INSTANCE.applyNewSpecialItemPose(matrices, arm, item);
+            renderItem(
+                    player, item,
+                    isRight ? ItemDisplayContext.FIRST_PERSON_RIGHT_HAND : ItemDisplayContext.FIRST_PERSON_LEFT_HAND,
+                    matrices, submitNodeCollector, light
+            );
         }
 
-        if (ModuleAnimations.INSTANCE.shouldDisableSwapOff() && offHandHeight <= 1.0F) {
-            offHandHeight = 1.0F;
-            offHandItem = minecraft.player.getOffhandItem();
+        matrices.popPose();
+        ci.cancel();
+    }
+
+    @Redirect(method = "renderArmWithItem", at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/player/AbstractClientPlayer;getMainArm()Lnet/minecraft/world/entity/HumanoidArm;"
+    ))
+    private HumanoidArm hookVisualMainArm(AbstractClientPlayer instance) {
+        return ModuleAnimations.INSTANCE.resolveMainArm(instance);
+    }
+
+    @WrapOperation(method = "renderArmWithItem", at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/ItemInHandRenderer;applyItemArmTransform(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/entity/HumanoidArm;F)V"
+    ))
+    private void hookSwingDown(ItemInHandRenderer instance, PoseStack matrices, HumanoidArm arm, float inverseArmHeight,
+                               Operation<Void> original, AbstractClientPlayer player, float tickDelta, float pitch,
+                               InteractionHand hand, float swingProgress, ItemStack item, float equipProgress,
+                                               PoseStack methodMatrices, SubmitNodeCollector submitNodeCollector, int light) {
+        float transformedEquipProgress = ModuleAnimations.INSTANCE.transformEquipProgress(inverseArmHeight, hand, item);
+
+        original.call(instance, matrices, arm, transformedEquipProgress);
+    }
+
+    @WrapOperation(method = "renderArmWithItem", at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/ItemInHandRenderer;swingArm(FLcom/mojang/blaze3d/vertex/PoseStack;ILnet/minecraft/world/entity/HumanoidArm;)V"
+    ))
+    private void hookSwingAnimation(ItemInHandRenderer instance, float attack, PoseStack matrices, int invert,
+                                    HumanoidArm arm, Operation<Void> original, AbstractClientPlayer player,
+                                    float tickDelta, float pitch, InteractionHand hand, float swingProgress,
+                                    ItemStack item, float equipProgress, PoseStack methodMatrices,
+                                    SubmitNodeCollector submitNodeCollector, int light) {
+        if (ModuleAnimations.INSTANCE.applySwingTransform(matrices, player, hand, arm, item, attack)) {
+            return;
         }
+
+        original.call(instance, attack, matrices, invert, arm);
     }
 
     @Inject(method = "renderArmWithItem", at = @At("HEAD"), cancellable = true)
@@ -231,7 +254,8 @@ public abstract class MixinHeldItemRenderer {
         var shouldAnimate = KillAuraAutoBlock.INSTANCE.getBlockVisual();
 
         if (shouldAnimate && liquid_bounce$isSword(item.getItem())) {
-            final HumanoidArm arm = (hand == InteractionHand.MAIN_HAND) ? player.getMainArm() : player.getMainArm().getOpposite();
+            final HumanoidArm mainArm = ModuleAnimations.INSTANCE.resolveMainArm(player);
+            final HumanoidArm arm = (hand == InteractionHand.MAIN_HAND) ? mainArm : mainArm.getOpposite();
 
             liquid_bounce$transformOneSevenBlockAnimation(matrices, arm, swingProgress);
         }

@@ -20,7 +20,8 @@ package net.ccbluex.liquidbounce.features.module.modules.combat.targetstrafe.mod
 
 import net.ccbluex.liquidbounce.config.types.nesting.Choice
 import net.ccbluex.liquidbounce.config.types.nesting.ChoiceConfigurable
-import net.ccbluex.liquidbounce.event.events.PlayerTickEvent
+import net.ccbluex.liquidbounce.event.EventState
+import net.ccbluex.liquidbounce.event.events.PlayerNetworkMovementTickEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
 import net.ccbluex.liquidbounce.features.module.modules.combat.targetstrafe.ModuleTargetStrafe
@@ -42,7 +43,8 @@ object TargetStrafeCollision : Choice("Collision") {
     private val distance by float("Distance", 1.2f, 1.0f..6.0f)
 
     @Suppress("unused")
-    private val tickHandler = handler<PlayerTickEvent> {
+    private val networkMovementHandler = handler<PlayerNetworkMovementTickEvent> { event ->
+        if (event.state != EventState.PRE) return@handler
         if (!ModuleKillAura.running) return@handler
         val target = ModuleKillAura.targetTracker.target as? LivingEntity ?: return@handler
         if (!target.isAlive || target.isRemoved) return@handler

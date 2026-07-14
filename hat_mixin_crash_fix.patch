@@ -1,0 +1,35 @@
+--- /mnt/data/review_pred_hat/src/src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/render/MixinLivingEntityRenderer.java	2026-07-11 15:46:56.000000000 +0000
++++ /mnt/data/review_pred_hat/fixed/src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/render/MixinLivingEntityRenderer.java	2026-07-11 09:51:24.918099116 +0000
+@@ -129,19 +129,6 @@
+             method = "submit",
+             at = @At(
+                     value = "INVOKE",
+-                    target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitModel(Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IIILnet/minecraft/client/resources/model/sprite/TextureAtlasSprite;ILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V",
+-                    shift = At.Shift.AFTER
+-            )
+-    )
+-    private void hookHatAfterVanillaModel(S state, PoseStack poseStack, SubmitNodeCollector submitNodeCollector,
+-                                          CameraRenderState camera, CallbackInfo ci) {
+-        liquid_bounce$submitHat(state, poseStack, submitNodeCollector);
+-    }
+-
+-    @Inject(
+-            method = "submit",
+-            at = @At(
+-                    value = "INVOKE",
+                     target = "Lnet/minecraft/client/renderer/entity/layers/RenderLayer;submit(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;ILnet/minecraft/client/renderer/entity/state/EntityRenderState;FF)V",
+                     shift = At.Shift.BEFORE
+             )
+--- /mnt/data/review_pred_hat/src/src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/hats/ModuleHats.kt	2026-07-11 15:46:38.000000000 +0000
++++ /mnt/data/review_pred_hat/fixed/src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/hats/ModuleHats.kt	2026-07-11 09:52:23.309209219 +0000
+@@ -68,8 +68,8 @@
+             return false
+         }
+ 
+-        playerModel.setupAnim(state)
+-
++        // LivingEntityRenderer has already applied setupAnim(state) before feature layers are submitted.
++        // Re-running it here can overwrite render-layer or mixin pose adjustments.
+         poseStack.pushPose()
+         try {
+             playerModel.head.translateAndRotate(poseStack)

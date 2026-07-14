@@ -1,0 +1,909 @@
+Module,Old,New,Label,Type
+AhHelper,w_1484_f,kolichestvoVygodnyhPredmetovSetting,\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e \u0432\u044b\u0433\u043e\u0434\u043d\u044b\u0445 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u043e\u0432,NumberSetting
+AimAssist,v_4262_N,kogoNavoditOptions,\u041a\u043e\u0433\u043e \u043d\u0430\u0432\u043e\u0434\u0438\u0442\u044c,MultiBooleanSetting
+AimAssist,w_1484_f,vremyaBlokirovkiSetting,\u0412\u0440\u0435\u043c\u044f \u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u043a\u0438,NumberSetting
+AimAssist,t_148_a,distanciyaNavodkiSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043d\u0430\u0432\u043e\u0434\u043a\u0438,NumberSetting
+AimAssist,s_956_w,silaNavodkiSetting,\u0421\u0438\u043b\u0430 \u043d\u0430\u0432\u043e\u0434\u043a\u0438,NumberSetting
+AimAssist,u_2550_I,skorostPricelivaniyaSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u043f\u0440\u0438\u0446\u0435\u043b\u0438\u0432\u0430\u043d\u0438\u044f,NumberSetting
+AimAssist,M_588_G,znacheniePlavnostiSetting,\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043f\u043b\u0430\u0432\u043d\u043e\u0441\u0442\u0438,NumberSetting
+AimAssist,P_4830_p,fovSetting,FOV,NumberSetting
+AimAssist,h_1847_R,boleeEnabled,\u0411\u043e\u043b\u0435\u0435 \,BooleanSetting
+AimAssist,Q_4569_t,vklyuchitVertikalnuyuNavodkuEnabled,\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0432\u0435\u0440\u0442\u0438\u043a\u0430\u043b\u044c\u043d\u0443\u044e \u043d\u0430\u0432\u043e\u0434\u043a\u0443,BooleanSetting
+AimAssist,M_182_A,skorostVertikalnSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0432\u0435\u0440\u0442\u0438\u043a\u0430\u043b\u044c\u043d.,NumberSetting
+AimAssist,t_1786_h,shumVertikalnoyOsiPriGorizontalnomDvizheniiEnabled,\u0428\u0443\u043c \u0432\u0435\u0440\u0442\u0438\u043a\u0430\u043b\u044c\u043d\u043e\u0439 \u043e\u0441\u0438 \u043f\u0440\u0438 \u0433\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u0430\u043b\u044c\u043d\u043e\u043c \u0434\u0432\u0438\u0436\u0435\u043d\u0438\u0438,BooleanSetting
+AimAssist,multiplayerClientSuggestionProvider,znachenieShumaSetting,\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u0448\u0443\u043c\u0430,NumberSetting
+AimAssist,w_1457_N,generirovatEnabled,\u0413\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \,BooleanSetting
+AimAssist,Y_601_j,tolkoPriOruzhiiEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u043f\u0440\u0438 \u043e\u0440\u0443\u0436\u0438\u0438,BooleanSetting
+AimAssist,Y_259_p,neDvigatPriProtivnikeEnabled,\u041d\u0435 \u0434\u0432\u0438\u0433\u0430\u0442\u044c \u043f\u0440\u0438 \u043f\u0440\u043e\u0442\u0438\u0432\u043d\u0438\u043a\u0435,BooleanSetting
+AimAssist,Q_2552_b,otVvodaEnabled,\u041e\u0442 \u0432\u0432\u043e\u0434\u0430,BooleanSetting
+AimAssist,C_2741_M,predugadyvaniePoziciiSetting,\u041f\u0440\u0435\u0434\u0443\u0433\u0430\u0434\u044b\u0432\u0430\u043d\u0438\u0435 \u043f\u043e\u0437\u0438\u0446\u0438\u0438,NumberSetting
+AimAssist,k_2293_S,prediktOttalkivaniyaSetting,\u041f\u0440\u0435\u0434\u0438\u043a\u0442 \u043e\u0442\u0442\u0430\u043b\u043a\u0438\u0432\u0430\u043d\u0438\u044f,NumberSetting
+AimAssist,q_2307_F,sistemaMultipointEnabled,\u0421\u0438\u0441\u0442\u0435\u043c\u0430 \u043c\u0443\u043b\u044c\u0442\u0438\u043f\u043e\u0438\u043d\u0442,BooleanSetting
+AimAssist,Z_875_P,dovoditPriDvizheniiMyshiEnabled,\u0414\u043e\u0432\u043e\u0434\u0438\u0442\u044c \u043f\u0440\u0438 \u0434\u0432\u0438\u0436\u0435\u043d\u0438\u0438 \u043c\u044b\u0448\u0438,BooleanSetting
+AimAssist,t_4043_B,tolkoVidimyhEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0432\u0438\u0434\u0438\u043c\u044b\u0445,BooleanSetting
+AimAssist,x_607_J,vyklyuchatSAttackauraEnabled,\u0412\u044b\u043a\u043b\u044e\u0447\u0430\u0442\u044c \u0441 AttackAura,BooleanSetting
+AirStuck,v_4262_N,izmenyatDistanciyuKillauryEnabled,\u0418\u0437\u043c\u0435\u043d\u044f\u0442\u044c \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044e \u043a\u0438\u043b\u043b\u0430\u0443\u0440\u044b,BooleanSetting
+AirStuck,w_1484_f,distanciyaKillaurySetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0438\u043b\u043b\u0430\u0443\u0440\u044b,NumberSetting
+AirStuck,t_148_a,lovitMomentEnabled,\u041b\u043e\u0432\u0438\u0442\u044c \u043c\u043e\u043c\u0435\u043d\u0442,BooleanSetting
+Ambience,v_4262_N,vremyaMode,\u0412\u0440\u0435\u043c\u044f,ModeSetting
+Ambience,w_1484_f,tumanMode,\u0422\u0443\u043c\u0430\u043d,ModeSetting
+Ambience,t_148_a,cvetMode,\u0426\u0432\u0435\u0442,ModeSetting
+Ambience,u_2550_I,konecTumanaSetting,\u041a\u043e\u043d\u0435\u0446 \u0442\u0443\u043c\u0430\u043d\u0430,NumberSetting
+Ambience,M_588_G,nachaloTumanaSetting,\u041d\u0430\u0447\u0430\u043b\u043e \u0442\u0443\u043c\u0430\u043d\u0430,NumberSetting
+Ambience,P_4830_p,adaptiveRadiusTumanaSetting,Adaptive: \u0420\u0430\u0434\u0438\u0443\u0441 \u0442\u0443\u043c\u0430\u043d\u0430,NumberSetting
+Ambience,h_1847_R,adaptiveSilaTumanaSetting,Adaptive: \u0421\u0438\u043b\u0430 \u0442\u0443\u043c\u0430\u043d\u0430,NumberSetting
+Ambience,Q_4569_t,adaptiveTolkoVDozhdEnabled,Adaptive: \u0422\u043e\u043b\u044c\u043a\u043e \u0432 \u0434\u043e\u0436\u0434\u044c,BooleanSetting
+Ambience,M_182_A,adaptiveMinKolichestvoVDozhdSetting,Adaptive: \u041c\u0438\u043d \u043a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e \u0432 \u0434\u043e\u0436\u0434\u044c,NumberSetting
+Ambience,t_1786_h,neboMode,\u041d\u0435\u0431\u043e,ModeSetting
+Ambience,multiplayerClientSuggestionProvider,letoVidMode,\u041b\u0435\u0442\u043e: \u0432\u0438\u0434,ModeSetting
+Ambience,w_1457_N,sheydNeboMasshtabSetting,\u0428\u0435\u0439\u0434.\u043d\u0435\u0431\u043e: \u043c\u0430\u0441\u0448\u0442\u0430\u0431,NumberSetting
+Ambience,Y_601_j,sheydNeboSkorostSetting,\u0428\u0435\u0439\u0434.\u043d\u0435\u0431\u043e: \u0441\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+Ambience,Y_259_p,izmenyatNasyschennostIgryEnabled,\u0418\u0437\u043c\u0435\u043d\u044f\u0442\u044c \u043d\u0430\u0441\u044b\u0449\u0435\u043d\u043d\u043e\u0441\u0442\u044c \u0438\u0433\u0440\u044b,BooleanSetting
+Ambience,Q_2552_b,nasyschennostSetting,\u041d\u0430\u0441\u044b\u0449\u0435\u043d\u043d\u043e\u0441\u0442\u044c,NumberSetting
+AntiAFK,v_4262_N,deystviyaOptions,\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u044f,MultiBooleanSetting
+AntiAFK,w_1484_f,zaderzhkaSekSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 (\u0441\u0435\u043a),NumberSetting
+AntiAFK,t_148_a,sluchaynayaZaderzhkaEnabled,\u0421\u043b\u0443\u0447\u0430\u0439\u043d\u0430\u044f \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0430,BooleanSetting
+AntiAFK,s_956_w,minZaderzhkaSekSetting,\u041c\u0438\u043d. \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0430 (\u0441\u0435\u043a),NumberSetting
+AntiAFK,u_2550_I,maksZaderzhkaSekSetting,\u041c\u0430\u043a\u0441. \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0430 (\u0441\u0435\u043a),NumberSetting
+AntiAFK,M_588_G,tipKomandyMode,\u0422\u0438\u043f \u043a\u043e\u043c\u0430\u043d\u0434\u044b,ModeSetting
+AntiAFK,P_4830_p,kolVoPryzhkovSetting,\u041a\u043e\u043b-\u0432\u043e \u043f\u0440\u044b\u0436\u043a\u043e\u0432,NumberSetting
+AntiAFK,h_1847_R,dlitelnostDvizheniyaTikSetting,\u0414\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u0434\u0432\u0438\u0436\u0435\u043d\u0438\u044f (\u0442\u0438\u043a),NumberSetting
+AntiAFK,Q_4569_t,sbrosPriDvizheniiEnabled,\u0421\u0431\u0440\u043e\u0441 \u043f\u0440\u0438 \u0434\u0432\u0438\u0436\u0435\u043d\u0438\u0438,BooleanSetting
+AntiBot,w_1484_f,obhodMode,\u041e\u0431\u0445\u043e\u0434,ModeSetting
+AntiBot,t_148_a,udalyatIzMiraEnabled,\u0423\u0434\u0430\u043b\u044f\u0442\u044c \u0438\u0437 \u043c\u0438\u0440\u0430,BooleanSetting
+AntiSurround,v_4262_N,distanciyaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+AntiSurround,w_1484_f,skorostSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+AntiSurround,t_148_a,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+AntiSurround,s_956_w,rotationMode,\u0420\u043e\u0442\u0430\u0446\u0438\u044f,ModeSetting
+AntiSurround,u_2550_I,tolkoObsidianEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d,BooleanSetting
+AntiSurround,M_588_G,avtoSvitchKirkiEnabled,\u0410\u0432\u0442\u043e-\u0441\u0432\u0438\u0442\u0447 \u043a\u0438\u0440\u043a\u0438,BooleanSetting
+AntiSurround,P_4830_p,svingEnabled,\u0421\u0432\u0438\u043d\u0433,BooleanSetting
+AntiSurround,h_1847_R,tolkoKogdaZablokirovanEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u043a\u043e\u0433\u0434\u0430 \u0437\u0430\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u043d,BooleanSetting
+AntiSurround,Q_4569_t,lomatNadGolovoyEnabled,\u041b\u043e\u043c\u0430\u0442\u044c \u043d\u0430\u0434 \u0433\u043e\u043b\u043e\u0432\u043e\u0439,BooleanSetting
+ArmorDurability,v_4262_N,otobrazhatOptions,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c,MultiBooleanSetting
+Arrows,v_4262_N,otobrazhatOptions,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c,MultiBooleanSetting
+Arrows,w_1484_f,cvetMode,\u0426\u0432\u0435\u0442,ModeSetting
+Arrows,M_588_G,radiusSetting,\u0420\u0430\u0434\u0438\u0443\u0441,NumberSetting
+Arrows,P_4830_p,pokazyvatTolkoEsliNeVidishEnabled,\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u0435\u0441\u043b\u0438 \u043d\u0435 \u0432\u0438\u0434\u0438\u0448\u044c,BooleanSetting
+AspectRatio,v_4262_N,sootnoshenieMode,\u0421\u043e\u043e\u0442\u043d\u043e\u0448\u0435\u043d\u0438\u0435,ModeSetting
+AspectRatio,w_1484_f,znachenieSetting,\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435,NumberSetting
+AttackAura,s_956_w,rotationMode,\u0420\u043e\u0442\u0430\u0446\u0438\u044f,ModeSetting
+AttackAura,u_2550_I,targetsOptions,\u041a\u043e\u0433\u043e \u0430\u0442\u0430\u043a\u043e\u0432\u0430\u0442\u044c,MultiBooleanSetting
+AttackAura,M_588_G,priorityMode,\u041f\u0440\u0438\u043e\u0440\u0438\u0442\u0435\u0442,ModeSetting
+AttackAura,P_4830_p,attackRangeSetting,\u0420\u0430\u0434\u0438\u0443\u0441 \u0430\u0442\u0430\u043a\u0438,NumberSetting
+AttackAura,h_1847_R,detectRangeSetting,\u0420\u0430\u0434\u0438\u0443\u0441 \u043e\u0431\u043d\u0430\u0440\u0443\u0436\u0435\u043d\u0438\u044f,NumberSetting
+AttackAura,Q_4569_t,skipAttackWhenOptions,\u041d\u0435 \u0431\u0438\u0442\u044c \u0435\u0441\u043b\u0438,MultiBooleanSetting
+AttackAura,M_182_A,movementCorrectionMode,\u041a\u043e\u0440\u0440\u0435\u043a\u0446\u0438\u044f \u0434\u0432\u0438\u0436\u0435\u043d\u0438\u044f,ModeSetting
+AttackAura,t_1786_h,onlyCriticalsEnabled,\u0411\u0438\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u0440\u0438\u0442\u0430\u043c\u0438,BooleanSetting
+AttackAura,multiplayerClientSuggestionProvider,breakShieldEnabled,\u041b\u043e\u043c\u0430\u0442\u044c \u0449\u0438\u0442,BooleanSetting
+AttackAura,w_1457_N,releaseShieldEnabled,\u041e\u0442\u0436\u0438\u043c\u0430\u0442\u044c \u0449\u0438\u0442,BooleanSetting
+AttackAura,Y_601_j,raycastEnabled,\u0420\u0430\u0439\u043a\u0430\u0441\u0442,BooleanSetting
+AttackAura,Y_259_p,workOnMode,\u0420\u0430\u0431\u043e\u0442\u0430\u0442\u044c \u043d\u0430,ModeSetting
+AttackAura,Q_2552_b,resolverEnabled,\u0420\u0435\u0437\u043e\u043b\u044c\u0432\u0435\u0440,BooleanSetting
+AttackAura,C_2741_M,resolverv2Enabled,ResolverV2,BooleanSetting
+AttackAura,k_2293_S,targetRenderMode,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u0435 \u0446\u0435\u043b\u0438,ModeSetting
+AttackAura,q_2307_F,onlyWhenSpacePressedEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u043f\u0440\u0438 \u0437\u0430\u0436\u0430\u0442\u043e\u043c \u043f\u0440\u043e\u0431\u0435\u043b\u0435,BooleanSetting
+AttackAura,Z_875_P,noWallHitEnabled,\u041d\u0435 \u0431\u0438\u0442\u044c \u0447\u0435\u0440\u0435\u0437 \u0441\u0442\u0435\u043d\u044b,BooleanSetting
+AttackAura,t_4043_B,allowDoorHitEnabled,\u041f\u043e\u0437\u0432\u043e\u043b\u044f\u0442\u044c \u0431\u0438\u0442\u044c \u0447\u0435\u0440\u0435\u0437 \u0434\u0432\u0435\u0440\u0438,BooleanSetting
+AttackAura,x_607_J,wallHitBypassMode,Wall Hit Bypass,ModeSetting
+AttackAura,e_4240_b,holyworldBypassKeyKeyBind,Holyworld Bypass Key,KeyBindSetting
+AttackAura,z_1737_N,tpsSyncEnabled,\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0441 \u0422\u041f\u0421,BooleanSetting
+AttackAura,v_4276_D,yawSpeedSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c yaw,NumberSetting
+AttackAura,d_2461_k,yawLimitSetting,\u041e\u0433\u0440\u0430\u043d\u0438\u0447\u0435\u043d\u0438\u0435 yaw,NumberSetting
+AttackAura,G_624_v,randomStrengthSetting,\u0421\u0438\u043b\u0430 \u0440\u0430\u043d\u0434\u043e\u043c\u0430,NumberSetting
+AttackAura,T_2506_i,rotatePitchEnabled,\u041f\u043e\u0432\u043e\u0440\u0430\u0447\u0438\u0432\u0430\u0442\u044c pitch,BooleanSetting
+AttackAura,q_4610_l,normalizeMouseEnabled,\u041d\u043e\u0440\u043c\u0430\u043b\u0438\u0437\u043e\u0432\u0430\u0442\u044c \u043c\u044b\u0448\u044c,BooleanSetting
+AttackAura,z_4693_k,snapOnAttackEnabled,\u0421\u043d\u0430\u043f \u043d\u0430 \u0443\u0434\u0430\u0440,BooleanSetting
+AttackAura,g_221_o,onlyWithWeaponEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0441 \u043e\u0440\u0443\u0436\u0438\u0435\u043c,BooleanSetting
+AttackAura,e_2887_G,autoTakeWeaponEnabled,\u0410\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438 \u0431\u0440\u0430\u0442\u044c \u043e\u0440\u0443\u0436\u0438\u0435,BooleanSetting
+AttackAura,B_1668_F,onnxModelMode,ONNX \u041c\u043e\u0434\u0435\u043b\u044c,ModeSetting
+AuctionHelper,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+AuctionHelper,t_148_a,kolichestvoVygodnyhPredmetovSetting,\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e \u0432\u044b\u0433\u043e\u0434\u043d\u044b\u0445 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u043e\u0432,NumberSetting
+AutoAccept,w_1484_f,prinimatZaprosyTolkoOtDruzeyEnabled,\u041f\u0440\u0438\u043d\u0438\u043c\u0430\u0442\u044c \u0437\u0430\u043f\u0440\u043e\u0441\u044b \u0442\u043e\u043b\u044c\u043a\u043e \u043e\u0442 \u0434\u0440\u0443\u0437\u0435\u0439,BooleanSetting
+AutoAnchor,v_4262_N,skorostSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+AutoAnchor,w_1484_f,maksVstavokSetting,\u041c\u0430\u043a\u0441. \u0432\u0441\u0442\u0430\u0432\u043e\u043a,NumberSetting
+AutoAnchor,t_148_a,radiusSetting,\u0420\u0430\u0434\u0438\u0443\u0441,NumberSetting
+AutoArmor,v_4262_N,zaderzhkaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430,NumberSetting
+AutoArmor,w_1484_f,ignorirovatElitruEnabled,\u0418\u0433\u043d\u043e\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u044d\u043b\u0438\u0442\u0440\u0443,BooleanSetting
+AutoArmor,t_148_a,prioritetPochinkiEnabled,\u041f\u0440\u0438\u043e\u0440\u0438\u0442\u0435\u0442 \u043f\u043e\u0447\u0438\u043d\u043a\u0438,BooleanSetting
+AutoBuy,w_1484_f,serverMode,\u0421\u0435\u0440\u0432\u0435\u0440,ModeSetting
+AutoBuy,t_148_a,avtoSetapEnabled,\u0410\u0432\u0442\u043e \u0441\u0435\u0442\u0430\u043f,BooleanSetting
+AutoBuy,s_956_w,naSkolkoProcentovMensheOtSamogoDeshevogoPredmetaSetting,\u041d\u0430 \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u043e\u0432 \u043c\u0435\u043d\u044c\u0448\u0435 \u043e\u0442 \u0441\u0430\u043c\u043e\u0433\u043e \u0434\u0435\u0448\u0435\u0432\u043e\u0433\u043e \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0430,NumberSetting
+AutoBuy,u_2550_I,podsvetkaPredmetovEnabled,\u041f\u043e\u0434\u0441\u0432\u0435\u0442\u043a\u0430 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u043e\u0432,BooleanSetting
+AutoBuy,M_588_G,minimalnayaZaderzhkaAvtosetapaTikSetting,\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0430\u0432\u0442\u043e\u0441\u0435\u0442\u0430\u043f\u0430 (\u0442\u0438\u043a),NumberSetting
+AutoBuy,P_4830_p,maksimalnayaZaderzhkaAvtosetapaTikSetting,\u041c\u0430\u043a\u0441\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0430\u0432\u0442\u043e\u0441\u0435\u0442\u0430\u043f\u0430 (\u0442\u0438\u043a),NumberSetting
+AutoBuy,h_1847_R,maksStranicDlyaProsmotraSetting,\u041c\u0430\u043a\u0441. \u0441\u0442\u0440\u0430\u043d\u0438\u0446 \u0434\u043b\u044f \u043f\u0440\u043e\u0441\u043c\u043e\u0442\u0440\u0430,NumberSetting
+AutoBuy,t_1786_h,uchityvatBalansEnabled,\u0423\u0447\u0438\u0442\u044b\u0432\u0430\u0442\u044c \u0431\u0430\u043b\u0430\u043d\u0441,BooleanSetting
+AutoContract,w_1484_f,grifSetting,\u0413\u0440\u0438\u0444,NumberSetting
+AutoContract,t_148_a,klavishaOtklyucheniyaKeyBind,\u041a\u043b\u0430\u0432\u0438\u0448\u0430 \u043e\u0442\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f,KeyBindSetting
+AutoCrystal,t_148_a,presetMode,\u041f\u0440\u0435\u0441\u0435\u0442,ModeSetting
+AutoCrystal,s_956_w,attackEnabled,Attack,BooleanSetting
+AutoCrystal,u_2550_I,attackspeedSetting,AttackSpeed,NumberSetting
+AutoCrystal,M_588_G,attackrangeSetting,AttackRange,NumberSetting
+AutoCrystal,P_4830_p,attackwallsrangeSetting,AttackWallsRange,NumberSetting
+AutoCrystal,h_1847_R,antiweaknessMode,AntiWeakness,ModeSetting
+AutoCrystal,Q_4569_t,instantEnabled,Instant,BooleanSetting
+AutoCrystal,M_182_A,inhibitEnabled,Inhibit,BooleanSetting
+AutoCrystal,t_1786_h,placeEnabled,Place,BooleanSetting
+AutoCrystal,multiplayerClientSuggestionProvider,placespeedSetting,PlaceSpeed,NumberSetting
+AutoCrystal,w_1457_N,placerangeSetting,PlaceRange,NumberSetting
+AutoCrystal,Y_601_j,placewallsrangeSetting,PlaceWallsRange,NumberSetting
+AutoCrystal,Y_259_p,placementsMode,Placements,ModeSetting
+AutoCrystal,Q_2552_b,switchMode,Switch,ModeSetting
+AutoCrystal,C_2741_M,sequentialMode,Sequential,ModeSetting
+AutoCrystal,k_2293_S,rotateMode,Rotate,ModeSetting
+AutoCrystal,q_2307_F,rotatespeedSetting,RotateSpeed,NumberSetting
+AutoCrystal,Z_875_P,swingMode,Swing,ModeSetting
+AutoCrystal,t_4043_B,raytraceEnabled,Raytrace,BooleanSetting
+AutoCrystal,x_607_J,extrapolationSetting,Extrapolation,NumberSetting
+AutoCrystal,e_4240_b,enemyrangeSetting,EnemyRange,NumberSetting
+AutoCrystal,n_3318_d,asyncEnabled,Async,BooleanSetting
+AutoCrystal,d_2427_y,godsyncEnabled,GodSync,BooleanSetting
+AutoCrystal,z_1737_N,predictionsSetting,Predictions,NumberSetting
+AutoCrystal,v_4276_D,idoffsetSetting,IDOffset,NumberSetting
+AutoCrystal,d_2461_k,faceplacemodeMode,FaceplaceMode,ModeSetting
+AutoCrystal,G_624_v,faceplacehpSetting,FaceplaceHP,NumberSetting
+AutoCrystal,T_2506_i,faceplacearmorSetting,FaceplaceArmor,NumberSetting
+AutoCrystal,q_4610_l,mindamageSetting,MinDamage,NumberSetting
+AutoCrystal,z_4693_k,maxselfdamageSetting,MaxSelfDamage,NumberSetting
+AutoCrystal,g_221_o,lethalmultiplierSetting,LethalMultiplier,NumberSetting
+AutoCrystal,e_2887_G,antisuicideEnabled,AntiSuicide,BooleanSetting
+AutoCrystal,B_1668_F,ignoreterrainEnabled,IgnoreTerrain,BooleanSetting
+AutoCrystal,g_164_R,renderEnabled,Render,BooleanSetting
+AutoCrystal,X_933_l,rendermodeMode,RenderMode,ModeSetting
+AutoCrystal,Z_976_R,renderdurationSetting,RenderDuration,NumberSetting
+AutoCrystal,c_4037_x,renderdamageEnabled,RenderDamage,BooleanSetting
+AutoCrystal,g_2268_R,ignorefriendsEnabled,IgnoreFriends,BooleanSetting
+AutoCrystal,T_3594_S,onlyhotbarEnabled,OnlyHotbar,BooleanSetting
+AutoCrystal,D_4792_h,whileeatingEnabled,WhileEating,BooleanSetting
+AutoDuel,w_1484_f,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+AutoDuel,t_148_a,klavishaOtklyucheniyaKeyBind,\u041a\u043b\u0430\u0432\u0438\u0448\u0430 \u043e\u0442\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f,KeyBindSetting
+AutoDupe,w_1484_f,kityOptions,\u041a\u0438\u0442\u044b,MultiBooleanSetting
+AutoDupe,t_148_a,predmetyOptions,\u041f\u0440\u0435\u0434\u043c\u0435\u0442\u044b,MultiBooleanSetting
+AutoEat,v_4262_N,neIspolzovatSAttackauraEnabled,\u041d\u0435 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c \u0441 AttackAura,BooleanSetting
+AutoEat,w_1484_f,kolVoGolodaSetting,\u041a\u043e\u043b-\u0432\u043e \u0433\u043e\u043b\u043e\u0434\u0430,NumberSetting
+AutoEat,t_148_a,estZolotyeYablokiEnabled,\u0415\u0441\u0442\u044c \u0437\u043e\u043b\u043e\u0442\u044b\u0435 \u044f\u0431\u043b\u043e\u043a\u0438,BooleanSetting
+AutoEat,s_956_w,zdoroveDlyaGaSetting,\u0417\u0434\u043e\u0440\u043e\u0432\u044c\u0435 \u0434\u043b\u044f \u0413\u0410,NumberSetting
+AutoEat,u_2550_I,prioritetGaEnabled,\u041f\u0440\u0438\u043e\u0440\u0438\u0442\u0435\u0442 \u0413\u0410,BooleanSetting
+AutoExplosion,h_1847_R,neVzryvatOptions,\u041d\u0435 \u0432\u0437\u0440\u044b\u0432\u0430\u0442\u044c,MultiBooleanSetting
+AutoExplosion,Q_4569_t,radiusProverkiSetting,\u0420\u0430\u0434\u0438\u0443\u0441 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438,NumberSetting
+AutoExplosion,M_182_A,stavitObsidianIKristallEnabled,\u0421\u0442\u0430\u0432\u0438\u0442\u044c \u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d \u0438 \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b,BooleanSetting
+AutoExplosion,t_1786_h,stavitKristallKeyBind,\u0421\u0442\u0430\u0432\u0438\u0442\u044c \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b,KeyBindSetting
+AutoExplosion,multiplayerClientSuggestionProvider,obsidianKeyBind,\u041e\u0431\u0441\u0438\u0434\u0438\u0430\u043d,KeyBindSetting
+AutoExplosion,w_1457_N,kristallKeyBind,\u041a\u0440\u0438\u0441\u0442\u0430\u043b\u043b,KeyBindSetting
+AutoExplosion,Y_601_j,istochnikKristallaMode,\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,ModeSetting
+AutoFarm,v_4262_N,tipMode,\u0422\u0438\u043f,ModeSetting
+AutoFarm,w_1484_f,radiusPoiskaSetting,\u0420\u0430\u0434\u0438\u0443\u0441 \u043f\u043e\u0438\u0441\u043a\u0430,NumberSetting
+AutoFarm,t_148_a,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+AutoFarm,s_956_w,radiusIssledovaniyaSetting,\u0420\u0430\u0434\u0438\u0443\u0441 \u0438\u0441\u0441\u043b\u0435\u0434\u043e\u0432\u0430\u043d\u0438\u044f,NumberSetting
+AutoFarm,u_2550_I,avtoissledovanieEnabled,\u0410\u0432\u0442\u043e\u0438\u0441\u0441\u043b\u0435\u0434\u043e\u0432\u0430\u043d\u0438\u0435,BooleanSetting
+AutoFarm,M_588_G,zaderzhkaIssledovaniyaSekSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0438\u0441\u0441\u043b\u0435\u0434\u043e\u0432\u0430\u043d\u0438\u044f (\u0441\u0435\u043a),NumberSetting
+AutoFarm,P_4830_p,sobiratOptions,\u0421\u043e\u0431\u0438\u0440\u0430\u0442\u044c,MultiBooleanSetting
+AutoFarm,h_1847_R,avtoInstrumentEnabled,\u0410\u0432\u0442\u043e \u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442,BooleanSetting
+AutoFarm,Q_4569_t,zaderzhkaLomaniyaMsSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u043b\u043e\u043c\u0430\u043d\u0438\u044f (\u043c\u0441),NumberSetting
+AutoFarm,M_182_A,zaderzhkaPeremescheniyaMsSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u043f\u0435\u0440\u0435\u043c\u0435\u0449\u0435\u043d\u0438\u044f (\u043c\u0441),NumberSetting
+AutoFarm,t_1786_h,povorachivatsyaKBlokuEnabled,\u041f\u043e\u0432\u043e\u0440\u0430\u0447\u0438\u0432\u0430\u0442\u044c\u0441\u044f \u043a \u0431\u043b\u043e\u043a\u0443,BooleanSetting
+AutoFarm,multiplayerClientSuggestionProvider,proveryatInventarEnabled,\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u0442\u044c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044c,BooleanSetting
+AutoFarm,w_1457_N,ostanavlivatPriPolnomInventareEnabled,\u041e\u0441\u0442\u0430\u043d\u0430\u0432\u043b\u0438\u0432\u0430\u0442\u044c \u043f\u0440\u0438 \u043f\u043e\u043b\u043d\u043e\u043c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u0435,BooleanSetting
+AutoFarm,Y_601_j,tolkoDostupnyeBlokiEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0435 \u0431\u043b\u043e\u043a\u0438,BooleanSetting
+AutoFarm,Y_259_p,avtoposadkaEnabled,\u0410\u0432\u0442\u043e\u043f\u043e\u0441\u0430\u0434\u043a\u0430,BooleanSetting
+AutoFarm,Q_2552_b,zaderzhkaPosadkiMsSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u043f\u043e\u0441\u0430\u0434\u043a\u0438 (\u043c\u0441),NumberSetting
+AutoFarm,C_2741_M,mobyOptions,\u041c\u043e\u0431\u044b,MultiBooleanSetting
+AutoFarm,k_2293_S,radiusPoiskaSetting2,\u0420\u0430\u0434\u0438\u0443\u0441 \u043f\u043e\u0438\u0441\u043a\u0430,NumberSetting
+AutoFarm,q_2307_F,maksDistanciyaPogoniSetting,\u041c\u0430\u043a\u0441. \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043f\u043e\u0433\u043e\u043d\u0438,NumberSetting
+AutoFarm,Z_875_P,distanciyaPodhodaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043f\u043e\u0434\u0445\u043e\u0434\u0430,NumberSetting
+AutoFarm,t_4043_B,zaderzhkaSkanirovaniyaSekSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0441\u043a\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f (\u0441\u0435\u043a),NumberSetting
+AutoFarm,x_607_J,izbegatVzryvaKriperovEnabled,\u0418\u0437\u0431\u0435\u0433\u0430\u0442\u044c \u0432\u0437\u0440\u044b\u0432\u0430 \u043a\u0440\u0438\u043f\u0435\u0440\u043e\u0432,BooleanSetting
+AutoFarm,e_4240_b,bezopasnayaDistanciyaSetting,\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u0430\u044f \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+AutoFarm,n_3318_d,zhdatKillauruEnabled,\u0416\u0434\u0430\u0442\u044c \u043a\u0438\u043b\u043b\u0430\u0443\u0440\u0443,BooleanSetting
+AutoFarm,d_2427_y,avtoissledovanieEnabled2,\u0410\u0432\u0442\u043e\u0438\u0441\u0441\u043b\u0435\u0434\u043e\u0432\u0430\u043d\u0438\u0435,BooleanSetting
+AutoFarm,z_1737_N,zeleMode,\u0417\u0435\u043b\u044c\u0435,ModeSetting
+AutoFarm,v_4276_D,uluchshenieMode,\u0423\u043b\u0443\u0447\u0448\u0435\u043d\u0438\u0435,ModeSetting
+AutoFarm,d_2461_k,radiusPoiskaVarkaSetting,\u0420\u0430\u0434\u0438\u0443\u0441 \u043f\u043e\u0438\u0441\u043a\u0430 (\u0432\u0430\u0440\u043a\u0430),NumberSetting
+AutoFarm,G_624_v,zaderzhkaDeystviyVarkaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0439 (\u0432\u0430\u0440\u043a\u0430),NumberSetting
+AutoFarm,T_2506_i,skladyvatVSundukEnabled,\u0421\u043a\u043b\u0430\u0434\u044b\u0432\u0430\u0442\u044c \u0432 \u0441\u0443\u043d\u0434\u0443\u043a,BooleanSetting
+AutoFarm,q_4610_l,pokazyvatStatusVarkiEnabled,\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0442\u044c \u0441\u0442\u0430\u0442\u0443\u0441 \u0432\u0430\u0440\u043a\u0438,BooleanSetting
+AutoFarm,z_4693_k,pokazyvatOtladkuEnabled,\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0442\u044c \u043e\u0442\u043b\u0430\u0434\u043a\u0443,BooleanSetting
+AutoFish,v_4262_N,avtomaticheskiBratUdochkuEnabled,\u0410\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438 \u0431\u0440\u0430\u0442\u044c \u0443\u0434\u043e\u0447\u043a\u0443,BooleanSetting
+AutoFish,w_1484_f,zaderzhkaPodsechkiMsSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u043f\u043e\u0434\u0441\u0435\u0447\u043a\u0438 (\u043c\u0441),NumberSetting
+AutoFish,t_148_a,zaderzhkaPerezabrosaMsSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u043f\u0435\u0440\u0435\u0437\u0430\u0431\u0440\u043e\u0441\u0430 (\u043c\u0441),NumberSetting
+AutoFish,s_956_w,proveryatProchnostEnabled,\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u0442\u044c \u043f\u0440\u043e\u0447\u043d\u043e\u0441\u0442\u044c,BooleanSetting
+AutoFish,u_2550_I,minProchnostSetting,\u041c\u0438\u043d. \u043f\u0440\u043e\u0447\u043d\u043e\u0441\u0442\u044c (%),NumberSetting
+AutoFish,M_588_G,proveryatInventarEnabled,\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u0442\u044c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044c,BooleanSetting
+AutoFish,P_4830_p,ostanavlivatPriPolnomInventareEnabled,\u041e\u0441\u0442\u0430\u043d\u0430\u0432\u043b\u0438\u0432\u0430\u0442\u044c \u043f\u0440\u0438 \u043f\u043e\u043b\u043d\u043e\u043c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u0435,BooleanSetting
+AutoFish,h_1847_R,proveryatNalichieBobberaEnabled,\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u0442\u044c \u043d\u0430\u043b\u0438\u0447\u0438\u0435 \u0431\u043e\u0431\u0431\u0435\u0440\u0430,BooleanSetting
+AutoFish,Q_4569_t,avtoSmenaUdochkiPriPolomkeEnabled,\u0410\u0432\u0442\u043e \u0441\u043c\u0435\u043d\u0430 \u0443\u0434\u043e\u0447\u043a\u0438 \u043f\u0440\u0438 \u043f\u043e\u043b\u043e\u043c\u043a\u0435,BooleanSetting
+AutoFish,M_182_A,avtoZabrosVVoduEnabled,\u0410\u0432\u0442\u043e \u0437\u0430\u0431\u0440\u043e\u0441 \u0432 \u0432\u043e\u0434\u0443,BooleanSetting
+AutoFish,t_1786_h,zaderzhkaAvtoZabrosaMsSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0430\u0432\u0442\u043e \u0437\u0430\u0431\u0440\u043e\u0441\u0430 (\u043c\u0441),NumberSetting
+AutoJoiner,v_4262_N,zahoditNaMode,\u0417\u0430\u0445\u043e\u0434\u0438\u0442\u044c \u043d\u0430,ModeSetting
+AutoJoiner,w_1484_f,griferskiyMirSetting,\u0413\u0440\u0438\u0444\u0435\u0440\u0441\u043a\u0438\u0439 \u043c\u0438\u0440,NumberSetting
+AutoJoiner,t_148_a,skorostSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+AutoJump,v_4262_N,prygatEsliOptions,\u041f\u0440\u044b\u0433\u0430\u0442\u044c \u0435\u0441\u043b\u0438,MultiBooleanSetting
+AutoLeave,v_4262_N,livatEsliOptions,\u041b\u0438\u0432\u0430\u0442\u044c \u0435\u0441\u043b\u0438,MultiBooleanSetting
+AutoLeave,w_1484_f,tipUhodaMode,\u0422\u0438\u043f \u0443\u0445\u043e\u0434\u0430,ModeSetting
+AutoLeave,t_148_a,livatTolkoVKoncePvpEnabled,\u041b\u0438\u0432\u0430\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u0432 \u043a\u043e\u043d\u0446\u0435 \u043f\u0432\u043f,BooleanSetting
+AutoLeave,s_956_w,zdoroveSetting,\u0417\u0434\u043e\u0440\u043e\u0432\u044c\u0435,NumberSetting
+AutoLeave,u_2550_I,radiusSetting,\u0420\u0430\u0434\u0438\u0443\u0441,NumberSetting
+AutoLeave,M_588_G,otklyuchatBaritonEnabled,\u041e\u0442\u043a\u043b\u044e\u0447\u0430\u0442\u044c \u0431\u0430\u0440\u0438\u0442\u043e\u043d,BooleanSetting
+AutoPilot,v_4262_N,sharEnabled,\u0428\u0430\u0440,BooleanSetting
+AutoPilot,w_1484_f,elitraEnabled,\u042d\u043b\u0438\u0442\u0440\u0430,BooleanSetting
+AutoPilot,t_148_a,oskolokEnabled,\u041e\u0441\u043a\u043e\u043b\u043e\u043a,BooleanSetting
+AutoPilot,s_956_w,ostrotaViEnabled,\u041e\u0441\u0442\u0440\u043e\u0442\u0430 VI,BooleanSetting
+AutoPilot,u_2550_I,antiPoletEnabled,\u0410\u043d\u0442\u0438 \u043f\u043e\u043b\u0451\u0442,BooleanSetting
+AutoPilot,M_588_G,auraEnabled,\u0410\u0443\u0440\u0430,BooleanSetting
+AutoPotion,w_1484_f,brosatOptions,\u0411\u0440\u043e\u0441\u0430\u0442\u044c,MultiBooleanSetting
+AutoPotion,t_148_a,tolkoPriPvpEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u043f\u0440\u0438 \u043f\u0432\u043f,BooleanSetting
+AutoPotion,s_956_w,otklyuchatPosleIspolzovaniyaEnabled,\u041e\u0442\u043a\u043b\u044e\u0447\u0430\u0442\u044c \u043f\u043e\u0441\u043b\u0435 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f,BooleanSetting
+AutoPotion,u_2550_I,tolkoSHotbaraEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0441 \u0445\u043e\u0442\u0431\u0430\u0440\u0430,BooleanSetting
+AutoPotion,M_588_G,prioritetSilyEnabled,\u041f\u0440\u0438\u043e\u0440\u0438\u0442\u0435\u0442 \u0441\u0438\u043b\u044b,BooleanSetting
+AutoRespawn,v_4262_N,otklyuchatAttackauraEnabled,\u041e\u0442\u043a\u043b\u044e\u0447\u0430\u0442\u044c AttackAura,BooleanSetting
+AutoRespawn,w_1484_f,ignorirovatHardkorEnabled,\u0418\u0433\u043d\u043e\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0445\u0430\u0440\u0434\u043a\u043e\u0440,BooleanSetting
+AutoSoup,v_4262_N,zdoroveSetting,\u0417\u0434\u043e\u0440\u043e\u0432\u044c\u0435,NumberSetting
+AutoSoup,w_1484_f,neIspolzovatSAttackauraEnabled,\u041d\u0435 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c \u0441 AttackAura,BooleanSetting
+AutoSoup,t_148_a,tolkoVInventareEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0432 \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u0435,BooleanSetting
+AutoSwap,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+AutoSwap,w_1484_f,knopkaSvapaKeyBind,\u041a\u043d\u043e\u043f\u043a\u0430 \u0441\u0432\u0430\u043f\u0430,KeyBindSetting
+AutoSwap,t_148_a,knopkaKolesaKeyBind,\u041a\u043d\u043e\u043f\u043a\u0430 \u043a\u043e\u043b\u0435\u0441\u0430,KeyBindSetting
+AutoSwap,s_956_w,kolesoNaGolovuKeyBind,\u041a\u043e\u043b\u0435\u0441\u043e \u043d\u0430 \u0433\u043e\u043b\u043e\u0432\u0443,KeyBindSetting
+AutoSwap,u_2550_I,pervyyPredmetMode,\u041f\u0435\u0440\u0432\u044b\u0439 \u043f\u0440\u0435\u0434\u043c\u0435\u0442,ModeSetting
+AutoSwap,M_588_G,vtoroyPredmetMode,\u0412\u0442\u043e\u0440\u043e\u0439 \u043f\u0440\u0435\u0434\u043c\u0435\u0442,ModeSetting
+AutoSwap,P_4830_p,ignorirovatObychnyeTotemyEnabled,\u0418\u0433\u043d\u043e\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043e\u0431\u044b\u0447\u043d\u044b\u0435 \u0442\u043e\u0442\u0435\u043c\u044b,BooleanSetting
+AutoSwap,h_1847_R,avtoSharKnopkaKeyBind,\u0410\u0432\u0442\u043e-\u0448\u0430\u0440 \u043a\u043d\u043e\u043f\u043a\u0430,KeyBindSetting
+AutoSwap,Q_4569_t,bratSharOptions,\u0411\u0440\u0430\u0442\u044c \u0448\u0430\u0440,MultiBooleanSetting
+AutoSwap,M_182_A,ubiratBezTargetaEnabled,\u0423\u0431\u0438\u0440\u0430\u0442\u044c \u0431\u0435\u0437 \u0442\u0430\u0440\u0433\u0435\u0442\u0430,BooleanSetting
+AutoSwap,t_1786_h,svapatPeredUdaromEnabled,\u0421\u0432\u0430\u043f\u0430\u0442\u044c \u043f\u0435\u0440\u0435\u0434 \u0443\u0434\u0430\u0440\u043e\u043c,BooleanSetting
+AutoTool,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+AutoTotem,w_1484_f,urovenZdorovyaSetting,\u0423\u0440\u043e\u0432\u0435\u043d\u044c \u0437\u0434\u043e\u0440\u043e\u0432\u044c\u044f,NumberSetting
+AutoTotem,t_148_a,zdoroveNaElitreSetting,\u0417\u0434\u043e\u0440\u043e\u0432\u044c\u0435 \u043d\u0430 \u044d\u043b\u0438\u0442\u0440\u0435,NumberSetting
+AutoTotem,s_956_w,vozvraschatPredmetEnabled,\u0412\u043e\u0437\u0432\u0440\u0430\u0449\u0430\u0442\u044c \u043f\u0440\u0435\u0434\u043c\u0435\u0442,BooleanSetting
+AutoTotem,u_2550_I,neMenyatSharEnabled,\u041d\u0435 \u043c\u0435\u043d\u044f\u0442\u044c \u0448\u0430\u0440,BooleanSetting
+AutoTotem,M_588_G,neSvapatEsliRukaAktivnaEnabled,"\u041d\u0435 \u0441\u0432\u0430\u043f\u0430\u0442\u044c, \u0435\u0441\u043b\u0438 \u0440\u0443\u043a\u0430 \u0430\u043a\u0442\u0438\u0432\u043d\u0430",BooleanSetting
+AutoTotem,P_4830_p,ignorirovatDeystviyaEnabled,\u0418\u0433\u043d\u043e\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f,BooleanSetting
+AutoTotem,h_1847_R,sohranyatZacharovannyyEnabled,\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0442\u044c \u0437\u0430\u0447\u0430\u0440\u043e\u0432\u0430\u043d\u043d\u044b\u0439,BooleanSetting
+AutoTotem,Q_4569_t,neBratTotemDrakonidaEnabled,\u041d\u0435 \u0431\u0440\u0430\u0442\u044c \u0442\u043e\u0442\u0435\u043c \u0434\u0440\u0430\u043a\u043e\u043d\u0438\u0434\u0430,BooleanSetting
+AutoTotem,M_182_A,proverkiNaOptions,\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 \u043d\u0430,MultiBooleanSetting
+AutoTotem,t_1786_h,bratOtHpPriVzryveEnabled,\u0411\u0440\u0430\u0442\u044c \u043e\u0442 \u0445\u043f \u043f\u0440\u0438 \u0432\u0437\u0440\u044b\u0432\u0435,BooleanSetting
+AutoTotem,multiplayerClientSuggestionProvider,otSkolkiHpPriVzryveSetting,\u041e\u0442 \u0441\u043a\u043e\u043b\u044c\u043a\u0438 \u0445\u043f \u043f\u0440\u0438 \u0432\u0437\u0440\u044b\u0432\u0435,NumberSetting
+AutoTotem,w_1457_N,distanciyaDoKristallaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u0434\u043e \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,NumberSetting
+AutoTotem,Y_601_j,distanciyaDoDinamitaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u0434\u043e \u0434\u0438\u043d\u0430\u043c\u0438\u0442\u0430,NumberSetting
+AutoTotem,Y_259_p,distanciyaDoTntvagonetkiSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u0434\u043e \u0422\u041d\u0422\u0412\u0430\u0433\u043e\u043d\u0435\u0442\u043a\u0438,NumberSetting
+AutoTotem,Q_2552_b,distanciyaTrezubcaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u0442\u0440\u0435\u0437\u0443\u0431\u0446\u0430,NumberSetting
+AutoTotem,C_2741_M,distanciyaDoYakoryaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u0434\u043e \u044f\u043a\u043e\u0440\u044f,NumberSetting
+AutoTotem,k_2293_S,nastroykiDlyaSharovEnabled,\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0434\u043b\u044f \u0448\u0430\u0440\u043e\u0432,BooleanSetting
+AutoTotem,q_2307_F,spisokSharovOptions,\u0421\u043f\u0438\u0441\u043e\u043a \u0448\u0430\u0440\u043e\u0432,MultiBooleanSetting
+AutoTotem,Z_875_P,ogonDistanciyaKristallaSetting,\u041e\u0433\u043e\u043d\u044c: \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,NumberSetting
+AutoTotem,t_4043_B,ogonHpTotemaSetting,\u041e\u0433\u043e\u043d\u044c: \u0445\u043f \u0442\u043e\u0442\u0435\u043c\u0430,NumberSetting
+AutoTotem,x_607_J,vodaDistanciyaKristallaSetting,\u0412\u043e\u0434\u0430: \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,NumberSetting
+AutoTotem,e_4240_b,vodaHpTotemaSetting,\u0412\u043e\u0434\u0430: \u0445\u043f \u0442\u043e\u0442\u0435\u043c\u0430,NumberSetting
+AutoTotem,n_3318_d,zemlyaDistanciyaKristallaSetting,\u0417\u0435\u043c\u043b\u044f: \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,NumberSetting
+AutoTotem,d_2427_y,zemlyaHpTotemaSetting,\u0417\u0435\u043c\u043b\u044f: \u0445\u043f \u0442\u043e\u0442\u0435\u043c\u0430,NumberSetting
+AutoTotem,z_1737_N,svetDistanciyaKristallaSetting,\u0421\u0432\u0435\u0442: \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,NumberSetting
+AutoTotem,v_4276_D,svetHpTotemaSetting,\u0421\u0432\u0435\u0442: \u0445\u043f \u0442\u043e\u0442\u0435\u043c\u0430,NumberSetting
+AutoTotem,d_2461_k,poryadokDistanciyaKristallaSetting,\u041f\u043e\u0440\u044f\u0434\u043e\u043a: \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,NumberSetting
+AutoTotem,G_624_v,poryadokHpTotemaSetting,\u041f\u043e\u0440\u044f\u0434\u043e\u043a: \u0445\u043f \u0442\u043e\u0442\u0435\u043c\u0430,NumberSetting
+AutoTotem,T_2506_i,haosDistanciyaKristallaSetting,\u0425\u0430\u043e\u0441: \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,NumberSetting
+AutoTotem,q_4610_l,haosHpTotemaSetting,\u0425\u0430\u043e\u0441: \u0445\u043f \u0442\u043e\u0442\u0435\u043c\u0430,NumberSetting
+AutoTotem,z_4693_k,vozduhDistanciyaKristallaSetting,\u0412\u043e\u0437\u0434\u0443\u0445: \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,NumberSetting
+AutoTotem,g_221_o,vozduhHpTotemaSetting,\u0412\u043e\u0437\u0434\u0443\u0445: \u0445\u043f \u0442\u043e\u0442\u0435\u043c\u0430,NumberSetting
+AutoTotem,e_2887_G,bunnyDistanciyaKristallaSetting,BUNNY: \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,NumberSetting
+AutoTotem,B_1668_F,bunnyHpTotemaSetting,BUNNY: \u0445\u043f \u0442\u043e\u0442\u0435\u043c\u0430,NumberSetting
+AutoTotem,g_164_R,dHelperDistanciyaKristallaSetting,\u0414.\u0425\u0435\u043b\u043f\u0435\u0440: \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,NumberSetting
+AutoTotem,X_933_l,dHelperHpTotemaSetting,\u0414.\u0425\u0435\u043b\u043f\u0435\u0440: \u0445\u043f \u0442\u043e\u0442\u0435\u043c\u0430,NumberSetting
+AutoTotem,Z_976_R,bogDistanciyaKristallaSetting,\u0411\u043e\u0433: \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u0430,NumberSetting
+AutoTotem,H_1990_U,bogHpTotemaSetting,\u0411\u043e\u0433: \u0445\u043f \u0442\u043e\u0442\u0435\u043c\u0430,NumberSetting
+AutoTrade,v_4262_N,zaderzhkaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430,NumberSetting
+AutoTrade,w_1484_f,nomerTreydaSetting,\u041d\u043e\u043c\u0435\u0440 \u0442\u0440\u0435\u0439\u0434\u0430,NumberSetting
+AutoTrade,t_148_a,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+AutoTrade,s_956_w,avtoVyborTreydaEnabled,\u0410\u0432\u0442\u043e-\u0432\u044b\u0431\u043e\u0440 \u0442\u0440\u0435\u0439\u0434\u0430,BooleanSetting
+AutoTrade,u_2550_I,propuskatIscherpannyeEnabled,\u041f\u0440\u043e\u043f\u0443\u0441\u043a\u0430\u0442\u044c \u0438\u0441\u0447\u0435\u0440\u043f\u0430\u043d\u043d\u044b\u0435,BooleanSetting
+AutoTrade,M_588_G,tolkoZacharovaniyaEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0437\u0430\u0447\u0430\u0440\u043e\u0432\u0430\u043d\u0438\u044f,BooleanSetting
+AutoTrade,P_4830_p,zakrytKogdaGotovoEnabled,\u0417\u0430\u043a\u0440\u044b\u0442\u044c \u043a\u043e\u0433\u0434\u0430 \u0433\u043e\u0442\u043e\u0432\u043e,BooleanSetting
+AutoTrap,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+AutoTrap,w_1484_f,blocksMode,Blocks,ModeSetting
+AutoTrap,t_148_a,distanciyaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+AutoTrap,s_956_w,prygatDlyaVerhaEnabled,\u041f\u0440\u044b\u0433\u0430\u0442\u044c \u0434\u043b\u044f \u0432\u0435\u0440\u0445\u0430,BooleanSetting
+AutoTrap,u_2550_I,podstavlyatObsidianEsliNetBlokaEnabled,\u041f\u043e\u0434\u0441\u0442\u0430\u0432\u043b\u044f\u0442\u044c \u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d \u0435\u0441\u043b\u0438 \u043d\u0435\u0442 \u0431\u043b\u043e\u043a\u0430,BooleanSetting
+AutoTrap,M_588_G,rabotatIzInventaryaEnabled,\u0420\u0430\u0431\u043e\u0442\u0430\u0442\u044c \u0438\u0437 \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044f,BooleanSetting
+AutoTrap,P_4830_p,knopkaUstanovkiKeyBind,\u041a\u043d\u043e\u043f\u043a\u0430 \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0438,KeyBindSetting
+BaritoneSettings,v_4262_N,ignoreScreensEnabled,Ignore Screens,BooleanSetting
+BaritoneSettings,w_1484_f,ignorePauseEnabled,Ignore Pause,BooleanSetting
+BaritoneSettings,t_148_a,autoEatEnabled,Auto Eat,BooleanSetting
+BaritoneSettings,s_956_w,minFoodSetting,Min Food,NumberSetting
+BedrockProxy,h_1847_R,bedrockPortSetting,Bedrock Port,NumberSetting
+BedrockProxy,Q_4569_t,javaPortLokalnyySetting,Java Port (\u043b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0439),NumberSetting
+BedrockProxy,M_182_A,avtorizaciyaMode,\u0410\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0438\u044f,ModeSetting
+BetterMinecraft,t_148_a,chatUtilityOptions,\u0427\u0430\u0442 \u0423\u0442\u0438\u043b\u0438\u0442\u044b,MultiBooleanSetting
+BetterMinecraft,s_956_w,uwuChatEnabled,UwU \u0427\u0430\u0442,BooleanSetting
+BetterMinecraft,Q_4569_t,optimizirovatOptions,\u041e\u043f\u0442\u0438\u043c\u0438\u0437\u0438\u0440\u043e\u0432\u0430\u0442\u044c,MultiBooleanSetting
+BetterMinecraft,M_182_A,izmenenieKameryEnabled,\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u043a\u0430\u043c\u0435\u0440\u044b,BooleanSetting
+BetterMinecraft,t_1786_h,izmenenieVysotyOptions,\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u0432\u044b\u0441\u043e\u0442\u044b,MultiBooleanSetting
+BetterMinecraft,multiplayerClientSuggestionProvider,vysotaNaElitreSetting,\u0412\u044b\u0441\u043e\u0442\u0430 \u043d\u0430 \u044d\u043b\u0438\u0442\u0440\u0435,NumberSetting
+BetterMinecraft,w_1457_N,vysotaNaZemleSetting,\u0412\u044b\u0441\u043e\u0442\u0430 \u043d\u0430 \u0437\u0435\u043c\u043b\u0435,NumberSetting
+BetterMinecraft,Y_601_j,shirinaXNaElitreSetting,\u0428\u0438\u0440\u0438\u043d\u0430 X \u043d\u0430 \u044d\u043b\u0438\u0442\u0440\u0435,NumberSetting
+BetterMinecraft,Y_259_p,shirinaZNaElitreSetting,\u0428\u0438\u0440\u0438\u043d\u0430 Z \u043d\u0430 \u044d\u043b\u0438\u0442\u0440\u0435,NumberSetting
+BetterMinecraft,Q_2552_b,shirinaXNaZemleSetting,\u0428\u0438\u0440\u0438\u043d\u0430 X \u043d\u0430 \u0437\u0435\u043c\u043b\u0435,NumberSetting
+BetterMinecraft,C_2741_M,shirinaZNaZemleSetting,\u0428\u0438\u0440\u0438\u043d\u0430 Z \u043d\u0430 \u0437\u0435\u043c\u043b\u0435,NumberSetting
+BetterMinecraft,k_2293_S,urovenZumaSetting,\u0423\u0440\u043e\u0432\u0435\u043d\u044c \u0437\u0443\u043c\u0430,NumberSetting
+BetterMinecraft,q_2307_F,podtverzhdenieVyhodaVBoyuEnabled,\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435 \u0432\u044b\u0445\u043e\u0434\u0430 \u0432 \u0431\u043e\u044e,BooleanSetting
+BetterMinecraft,Z_875_P,knopkaReconnectEnabled,\u041a\u043d\u043e\u043f\u043a\u0430 Reconnect,BooleanSetting
+BetterMinecraft,t_4043_B,zaderzhkaRekonnektaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0440\u0435\u043a\u043e\u043d\u043d\u0435\u043a\u0442\u0430,NumberSetting
+BetterMinecraft,x_607_J,_3dZvukEnabled,3D \u0417\u0432\u0443\u043a,BooleanSetting
+BetterMinecraft,e_4240_b,usilenieEmbientaSetting,\u0423\u0441\u0438\u043b\u0435\u043d\u0438\u0435 \u044d\u043c\u0431\u0438\u0435\u043d\u0442\u0430,NumberSetting
+BetterMinecraft,n_3318_d,usilenieShagovSetting,\u0423\u0441\u0438\u043b\u0435\u043d\u0438\u0435 \u0448\u0430\u0433\u043e\u0432,NumberSetting
+BetterMinecraft,d_2427_y,usilenieMobovSetting,\u0423\u0441\u0438\u043b\u0435\u043d\u0438\u0435 \u043c\u043e\u0431\u043e\u0432,NumberSetting
+BetterMinecraft,z_1737_N,betterf3Enabled,BetterF3,BooleanSetting
+BetterMinecraft,v_4276_D,otobrazhatChtoKushaetPetEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0447\u0442\u043e \u043a\u0443\u0448\u0430\u0435\u0442/\u043f\u044c\u0435\u0442,BooleanSetting
+BetterMinecraft,d_2461_k,otobrazhatKogdaMaloHpEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u043a\u043e\u0433\u0434\u0430 \u043c\u0430\u043b\u043e \u0445\u043f,BooleanSetting
+BetterMinecraft,G_624_v,porogHpSetting,\u041f\u043e\u0440\u043e\u0433 \u0445\u043f,NumberSetting
+BetterMinecraft,T_2506_i,intensivnostSetting,\u0418\u043d\u0442\u0435\u043d\u0441\u0438\u0432\u043d\u043e\u0441\u0442\u044c,NumberSetting
+BetterMinecraft,q_4610_l,animaciiOptions,\u0410\u043d\u0438\u043c\u0430\u0446\u0438\u0438,MultiBooleanSetting
+BetterMinecraft,z_4693_k,animaciyaChankovMode,\u0410\u043d\u0438\u043c\u0430\u0446\u0438\u044f \u0447\u0430\u043d\u043a\u043e\u0432,ModeSetting
+BetterMinecraft,g_221_o,skorostSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+BetterMinecraft,e_2887_G,podmenyatRotaciyuEnabled,\u041f\u043e\u0434\u043c\u0435\u043d\u044f\u0442\u044c \u0440\u043e\u0442\u0430\u0446\u0438\u044e,BooleanSetting
+BetterMinecraft,B_1668_F,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+BetterMinecraft,g_164_R,skorostSetting2,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+BetterMinecraft,X_933_l,dlitelnost360Setting,\u0414\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c 360,NumberSetting
+BetterMinecraft,Z_976_R,amplitudaSetting,\u0410\u043c\u043f\u043b\u0438\u0442\u0443\u0434\u0430,NumberSetting
+BetterMinecraft,H_1990_U,feykPitchEnabled,\u0424\u0435\u0439\u043a Pitch,BooleanSetting
+BetterMinecraft,N_2525_X,pitchZnachenieSetting,Pitch \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435,NumberSetting
+BetterMinecraft,c_4037_x,tolkoVF5Enabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0432 F5,BooleanSetting
+Blink,v_4262_N,otpravlyatPaketyNaUdarEnabled,\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0442\u044c \u043f\u0430\u043a\u0435\u0442\u044b \u043d\u0430 \u0443\u0434\u0430\u0440,BooleanSetting
+Blink,w_1484_f,otobrazhatPoziciyuEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u043f\u043e\u0437\u0438\u0446\u0438\u044e,BooleanSetting
+Blink,s_956_w,avtomaticheskiOtpravlyatEnabled,\u0410\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0442\u044c,BooleanSetting
+Blink,u_2550_I,kolVoTikovMezhduOtpravkamiSetting,\u041a\u043e\u043b-\u0432\u043e \u0442\u0438\u043a\u043e\u0432 \u043c\u0435\u0436\u0434\u0443 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0430\u043c\u0438,NumberSetting
+BlockOverlay,w_1484_f,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+BlockOverlay,t_148_a,cvetaMode,\u0426\u0432\u0435\u0442\u0430,ModeSetting
+BlockOverlay,s_956_w,animaciyaPerehodaEnabled,\u0410\u043d\u0438\u043c\u0430\u0446\u0438\u044f \u043f\u0435\u0440\u0435\u0445\u043e\u0434\u0430,BooleanSetting
+BoatNoClip,v_4262_N,skorostVverhSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0432\u0432\u0435\u0440\u0445,NumberSetting
+BoatNoClip,w_1484_f,skorostVnizSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0432\u043d\u0438\u0437,NumberSetting
+BoatNoClip,t_148_a,skorostVStoronySetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0432 \u0441\u0442\u043e\u0440\u043e\u043d\u044b,NumberSetting
+BotAutoCollector,v_4262_N,collectOptions,Collect,MultiBooleanSetting
+Bots,v_4262_N,otobrazhatOptions,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c,MultiBooleanSetting
+Bots,w_1484_f,pozvolyatBotamDvigatsyaEnabled,\u041f\u043e\u0437\u0432\u043e\u043b\u044f\u0442\u044c \u0431\u043e\u0442\u0430\u043c \u0434\u0432\u0438\u0433\u0430\u0442\u044c\u0441\u044f,BooleanSetting
+Bots,s_956_w,zaderzhkaSekSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0441\u0435\u043a,NumberSetting
+Bots,u_2550_I,spuferResurspakaEnabled,\u0421\u043f\u0443\u0444\u0435\u0440 \u0440\u0435\u0441\u0443\u0440\u0441\u043f\u0430\u043a\u0430,BooleanSetting
+Bots,P_4830_p,zakryvatMenyuRwEnabled,\u0417\u0430\u043a\u0440\u044b\u0432\u0430\u0442\u044c \u043c\u0435\u043d\u044e RW,BooleanSetting
+Bots,h_1847_R,pereklyuchatEkranEnabled,\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0430\u0442\u044c \u044d\u043a\u0440\u0430\u043d,BooleanSetting
+CavityFinder,w_1484_f,radiusSetting,\u0420\u0430\u0434\u0438\u0443\u0441,NumberSetting
+CavityFinder,t_148_a,minBlokovSetting,\u041c\u0438\u043d. \u0431\u043b\u043e\u043a\u043e\u0432,NumberSetting
+CavityFinder,s_956_w,maksBlokovSetting,\u041c\u0430\u043a\u0441. \u0431\u043b\u043e\u043a\u043e\u0432,NumberSetting
+CavityFinder,u_2550_I,minVysotaSetting,\u041c\u0438\u043d. \u0432\u044b\u0441\u043e\u0442\u0430,NumberSetting
+CavityFinder,M_588_G,minShirinaSetting,\u041c\u0438\u043d. \u0448\u0438\u0440\u0438\u043d\u0430,NumberSetting
+Chams,P_4830_p,otobrazhatOptions,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c,MultiBooleanSetting
+Chams,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+Chams,w_1484_f,otrisovkaMode,\u041e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0430,ModeSetting
+Chams,h_1847_R,shaderMode,Shader,ModeSetting
+Chams,Q_4569_t,toonStepsSetting,Toon Steps,NumberSetting
+Chams,M_182_A,toonShadowSetting,Toon Shadow,NumberSetting
+Chams,multiplayerClientSuggestionProvider,inkWidthSetting,Ink Width,NumberSetting
+Chams,t_148_a,cvetMode,\u0426\u0432\u0435\u0442,ModeSetting
+Chams,w_1457_N,tolschinaLiniySetting,\u0422\u043e\u043b\u0449\u0438\u043d\u0430 \u043b\u0438\u043d\u0438\u0439,NumberSetting
+Chams,Y_601_j,svechenieEnabled,\u0421\u0432\u0435\u0447\u0435\u043d\u0438\u0435,BooleanSetting
+Chams,Y_259_p,silaSvecheniyaSetting,\u0421\u0438\u043b\u0430 \u0441\u0432\u0435\u0447\u0435\u043d\u0438\u044f,NumberSetting
+Chams,Q_2552_b,sloiSvecheniyaSetting,\u0421\u043b\u043e\u0438 \u0441\u0432\u0435\u0447\u0435\u043d\u0438\u044f,NumberSetting
+Chams,C_2741_M,pulsaciyaEnabled,\u041f\u0443\u043b\u044c\u0441\u0430\u0446\u0438\u044f,BooleanSetting
+Chams,k_2293_S,skorostPulsaciiSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u043f\u0443\u043b\u044c\u0441\u0430\u0446\u0438\u0438,NumberSetting
+Chams,q_2307_F,effektPriUroneEnabled,\u042d\u0444\u0444\u0435\u043a\u0442 \u043f\u0440\u0438 \u0443\u0440\u043e\u043d\u0435,BooleanSetting
+Chams,t_4043_B,svoyCvetDlyaDruzeyEnabled,\u0421\u0432\u043e\u0439 \u0446\u0432\u0435\u0442 \u0434\u043b\u044f \u0434\u0440\u0443\u0437\u0435\u0439,BooleanSetting
+Chams,n_3318_d,skrytOriginalEnabled,\u0421\u043a\u0440\u044b\u0442\u044c \u043e\u0440\u0438\u0433\u0438\u043d\u0430\u043b,BooleanSetting
+Chams,d_2427_y,skrytIgrokovEnabled,\u0421\u043a\u0440\u044b\u0442\u044c \u0438\u0433\u0440\u043e\u043a\u043e\u0432,BooleanSetting
+Chams,z_1737_N,skrytSebyaEnabled,\u0421\u043a\u0440\u044b\u0442\u044c \u0441\u0435\u0431\u044f,BooleanSetting
+ChatBubbles,v_4262_N,vremyaPokazaSetting,\u0412\u0440\u0435\u043c\u044f \u043f\u043e\u043a\u0430\u0437\u0430,NumberSetting
+ChatBubbles,w_1484_f,peredGlazamiEnabled,\u041f\u0435\u0440\u0435\u0434 \u0433\u043b\u0430\u0437\u0430\u043c\u0438,BooleanSetting
+ChatBubbles,t_148_a,vysotaSetting,\u0412\u044b\u0441\u043e\u0442\u0430,NumberSetting
+ChatBubbles,s_956_w,distanciyaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+ChatBubbles,u_2550_I,masshtabSetting,\u041c\u0430\u0441\u0448\u0442\u0430\u0431,NumberSetting
+ChatBubbles,M_588_G,fonEnabled,\u0424\u043e\u043d,BooleanSetting
+ChatBubbles,P_4830_p,tolkoSvoeEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0441\u0432\u043e\u0451,BooleanSetting
+ChestStealer,v_4262_N,zaderzhkaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430,NumberSetting
+ChestStealer,w_1484_f,randomizaciyaEnabled,\u0420\u0430\u043d\u0434\u043e\u043c\u0438\u0437\u0430\u0446\u0438\u044f,BooleanSetting
+ClickFriend,v_4262_N,knopkaVzaimodeystviyaKeyBind,\u041a\u043d\u043e\u043f\u043a\u0430 \u0432\u0437\u0430\u0438\u043c\u043e\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f,KeyBindSetting
+ClickPearl,v_4262_N,knopkaBrosaniyaKeyBind,\u041a\u043d\u043e\u043f\u043a\u0430 \u0431\u0440\u043e\u0441\u0430\u043d\u0438\u044f,KeyBindSetting
+ClickPearl,w_1484_f,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+ClientSpoof,v_4262_N,klientMode,\u041a\u043b\u0438\u0435\u043d\u0442,ModeSetting
+Cosmetics,t_148_a,razdelOptions,\u0420\u0430\u0437\u0434\u0435\u043b,MultiBooleanSetting
+Cosmetics,s_956_w,spinaMode,\u0421\u043f\u0438\u043d\u0430,ModeSetting
+Cosmetics,u_2550_I,golovaMode,\u0413\u043e\u043b\u043e\u0432\u0430,ModeSetting
+Cosmetics,M_588_G,razmerGolovaSetting,\u0420\u0430\u0437\u043c\u0435\u0440 (\u0433\u043e\u043b\u043e\u0432\u0430),NumberSetting
+Cosmetics,P_4830_p,obuvMode,\u041e\u0431\u0443\u0432\u044c,ModeSetting
+Cosmetics,h_1847_R,razmerNogiSetting,\u0420\u0430\u0437\u043c\u0435\u0440 (\u043d\u043e\u0433\u0438),NumberSetting
+Cosmetics,Q_4569_t,pokachivanieNogiEnabled,\u041f\u043e\u043a\u0430\u0447\u0438\u0432\u0430\u043d\u0438\u0435 (\u043d\u043e\u0433\u0438),BooleanSetting
+Cosmetics,M_182_A,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+Cosmetics,t_1786_h,otrisovkaKrylyaMode,\u041e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0430 (\u043a\u0440\u044b\u043b\u044c\u044f),ModeSetting
+Cosmetics,multiplayerClientSuggestionProvider,otrisovkaKatanaMode,\u041e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0430 (\u043a\u0430\u0442\u0430\u043d\u0430),ModeSetting
+Cosmetics,w_1457_N,sheyderMode,\u0428\u0435\u0439\u0434\u0435\u0440,ModeSetting
+Cosmetics,Y_601_j,razmerSetting,\u0420\u0430\u0437\u043c\u0435\u0440,NumberSetting
+Cosmetics,Y_259_p,cvetMode,\u0426\u0432\u0435\u0442,ModeSetting
+Cosmetics,C_2741_M,naDruzyahEnabled,\u041d\u0430 \u0434\u0440\u0443\u0437\u044c\u044f\u0445,BooleanSetting
+Cosmetics,k_2293_S,tolkoOt3GoLicaEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u043e\u0442 3-\u0433\u043e \u043b\u0438\u0446\u0430,BooleanSetting
+Cosmetics,q_2307_F,poverhChamsovF5SzadiEnabled,\u041f\u043e\u0432\u0435\u0440\u0445 \u0447\u0430\u043c\u0441\u043e\u0432 (F5 \u0441\u0437\u0430\u0434\u0438),BooleanSetting
+Cosmetics,Z_875_P,skrytPlaschEnabled,\u0421\u043a\u0440\u044b\u0442\u044c \u043f\u043b\u0430\u0449,BooleanSetting
+Cosmetics,t_4043_B,svechenieSetting,\u0421\u0432\u0435\u0447\u0435\u043d\u0438\u0435,NumberSetting
+Crosshair,v_4262_N,zazorSetting,\u0417\u0430\u0437\u043e\u0440,NumberSetting
+Crosshair,w_1484_f,dlinaSetting,\u0414\u043b\u0438\u043d\u0430,NumberSetting
+Crosshair,t_148_a,tolschinaSetting,\u0422\u043e\u043b\u0449\u0438\u043d\u0430,NumberSetting
+Crosshair,s_956_w,menyatCvetPriNavedeniiEnabled,\u041c\u0435\u043d\u044f\u0442\u044c \u0446\u0432\u0435\u0442 \u043f\u0440\u0438 \u043d\u0430\u0432\u0435\u0434\u0435\u043d\u0438\u0438,BooleanSetting
+Crosshair,u_2550_I,dinamicheskiyRazryvEnabled,\u0414\u0438\u043d\u0430\u043c\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u0440\u0430\u0437\u0440\u044b\u0432,BooleanSetting
+Crosshair,M_588_G,obvodkaEnabled,\u041e\u0431\u0432\u043e\u0434\u043a\u0430,BooleanSetting
+Crosshair,P_4830_p,tochkaVCentreEnabled,\u0422\u043e\u0447\u043a\u0430 \u0432 \u0446\u0435\u043d\u0442\u0440\u0435,BooleanSetting
+CrystalESP,M_588_G,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+CrystalESP,P_4830_p,svechenieEnabled,\u0421\u0432\u0435\u0447\u0435\u043d\u0438\u0435,BooleanSetting
+CrystalESP,Q_4569_t,radiusSvecheniyaSetting,\u0420\u0430\u0434\u0438\u0443\u0441 \u0441\u0432\u0435\u0447\u0435\u043d\u0438\u044f,NumberSetting
+CrystalESP,M_182_A,obvodkaEnabled,\u041e\u0431\u0432\u043e\u0434\u043a\u0430,BooleanSetting
+CrystalESP,t_1786_h,_3dBoksEnabled,3D \u0411\u043e\u043a\u0441,BooleanSetting
+CrystalESP,w_1457_N,razmerBoksaSetting,\u0420\u0430\u0437\u043c\u0435\u0440 \u0431\u043e\u043a\u0441\u0430,NumberSetting
+CrystalESP,Y_601_j,zalivkaEnabled,\u0417\u0430\u043b\u0438\u0432\u043a\u0430,BooleanSetting
+CrystalESP,Y_259_p,okrashivanieEnabled,\u041e\u043a\u0440\u0430\u0448\u0438\u0432\u0430\u043d\u0438\u0435,BooleanSetting
+DistantAlpha,v_4262_N,minalphaSetting,MinAlpha,NumberSetting
+DistantAlpha,w_1484_f,startdistanceSetting,StartDistance,NumberSetting
+DistantAlpha,t_148_a,killdistanceSetting,KillDistance,NumberSetting
+EcSaver,v_4262_N,otkrytEcKeyBind,\u041e\u0442\u043a\u0440\u044b\u0442\u044c EC,KeyBindSetting
+ElytraHelper,v_4262_N,knopkaSvapaKeyBind,\u041a\u043d\u043e\u043f\u043a\u0430 \u0441\u0432\u0430\u043f\u0430,KeyBindSetting
+ElytraHelper,w_1484_f,knopkaFeyeraKeyBind,\u041a\u043d\u043e\u043f\u043a\u0430 \u0444\u0435\u0439\u0435\u0440\u0430,KeyBindSetting
+ElytraHelper,t_148_a,feyeverkiTolkoSHotbaraEnabled,\u0424\u0435\u0439\u0435\u0432\u0435\u0440\u043a\u0438 \u0442\u043e\u043b\u044c\u043a\u043e \u0441 \u0445\u043e\u0442\u0431\u0430\u0440\u0430,BooleanSetting
+ElytraHelper,s_956_w,slotHotbara19Setting,\u0421\u043b\u043e\u0442 \u0445\u043e\u0442\u0431\u0430\u0440\u0430 (1-9),NumberSetting
+ElytraHelper,u_2550_I,obhodFeyeraHwEnabled,\u041e\u0431\u0445\u043e\u0434 \u0444\u0435\u0439\u0435\u0440\u0430 HW,BooleanSetting
+ElytraHelper,M_588_G,zaderzhkaSvapaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0441\u0432\u0430\u043f\u0430,NumberSetting
+ElytraHelper,P_4830_p,snimatElitryPriPrizemleniiEnabled,\u0421\u043d\u0438\u043c\u0430\u0442\u044c \u044d\u043b\u0438\u0442\u0440\u044b \u043f\u0440\u0438 \u043f\u0440\u0438\u0437\u0435\u043c\u043b\u0435\u043d\u0438\u0438,BooleanSetting
+ElytraHelper,h_1847_R,avtomaticheskiVzletatEnabled,\u0410\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438 \u0432\u0437\u043b\u0435\u0442\u0430\u0442\u044c,BooleanSetting
+ElytraHelper,Q_4569_t,feyeverkPriVzleteEnabled,\u0424\u0435\u0439\u0435\u0432\u0435\u0440\u043a \u043f\u0440\u0438 \u0432\u0437\u043b\u0435\u0442\u0435,BooleanSetting
+ElytraHelper,M_182_A,vklyuchatUvedomleniyaEnabled,\u0412\u043a\u043b\u044e\u0447\u0430\u0442\u044c \u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f,BooleanSetting
+ElytraJump,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+ElytraJump,w_1484_f,svapatElitruEnabled,\u0421\u0432\u0430\u043f\u0430\u0442\u044c \u044d\u043b\u0438\u0442\u0440\u0443,BooleanSetting
+ElytraMotion,v_4262_N,distanciyaRabotySetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u0440\u0430\u0431\u043e\u0442\u044b,NumberSetting
+ElytraMotion,t_148_a,avtoFeyerverkEnabled,\u0410\u0432\u0442\u043e-\u0444\u0435\u0439\u0435\u0440\u0432\u0435\u0440\u043a,BooleanSetting
+ElytraResolver,v_4262_N,distanciyaAtakiSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u0430\u0442\u0430\u043a\u0438,NumberSetting
+ElytraResolver,w_1484_f,distanciyaOtletaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043e\u0442\u043b\u0451\u0442\u0430,NumberSetting
+ElytraResolver,t_148_a,ugolOtletaSetting,\u0423\u0433\u043e\u043b \u043e\u0442\u043b\u0451\u0442\u0430,NumberSetting
+ElytraResolver,s_956_w,rezhimOtletaMode,\u0420\u0435\u0436\u0438\u043c \u043e\u0442\u043b\u0451\u0442\u0430,ModeSetting
+ElytraResolver,u_2550_I,cheredovatStoronyEnabled,\u0427\u0435\u0440\u0435\u0434\u043e\u0432\u0430\u0442\u044c \u0441\u0442\u043e\u0440\u043e\u043d\u044b,BooleanSetting
+Emotions,v_4262_N,knopkaKolesaKeyBind,\u041a\u043d\u043e\u043f\u043a\u0430 \u043a\u043e\u043b\u0435\u0441\u0430,KeyBindSetting
+Emotions,w_1484_f,naDruzeyEnabled,\u041d\u0430 \u0434\u0440\u0443\u0437\u0435\u0439,BooleanSetting
+Emotions,t_148_a,naSebyaEnabled,\u041d\u0430 \u0441\u0435\u0431\u044f,BooleanSetting
+Emotions,s_956_w,naVsehEnabled,\u041d\u0430 \u0432\u0441\u0435\u0445,BooleanSetting
+EntityESP,v_4262_N,otobrazhatOptions,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c,MultiBooleanSetting
+EntityESP,M_588_G,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+EntityESP,P_4830_p,zalivkaEnabled,\u0417\u0430\u043b\u0438\u0432\u043a\u0430,BooleanSetting
+EntityESP,h_1847_R,povorachivatZaSuschnostyuEnabled,\u041f\u043e\u0432\u043e\u0440\u0430\u0447\u0438\u0432\u0430\u0442\u044c \u0437\u0430 \u0441\u0443\u0449\u043d\u043e\u0441\u0442\u044c\u044e,BooleanSetting
+EntityESP,Q_4569_t,stilBoksaMode,\u0421\u0442\u0438\u043b\u044c \u0431\u043e\u043a\u0441\u0430,ModeSetting
+EntityESP,M_182_A,rezhimCvetaMode,\u0420\u0435\u0436\u0438\u043c \u0446\u0432\u0435\u0442\u0430,ModeSetting
+EntityESP,w_1457_N,barZdorovyaMode,\u0411\u0430\u0440 \u0437\u0434\u043e\u0440\u043e\u0432\u044c\u044f,ModeSetting
+EntityESP,Q_2552_b,svechenieEnabled,\u0421\u0432\u0435\u0447\u0435\u043d\u0438\u0435,BooleanSetting
+EntityESP,k_2293_S,radiusSvecheniyaSetting,\u0420\u0430\u0434\u0438\u0443\u0441 \u0441\u0432\u0435\u0447\u0435\u043d\u0438\u044f,NumberSetting
+EntityESP,q_2307_F,obvodkaEnabled,\u041e\u0431\u0432\u043e\u0434\u043a\u0430,BooleanSetting
+ExtendedTab,v_4262_N,maksimalnoeKolVoIgrokovSetting,\u041c\u0430\u043a\u0441\u0438\u043c\u0430\u043b\u044c\u043d\u043e\u0435 \u043a\u043e\u043b-\u0432\u043e \u0438\u0433\u0440\u043e\u043a\u043e\u0432,NumberSetting
+ExtendedTab,w_1484_f,maksimalnoeKolVoKolonokSetting,\u041c\u0430\u043a\u0441\u0438\u043c\u0430\u043b\u044c\u043d\u043e\u0435 \u043a\u043e\u043b-\u0432\u043e \u043a\u043e\u043b\u043e\u043d\u043e\u043a,NumberSetting
+FastBreak,v_4262_N,uskorenieSetting,\u0423\u0441\u043a\u043e\u0440\u0435\u043d\u0438\u0435,NumberSetting
+FastPlace,v_4262_N,tolkoBezPvpRezhimaEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0431\u0435\u0437 \u043f\u0432\u043f \u0440\u0435\u0436\u0438\u043c\u0430,BooleanSetting
+FastPlace,w_1484_f,zaderzhkaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430,NumberSetting
+FastPlace,t_148_a,puzyrkovOpytaEnabled,\u041f\u0443\u0437\u044b\u0440\u044c\u043a\u043e\u0432 \u043e\u043f\u044b\u0442\u0430,BooleanSetting
+FastPlace,s_956_w,blokovEnabled,\u0411\u043b\u043e\u043a\u043e\u0432,BooleanSetting
+FastPlace,u_2550_I,yaicEnabled,\u042f\u0438\u0446,BooleanSetting
+FastPlace,M_588_G,snezhkovEnabled,\u0421\u043d\u0435\u0436\u043a\u043e\u0432,BooleanSetting
+FastPlace,P_4830_p,enderPerlovEnabled,\u042d\u043d\u0434\u0435\u0440-\u043f\u0435\u0440\u043b\u043e\u0432,BooleanSetting
+FastPlace,h_1847_R,vzryvnyhZeliyEnabled,\u0412\u0437\u0440\u044b\u0432\u043d\u044b\u0445 \u0437\u0435\u043b\u0438\u0439,BooleanSetting
+FastPlace,Q_4569_t,osedayuschihZeliyEnabled,\u041e\u0441\u0435\u0434\u0430\u044e\u0449\u0438\u0445 \u0437\u0435\u043b\u0438\u0439,BooleanSetting
+FireworkESP,v_4262_N,otobrazhatVremyaEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0432\u0440\u0435\u043c\u044f,BooleanSetting
+FireworkESP,w_1484_f,blyurFonEnabled,\u0411\u043b\u044e\u0440 \u0444\u043e\u043d,BooleanSetting
+FlagDetector,w_1484_f,logVChatEnabled,\u041b\u043e\u0433 \u0432 \u0447\u0430\u0442,BooleanSetting
+FlagDetector,t_148_a,otkatDlyaOptions,\u041e\u0442\u043a\u0430\u0442 \u0434\u043b\u044f,MultiBooleanSetting
+FlagDetector,s_956_w,velositiSeyfOptions,\u0412\u0435\u043b\u043e\u0441\u0438\u0442\u0438 \u0441\u0435\u0439\u0444,MultiBooleanSetting
+Flight,v_4262_N,tipMode,\u0422\u0438\u043f,ModeSetting
+Flight,w_1484_f,skorostSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+Flight,t_148_a,skorostPoYSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u043f\u043e Y,NumberSetting
+Flight,s_956_w,letetVperedEnabled,\u041b\u0435\u0442\u0435\u0442\u044c \u0432\u043f\u0435\u0440\u0435\u0434,BooleanSetting
+FreeCam,w_1484_f,skorostPoXzSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u043f\u043e XZ,NumberSetting
+FreeCam,t_148_a,skorostPoYSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u043f\u043e Y,NumberSetting
+FreeCam,s_956_w,uvelichitYarkostEnabled,\u0423\u0432\u0435\u043b\u0438\u0447\u0438\u0442\u044c \u044f\u0440\u043a\u043e\u0441\u0442\u044c,BooleanSetting
+FreeCam,u_2550_I,podmenyatKlikiPoBlokamEnabled,\u041f\u043e\u0434\u043c\u0435\u043d\u044f\u0442\u044c \u043a\u043b\u0438\u043a\u0438 \u043f\u043e \u0431\u043b\u043e\u043a\u0430\u043c,BooleanSetting
+FreeCam,M_588_G,otobrazhatRaznicuPoziciiEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0440\u0430\u0437\u043d\u0438\u0446\u0443 \u043f\u043e\u0437\u0438\u0446\u0438\u0438,BooleanSetting
+FreeCam,P_4830_p,otklyuchatPriUroneEnabled,\u041e\u0442\u043a\u043b\u044e\u0447\u0430\u0442\u044c \u043f\u0440\u0438 \u0443\u0440\u043e\u043d\u0435,BooleanSetting
+FullBright,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+FullBright,w_1484_f,kolichestvoGammySetting,\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e \u0413\u0430\u043c\u043c\u044b,NumberSetting
+FullBright,t_148_a,urovenOsvescheniyaSetting,\u0423\u0440\u043e\u0432\u0435\u043d\u044c \u043e\u0441\u0432\u0435\u0449\u0435\u043d\u0438\u044f,NumberSetting
+FullBright,s_956_w,urovenTemnotySetting,\u0423\u0440\u043e\u0432\u0435\u043d\u044c \u0442\u0435\u043c\u043d\u043e\u0442\u044b,NumberSetting
+FullBright,u_2550_I,rabotatTolkoNochyuEnabled,\u0420\u0430\u0431\u043e\u0442\u0430\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u043d\u043e\u0447\u044c\u044e,BooleanSetting
+FullBright,M_588_G,rabotatTolkoVPescherahEnabled,\u0420\u0430\u0431\u043e\u0442\u0430\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u0432 \u043f\u0435\u0449\u0435\u0440\u0430\u0445,BooleanSetting
+Glint,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+Glint,t_148_a,skorostRadugiSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0440\u0430\u0434\u0443\u0433\u0438,NumberSetting
+Globals,w_1484_f,podsvechivatSebyaEnabled,\u041f\u043e\u0434\u0441\u0432\u0435\u0447\u0438\u0432\u0430\u0442\u044c \u0441\u0435\u0431\u044f,BooleanSetting
+Globals,t_148_a,koordinatyGlobalovEnabled,\u041a\u043e\u043e\u0440\u0434\u0438\u043d\u0430\u0442\u044b \u0433\u043b\u043e\u0431\u0430\u043b\u043e\u0432,BooleanSetting
+GuiMove,v_4262_N,obhodMode,\u041e\u0431\u0445\u043e\u0434,ModeSetting
+HighJump,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+HighJump,w_1484_f,vysotaPryzhkaSetting,\u0412\u044b\u0441\u043e\u0442\u0430 \u043f\u0440\u044b\u0436\u043a\u0430,NumberSetting
+HitEffect,v_4262_N,modeMode,Mode,ModeSetting
+HitEffect,w_1484_f,colorMode,Color,ModeSetting
+HitEffect,u_2550_I,sizeSetting,Size,NumberSetting
+HitEffect,M_588_G,durationMsSetting,"Duration, ms",NumberSetting
+HitEffect,P_4830_p,critEffectEnabled,Crit Effect,BooleanSetting
+HitEffect,h_1847_R,soundEnabled,Sound,BooleanSetting
+HitEffect,Q_4569_t,volumeSetting,Volume,NumberSetting
+HitEffect,M_182_A,floatingDamageEnabled,Floating Damage,BooleanSetting
+HoleFill,v_4262_N,avtoSvitchMode,\u0410\u0432\u0442\u043e-\u0441\u0432\u0438\u0442\u0447,ModeSetting
+HoleFill,w_1484_f,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+HoleFill,t_148_a,pautinaEnabled,\u041f\u0430\u0443\u0442\u0438\u043d\u0430,BooleanSetting
+HoleFill,s_956_w,asinhronnoEnabled,\u0410\u0441\u0438\u043d\u0445\u0440\u043e\u043d\u043d\u043e,BooleanSetting
+HoleFill,u_2550_I,blokovTikSetting,\u0411\u043b\u043e\u043a\u043e\u0432/\u0442\u0438\u043a,NumberSetting
+HoleFill,M_588_G,zaderzhkaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430,NumberSetting
+HoleFill,P_4830_p,distanciyaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+HoleFill,h_1847_R,distanciyaVragaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u0432\u0440\u0430\u0433\u0430,NumberSetting
+HoleFill,Q_4569_t,smartDistanciyaSetting,Smart \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+HoleFill,M_182_A,bezopasnostEnabled,\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u044c,BooleanSetting
+HoleFill,t_1786_h,bezopasnayaDistanciyaSetting,\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u0430\u044f \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+HoleFill,multiplayerClientSuggestionProvider,rotationEnabled,\u0420\u043e\u0442\u0430\u0446\u0438\u044f,BooleanSetting
+HoleFill,w_1457_N,strogoeNapravlenieEnabled,\u0421\u0442\u0440\u043e\u0433\u043e\u0435 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435,BooleanSetting
+HoleFill,Y_601_j,lomatKristallyEnabled,\u041b\u043e\u043c\u0430\u0442\u044c \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u044b,BooleanSetting
+HoleFill,Y_259_p,dvoynyeDyryEnabled,\u0414\u0432\u043e\u0439\u043d\u044b\u0435 \u0434\u044b\u0440\u044b,BooleanSetting
+HoleFill,Q_2552_b,proverkaDyryEnabled,\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0434\u044b\u0440\u044b,BooleanSetting
+HoleFill,C_2741_M,priEdeEnabled,\u041f\u0440\u0438 \u0435\u0434\u0435,BooleanSetting
+HoleFill,k_2293_S,avtoVyklEnabled,\u0410\u0432\u0442\u043e-\u0432\u044b\u043a\u043b.,BooleanSetting
+HoleFill,q_2307_F,vyklBezBlokovEnabled,\u0412\u044b\u043a\u043b. \u0431\u0435\u0437 \u0431\u043b\u043e\u043a\u043e\u0432,BooleanSetting
+HoleFill,Z_875_P,otrisovkaEnabled,\u041e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0430,BooleanSetting
+Interface,t_148_a,oknaOptions,\u041e\u043a\u043d\u0430,MultiBooleanSetting
+InvManager,v_4262_N,zaderzhkaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430,NumberSetting
+InvManager,w_1484_f,vybrasyvatMusorOptions,\u0412\u044b\u0431\u0440\u0430\u0441\u044b\u0432\u0430\u0442\u044c \u043c\u0443\u0441\u043e\u0440,MultiBooleanSetting
+InvManager,t_148_a,chistitTolkoHotbarEnabled,\u0427\u0438\u0441\u0442\u0438\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u0445\u043e\u0442\u0431\u0430\u0440,BooleanSetting
+ItemHelper,w_1484_f,podsvechivatZeleIsceleniyaEnabled,\u041f\u043e\u0434\u0441\u0432\u0435\u0447\u0438\u0432\u0430\u0442\u044c \u0437\u0435\u043b\u044c\u0435 \u0438\u0441\u0446\u0435\u043b\u0435\u043d\u0438\u044f,BooleanSetting
+ItemHelper,s_956_w,podsvechivatCharkiEnabled,\u041f\u043e\u0434\u0441\u0432\u0435\u0447\u0438\u0432\u0430\u0442\u044c \u0447\u0430\u0440\u043a\u0438,BooleanSetting
+ItemHelper,M_588_G,podsvechivatZolotyeYablokiEnabled,\u041f\u043e\u0434\u0441\u0432\u0435\u0447\u0438\u0432\u0430\u0442\u044c \u0437\u043e\u043b\u043e\u0442\u044b\u0435 \u044f\u0431\u043b\u043e\u043a\u0438,BooleanSetting
+ItemHelper,Q_4569_t,podsvechivatTotemyEnabled,\u041f\u043e\u0434\u0441\u0432\u0435\u0447\u0438\u0432\u0430\u0442\u044c \u0442\u043e\u0442\u0435\u043c\u044b,BooleanSetting
+ItemHelper,t_1786_h,podsvechivatXpButylkiEnabled,\u041f\u043e\u0434\u0441\u0432\u0435\u0447\u0438\u0432\u0430\u0442\u044c XP \u0431\u0443\u0442\u044b\u043b\u043a\u0438,BooleanSetting
+ItemHelper,Y_601_j,umenshatZaderzhkuNaPredmetyEnabled,\u0423\u043c\u0435\u043d\u044c\u0448\u0430\u0442\u044c \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0443 \u043d\u0430 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u044b,BooleanSetting
+ItemHelper,Y_259_p,podsvechivatTolkoChtoPodnyatyePredmetyEnabled,\u041f\u043e\u0434\u0441\u0432\u0435\u0447\u0438\u0432\u0430\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u0447\u0442\u043e \u043f\u043e\u0434\u043d\u044f\u0442\u044b\u0435 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u044b,BooleanSetting
+ItemHelper,Q_2552_b,otobrazhatNbtPredmetovEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c nbt \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u043e\u0432,BooleanSetting
+ItemPhysics,v_4262_N,umenshitPredmetyEnabled,\u0423\u043c\u0435\u043d\u044c\u0448\u0438\u0442\u044c \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u044b,BooleanSetting
+ItemRadius,v_4262_N,predmetyOptions,\u041f\u0440\u0435\u0434\u043c\u0435\u0442\u044b,MultiBooleanSetting
+ItemRelease,v_4262_N,predmetyOptions,\u041f\u0440\u0435\u0434\u043c\u0435\u0442\u044b,MultiBooleanSetting
+ItemRelease,w_1484_f,silaVystrelaSetting,\u0421\u0438\u043b\u0430 \u0432\u044b\u0441\u0442\u0440\u0435\u043b\u0430,NumberSetting
+ItemRelease,t_148_a,zvukPriPopadaniiEnabled,\u0417\u0432\u0443\u043a \u043f\u0440\u0438 \u043f\u043e\u043f\u0430\u0434\u0430\u043d\u0438\u0438,BooleanSetting
+ItemRelease,s_956_w,knopkaBroskaTrezubcaKeyBind,\u041a\u043d\u043e\u043f\u043a\u0430 \u0431\u0440\u043e\u0441\u043a\u0430 \u0442\u0440\u0435\u0437\u0443\u0431\u0446\u0430,KeyBindSetting
+ItemRelease,u_2550_I,vremyaZaryadkiTrezubcaSetting,\u0412\u0440\u0435\u043c\u044f \u0437\u0430\u0440\u044f\u0434\u043a\u0438 \u0442\u0440\u0435\u0437\u0443\u0431\u0446\u0430,NumberSetting
+ItemRelease,M_588_G,aimAssistEnabled,\u0410\u0438\u043c-\u0430\u0441\u0441\u0438\u0441\u0442,BooleanSetting
+ItemRelease,P_4830_p,dalnostAimAssistaSetting,\u0414\u0430\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u0430\u0438\u043c-\u0430\u0441\u0441\u0438\u0441\u0442\u0430,NumberSetting
+ItemRelease,h_1847_R,radiusFovSetting,\u0420\u0430\u0434\u0438\u0443\u0441 FOV,NumberSetting
+ItemRelease,Q_4569_t,otrisovyvatFovEnabled,\u041e\u0442\u0440\u0438\u0441\u043e\u0432\u044b\u0432\u0430\u0442\u044c FOV,BooleanSetting
+ItemRelease,M_182_A,prediktCeliEnabled,\u041f\u0440\u0435\u0434\u0438\u043a\u0442 \u0446\u0435\u043b\u0438,BooleanSetting
+ItemRelease,t_1786_h,targetitBlizhayshuyuCelEnabled,\u0422\u0430\u0440\u0433\u0435\u0442\u0438\u0442\u044c \u0431\u043b\u0438\u0436\u0430\u0439\u0448\u0443\u044e \u0446\u0435\u043b\u044c,BooleanSetting
+ItemRelease,multiplayerClientSuggestionProvider,neStrelyatEsliTargetZaStenoyEnabled,\u041d\u0435 \u0441\u0442\u0440\u0435\u043b\u044f\u0442\u044c \u0435\u0441\u043b\u0438 \u0442\u0430\u0440\u0433\u0435\u0442 \u0437\u0430 \u0441\u0442\u0435\u043d\u043e\u0439,BooleanSetting
+ItemRelease,w_1457_N,celiAimAssistaOptions,\u0426\u0435\u043b\u0438 \u0430\u0438\u043c-\u0430\u0441\u0441\u0438\u0441\u0442\u0430,MultiBooleanSetting
+ItemsCooldown,v_4262_N,primenyatNaOptions,\u041f\u0440\u0438\u043c\u0435\u043d\u044f\u0442\u044c \u043d\u0430,MultiBooleanSetting
+ItemsCooldown,w_1484_f,zaderzhkaZolotogoYablokaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0437\u043e\u043b\u043e\u0442\u043e\u0433\u043e \u044f\u0431\u043b\u043e\u043a\u0430,NumberSetting
+ItemsCooldown,t_148_a,zaderzhkaZolotogoZacharovannogoYablokaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0437\u043e\u043b\u043e\u0442\u043e\u0433\u043e \u0437\u0430\u0447\u0430\u0440\u043e\u0432\u0430\u043d\u043d\u043e\u0433\u043e \u044f\u0431\u043b\u043e\u043a\u0430,NumberSetting
+ItemsCooldown,s_956_w,zaderzhkaEnderZhemchugaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u044d\u043d\u0434\u0435\u0440 \u0436\u0435\u043c\u0447\u0443\u0433\u0430,NumberSetting
+ItemsCooldown,u_2550_I,zaderzhkaHorusaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0445\u043e\u0440\u0443\u0441\u0430,NumberSetting
+ItemsCooldown,M_588_G,tolkoPriPvpEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u043f\u0440\u0438 \u043f\u0432\u043f,BooleanSetting
+ItemScroller,v_4262_N,zaderzhkaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430,NumberSetting
+Jesus,v_4262_N,modeMode,Mode,ModeSetting
+Jesus,w_1484_f,skorostSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+Jesus,t_148_a,bindBustaKeyBind,\u0411\u0438\u043d\u0434 \u0431\u0443\u0441\u0442\u0430,KeyBindSetting
+Jesus,s_956_w,vremyaBustaSekSetting,\u0412\u0440\u0435\u043c\u044f \u0431\u0443\u0441\u0442\u0430 (\u0441\u0435\u043a),NumberSetting
+Jesus,u_2550_I,kuldaunBustaSekSetting,\u041a\u0443\u043b\u0434\u0430\u0443\u043d \u0431\u0443\u0441\u0442\u0430 (\u0441\u0435\u043a),NumberSetting
+Jesus,M_588_G,skorostBustaSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0431\u0443\u0441\u0442\u0430,NumberSetting
+JumpCircle,v_4262_N,radiusSetting,\u0420\u0430\u0434\u0438\u0443\u0441,NumberSetting
+KBDisplacement,s_956_w,napravlenieMode,\u041d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435,ModeSetting
+KBDisplacement,u_2550_I,tolkoSKillauroyEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0441 \u043a\u0438\u043b\u043b\u0430\u0443\u0440\u043e\u0439,BooleanSetting
+KillEffect,M_588_G,particlesSetting,Particles,NumberSetting
+KillEffect,P_4830_p,particleSizeSetting,Particle size,NumberSetting
+KillEffect,h_1847_R,deathHoldSetting,Death hold,NumberSetting
+KillEffect,Q_4569_t,evaporationSetting,Evaporation,NumberSetting
+KillEffect,M_182_A,riseHeightSetting,Rise height,NumberSetting
+KillEffect,t_1786_h,chaosSetting,Chaos,NumberSetting
+KillEffect,multiplayerClientSuggestionProvider,throughWallsEnabled,Through walls,BooleanSetting
+KillEffect,w_1457_N,colorModeMode,Color mode,ModeSetting
+KillEffect,Y_601_j,secondColorEnabled,Second color,BooleanSetting
+LeaveTracker,v_4262_N,proveryatDistanciyuEnabled,\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u0442\u044c \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044e,BooleanSetting
+LockSlot,w_1484_f,tolkoPriPvpEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u043f\u0440\u0438 \u043f\u0432\u043f,BooleanSetting
+LockSlot,v_4262_N,vyberiteSlotyOptions,\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043b\u043e\u0442\u044b,MultiBooleanSetting
+LogoutSpots,v_4262_N,_3dBoksEnabled,3D \u0411\u043e\u043a\u0441,BooleanSetting
+LogoutSpots,w_1484_f,imyaIgrokaEnabled,\u0418\u043c\u044f \u0438\u0433\u0440\u043e\u043a\u0430,BooleanSetting
+LogoutSpots,t_148_a,koordinatyEnabled,\u041a\u043e\u043e\u0440\u0434\u0438\u043d\u0430\u0442\u044b,BooleanSetting
+LogoutSpots,s_956_w,vremyaVyhodaEnabled,\u0412\u0440\u0435\u043c\u044f \u0432\u044b\u0445\u043e\u0434\u0430,BooleanSetting
+LogoutSpots,u_2550_I,distanciyaEnabled,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,BooleanSetting
+LogoutSpots,P_4830_p,maksTochekSetting,\u041c\u0430\u043a\u0441. \u0442\u043e\u0447\u0435\u043a,NumberSetting
+LogoutSpots,h_1847_R,dalnostRenderaSetting,\u0414\u0430\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u0440\u0435\u043d\u0434\u0435\u0440\u0430,NumberSetting
+LogoutSpots,Q_4569_t,sohranyatVFaylEnabled,\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0442\u044c \u0432 \u0444\u0430\u0439\u043b,BooleanSetting
+LogoutSpots,M_182_A,uvedomlyatVChatEnabled,\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u044f\u0442\u044c \u0432 \u0447\u0430\u0442,BooleanSetting
+MoveHelper,v_4262_N,nezametnyePryzhkiNaStupenkahEnabled,\u041d\u0435\u0437\u0430\u043c\u0435\u0442\u043d\u044b\u0435 \u043f\u0440\u044b\u0436\u043a\u0438 \u043d\u0430 \u0441\u0442\u0443\u043f\u0435\u043d\u044c\u043a\u0430\u0445,BooleanSetting
+MoveHelper,w_1484_f,prygatNaKrayuBlokaEnabled,\u041f\u0440\u044b\u0433\u0430\u0442\u044c \u043d\u0430 \u043a\u0440\u0430\u044e \u0431\u043b\u043e\u043a\u0430,BooleanSetting
+MoveHelper,t_148_a,prisedatNaKrayuBlokaEnabled,\u041f\u0440\u0438\u0441\u0435\u0434\u0430\u0442\u044c \u043d\u0430 \u043a\u0440\u0430\u044e \u0431\u043b\u043e\u043a\u0430,BooleanSetting
+MoveHelper,s_956_w,avtoPrisedanieVNizkihProhodahEnabled,\u0410\u0432\u0442\u043e \u043f\u0440\u0438\u0441\u0435\u0434\u0430\u043d\u0438\u0435 \u0432 \u043d\u0438\u0437\u043a\u0438\u0445 \u043f\u0440\u043e\u0445\u043e\u0434\u0430\u0445,BooleanSetting
+MoveHelper,u_2550_I,uskorenieNaLduEnabled,\u0423\u0441\u043a\u043e\u0440\u0435\u043d\u0438\u0435 \u043d\u0430 \u043b\u044c\u0434\u0443,BooleanSetting
+MoveHelper,M_588_G,pryzhkiNaSlaymBlokahEnabled,\u041f\u0440\u044b\u0436\u043a\u0438 \u043d\u0430 \u0441\u043b\u0430\u0439\u043c \u0431\u043b\u043e\u043a\u0430\u0445,BooleanSetting
+NoFall,v_4262_N,modMode,\u041c\u043e\u0434,ModeSetting
+NoInteract,v_4262_N,neStavitSharSferuEnabled,"\u041d\u0435 \u0441\u0442\u0430\u0432\u0438\u0442\u044c \u0448\u0430\u0440,\u0441\u0444\u0435\u0440\u0443",BooleanSetting
+NoInteract,w_1484_f,vseBlokiEnabled,\u0412\u0441\u0435 \u0431\u043b\u043e\u043a\u0438,BooleanSetting
+NoInteract,t_148_a,obektyOptions,\u041e\u0431\u044c\u0435\u043a\u0442\u044b,MultiBooleanSetting
+NoPush,v_4262_N,tipOptions,\u0422\u0438\u043f,MultiBooleanSetting
+NoSlow,v_4262_N,modMode,\u041c\u043e\u0434,ModeSetting
+NoWeb,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+NoWeb,w_1484_f,lomatSkvozPautinuEnabled,\u041b\u043e\u043c\u0430\u0442\u044c \u0441\u043a\u0432\u043e\u0437\u044c \u043f\u0430\u0443\u0442\u0438\u043d\u0443,BooleanSetting
+Nuker,v_4262_N,distanciyaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+Nuker,w_1484_f,lomatVseBlokiEnabled,\u041b\u043e\u043c\u0430\u0442\u044c \u0432\u0441\u0435 \u0431\u043b\u043e\u043a\u0438,BooleanSetting
+ObjectInfo,v_4262_N,chasticyMode,\u0427\u0430\u0441\u0442\u0438\u0446\u044b,ModeSetting
+ObjectInfo,w_1484_f,pokazyvatChasticyEnabled,\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0442\u044c \u0447\u0430\u0441\u0442\u0438\u0446\u044b,BooleanSetting
+ObjectInfo,t_148_a,_3dKubStanaEnabled,3D \u041a\u0443\u0431 \u0441\u0442\u0430\u043d\u0430,BooleanSetting
+PacketCriticals,w_1484_f,modMode,\u041c\u043e\u0434,ModeSetting
+Particles,h_1847_R,dobavlyatPriOptions,\u0414\u043e\u0431\u0430\u0432\u043b\u044f\u0442\u044c \u043f\u0440\u0438,MultiBooleanSetting
+Particles,Q_4569_t,bezdeystvieMode,\u0411\u0435\u0437\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435,ModeSetting
+Particles,M_182_A,bezdeystvieAnimaciyaMode,\u0411\u0435\u0437\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u0430\u043d\u0438\u043c\u0430\u0446\u0438\u044f,ModeSetting
+Particles,t_1786_h,begMode,\u0411\u0435\u0433,ModeSetting
+Particles,multiplayerClientSuggestionProvider,kritMode,\u041a\u0440\u0438\u0442,ModeSetting
+Particles,w_1457_N,perlMode,\u041f\u0435\u0440\u043b,ModeSetting
+Particles,Y_601_j,trezubecMode,\u0422\u0440\u0435\u0437\u0443\u0431\u0435\u0446,ModeSetting
+Particles,Y_259_p,strelaMode,\u0421\u0442\u0440\u0435\u043b\u0430,ModeSetting
+Particles,Q_2552_b,totemMode,\u0422\u043e\u0442\u0435\u043c,ModeSetting
+Particles,C_2741_M,animaciyaMode,\u0410\u043d\u0438\u043c\u0430\u0446\u0438\u044f,ModeSetting
+Particles,k_2293_S,silaAnimaciiSetting,\u0421\u0438\u043b\u0430 \u0430\u043d\u0438\u043c\u0430\u0446\u0438\u0438,NumberSetting
+Particles,q_2307_F,skorostAnimaciiSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0430\u043d\u0438\u043c\u0430\u0446\u0438\u0438,NumberSetting
+Particles,Z_875_P,kastomXzSetting,\u041a\u0430\u0441\u0442\u043e\u043c XZ,NumberSetting
+Particles,t_4043_B,kastomYSetting,\u041a\u0430\u0441\u0442\u043e\u043c Y,NumberSetting
+Particles,x_607_J,kastomGravitaciyaSetting,\u041a\u0430\u0441\u0442\u043e\u043c \u0433\u0440\u0430\u0432\u0438\u0442\u0430\u0446\u0438\u044f,NumberSetting
+Particles,e_4240_b,kastomZatuhanieSetting,\u041a\u0430\u0441\u0442\u043e\u043c \u0437\u0430\u0442\u0443\u0445\u0430\u043d\u0438\u0435,NumberSetting
+Particles,n_3318_d,kastomSpavnSverhuEnabled,\u041a\u0430\u0441\u0442\u043e\u043c \u0441\u043f\u0430\u0432\u043d \u0441\u0432\u0435\u0440\u0445\u0443,BooleanSetting
+Particles,d_2427_y,kastomPadenieSetting,\u041a\u0430\u0441\u0442\u043e\u043c \u043f\u0430\u0434\u0435\u043d\u0438\u0435,NumberSetting
+Particles,z_1737_N,kastomVysotaSpavnaSetting,\u041a\u0430\u0441\u0442\u043e\u043c \u0432\u044b\u0441\u043e\u0442\u0430 \u0441\u043f\u0430\u0432\u043d\u0430,NumberSetting
+Particles,v_4276_D,glouEnabled,\u0413\u043b\u043e\u0443,BooleanSetting
+Particles,d_2461_k,sloevSvecheniyaSetting,\u0421\u043b\u043e\u0451\u0432 \u0441\u0432\u0435\u0447\u0435\u043d\u0438\u044f,NumberSetting
+Particles,G_624_v,pulsaciyaAlfyEnabled,\u041f\u0443\u043b\u044c\u0441\u0430\u0446\u0438\u044f \u0430\u043b\u044c\u0444\u044b,BooleanSetting
+Particles,T_2506_i,raduzhnyyEnabled,\u0420\u0430\u0434\u0443\u0436\u043d\u044b\u0439,BooleanSetting
+Particles,q_4610_l,skorostRadugiSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0440\u0430\u0434\u0443\u0433\u0438,NumberSetting
+Particles,z_4693_k,razbrosRadugiSetting,\u0420\u0430\u0437\u0431\u0440\u043e\u0441 \u0440\u0430\u0434\u0443\u0433\u0438,NumberSetting
+Particles,g_221_o,kolichestvoSetting,\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e,NumberSetting
+Particles,e_2887_G,izmenyatRazmerEnabled,\u0418\u0437\u043c\u0435\u043d\u044f\u0442\u044c \u0440\u0430\u0437\u043c\u0435\u0440,BooleanSetting
+Particles,B_1668_F,razmerSetting,\u0420\u0430\u0437\u043c\u0435\u0440,NumberSetting
+Party,v_4262_N,metkaPoVzglyaduKeyBind,\u041c\u0435\u0442\u043a\u0430 \u043f\u043e \u0432\u0437\u0433\u043b\u044f\u0434\u0443,KeyBindSetting
+PearlLogger,v_4262_N,reagirovatNaVasEnabled,\u0420\u0435\u0430\u0433\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043d\u0430 \u0432\u0430\u0441,BooleanSetting
+PearlLogger,w_1484_f,avtoGpsDoPerlaEnabled,\u0410\u0432\u0442\u043e GPS \u0434\u043e \u043f\u0451\u0440\u043b\u0430,BooleanSetting
+Phase,w_1484_f,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+Phase,t_148_a,kolVoPaketovSetting,\u041a\u043e\u043b-\u0432\u043e \u043f\u0430\u043a\u0435\u0442\u043e\u0432,NumberSetting
+Phase,s_956_w,tolkoNaZemleEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u043d\u0430 \u0437\u0435\u043c\u043b\u0435,BooleanSetting
+Phase,u_2550_I,avtootklyuchenieEnabled,\u0410\u0432\u0442\u043e\u043e\u0442\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435,BooleanSetting
+Phase,M_588_G,taymautPosleZhemchugaSetting,\u0422\u0430\u0439\u043c\u0430\u0443\u0442 \u043f\u043e\u0441\u043b\u0435 \u0436\u0435\u043c\u0447\u0443\u0433\u0430,NumberSetting
+Phase,P_4830_p,pitchSetting,Pitch,NumberSetting
+Phase,h_1847_R,skorostSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+Phase,Q_4569_t,maksTikovSetting,\u041c\u0430\u043a\u0441. \u0442\u0438\u043a\u043e\u0432,NumberSetting
+PotionTracker,v_4262_N,ignorirovatSebyaEnabled,\u0418\u0433\u043d\u043e\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0441\u0435\u0431\u044f,BooleanSetting
+PotionTracker,w_1484_f,ignorirovatObychnyeZelyaEnabled,\u0418\u0433\u043d\u043e\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043e\u0431\u044b\u0447\u043d\u044b\u0435 \u0437\u0435\u043b\u044c\u044f,BooleanSetting
+Prediction,v_4262_N,snaryadyOptions,\u0421\u043d\u0430\u0440\u044f\u0434\u044b,MultiBooleanSetting
+Prediction,t_148_a,blyurFonEnabled,\u0411\u043b\u044e\u0440 \u0444\u043e\u043d,BooleanSetting
+RegionExploit,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+RegionExploit,w_1484_f,radiusRegionaSetting,\u0420\u0430\u0434\u0438\u0443\u0441 \u0440\u0435\u0433\u0438\u043e\u043d\u0430,NumberSetting
+RegionExploit,t_148_a,knopkaOtpravkiKeyBind,\u041a\u043d\u043e\u043f\u043a\u0430 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0438,KeyBindSetting
+Removals,v_4262_N,primenyatNaOptions,\u041f\u0440\u0438\u043c\u0435\u043d\u044f\u0442\u044c \u043d\u0430,MultiBooleanSetting
+Removals,w_1484_f,umenshitZvukOptions,\u0423\u043c\u0435\u043d\u044c\u0448\u0438\u0442\u044c \u0437\u0432\u0443\u043a,MultiBooleanSetting
+Removals,t_148_a,gromkostSetting,\u0413\u0440\u043e\u043c\u043a\u043e\u0441\u0442\u044c,NumberSetting
+SeeInvisibles,v_4262_N,prozrachnostSetting,\u041f\u0440\u043e\u0437\u0440\u0430\u0447\u043d\u043e\u0441\u0442\u044c,NumberSetting
+SeeInvisibles,w_1484_f,otobrazhatStoykiBroniEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0441\u0442\u043e\u0439\u043a\u0438 \u0431\u0440\u043e\u043d\u0438,BooleanSetting
+ServerHelper,M_588_G,serverMode,\u0421\u0435\u0440\u0432\u0435\u0440,ModeSetting
+ServerHelper,P_4830_p,tolkoSHotbaraEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0441 \u0445\u043e\u0442\u0431\u0430\u0440\u0430,BooleanSetting
+ServerHelper,h_1847_R,dezorientaciyaKeyBind,\u0414\u0435\u0437\u043e\u0440\u0438\u0435\u043d\u0442\u0430\u0446\u0438\u044f,KeyBindSetting
+ServerHelper,Q_4569_t,yavnayaPylKeyBind,\u042f\u0432\u043d\u0430\u044f \u043f\u044b\u043b\u044c,KeyBindSetting
+ServerHelper,M_182_A,plastKeyBind,\u041f\u043b\u0430\u0441\u0442,KeyBindSetting
+ServerHelper,t_1786_h,trapkaSpookyKeyBind,\u0422\u0440\u0430\u043f\u043a\u0430 Spooky,KeyBindSetting
+ServerHelper,multiplayerClientSuggestionProvider,ognennyySmerchKeyBind,\u041e\u0433\u043d\u0435\u043d\u043d\u044b\u0439 \u0441\u043c\u0435\u0440\u0447,KeyBindSetting
+ServerHelper,w_1457_N,snezhokZamorozkaKeyBind,\u0421\u043d\u0435\u0436\u043e\u043a \u0437\u0430\u043c\u043e\u0440\u043e\u0437\u043a\u0430,KeyBindSetting
+ServerHelper,Y_601_j,bozhyaAuraKeyBind,\u0411\u043e\u0436\u044c\u044f \u0430\u0443\u0440\u0430,KeyBindSetting
+ServerHelper,Y_259_p,obychnayaLivalkaKeyBind,\u041e\u0431\u044b\u0447\u043d\u0430\u044f \u043b\u0438\u0432\u0430\u043b\u043a\u0430,KeyBindSetting
+ServerHelper,Q_2552_b,unikalnoePeryshkoKeyBind,\u0423\u043d\u0438\u043a\u0430\u043b\u044c\u043d\u043e\u0435 \u043f\u0435\u0440\u044b\u0448\u043a\u043e,KeyBindSetting
+ServerHelper,C_2741_M,livalkaSPlatformoyKeyBind,\u041b\u0438\u0432\u0430\u043b\u043a\u0430 \u0441 \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u043e\u0439,KeyBindSetting
+ServerHelper,k_2293_S,unikalnayaTrapkaKeyBind,\u0423\u043d\u0438\u043a\u0430\u043b\u044c\u043d\u0430\u044f \u0442\u0440\u0430\u043f\u043a\u0430,KeyBindSetting
+ServerHelper,q_2307_F,avtoChatIgraUravnenieEnabled,\u0410\u0432\u0442\u043e \u0447\u0430\u0442-\u0438\u0433\u0440\u0430 (\u0443\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435),BooleanSetting
+ServerHelper,Z_875_P,puzyrekOpytaKeyBind,\u041f\u0443\u0437\u044b\u0440\u0451\u043a \u043e\u043f\u044b\u0442\u0430,KeyBindSetting
+ServerHelper,t_4043_B,trapkaKeyBind,\u0422\u0440\u0430\u043f\u043a\u0430,KeyBindSetting
+ServerHelper,x_607_J,vzryvnayaTrapkaKeyBind,\u0412\u0437\u0440\u044b\u0432\u043d\u0430\u044f \u0442\u0440\u0430\u043f\u043a\u0430,KeyBindSetting
+ServerHelper,e_4240_b,proschalnyyGulKeyBind,\u041f\u0440\u043e\u0449\u0430\u043b\u044c\u043d\u044b\u0439 \u0433\u0443\u043b,KeyBindSetting
+ServerHelper,n_3318_d,vzryvnayaShtuchkaKeyBind,\u0412\u0437\u0440\u044b\u0432\u043d\u0430\u044f \u0448\u0442\u0443\u0447\u043a\u0430,KeyBindSetting
+ServerHelper,d_2427_y,stanKeyBind,\u0421\u0442\u0430\u043d,KeyBindSetting
+ServerHelper,z_1737_N,komSnegaKeyBind,\u041a\u043e\u043c \u0441\u043d\u0435\u0433\u0430,KeyBindSetting
+ServerHelper,v_4276_D,ryukzakKeyBind,\u0420\u044e\u043a\u0437\u0430\u043a,KeyBindSetting
+ServerHelper,d_2461_k,antiCrashEnabled,Anti-Crash,BooleanSetting
+ServerHelper,G_624_v,antiPoletKeyBind,\u0410\u043d\u0442\u0438 \u043f\u043e\u043b\u0435\u0442,KeyBindSetting
+ServerHelper,T_2506_i,zeleGrinchaKeyBind,\u0417\u0435\u043b\u044c\u0435 \u0413\u0440\u0438\u043d\u0447\u0430,KeyBindSetting
+ServerHelper,q_4610_l,autoshiftShiftDlyaSharaKeyBind,AutoShift (\u0428\u0438\u0444\u0442 \u0434\u043b\u044f \u0448\u0430\u0440\u0430),KeyBindSetting
+ServerHelper,z_4693_k,novogodniyUzhasKeyBind,\u041d\u043e\u0432\u043e\u0433\u043e\u0434\u043d\u0438\u0439 \u0443\u0436\u0430\u0441,KeyBindSetting
+ServerHelper,g_221_o,essenciyaKromeshnikaKeyBind,\u042d\u0441\u0441\u0435\u043d\u0446\u0438\u044f \u043a\u0440\u043e\u043c\u0435\u0448\u043d\u0438\u043a\u0430,KeyBindSetting
+ServerHelper,e_2887_G,snezhokKeyBind,\u0421\u043d\u0435\u0436\u043e\u043a,KeyBindSetting
+ServerHelper,B_1668_F,lovushkaKeyBind,\u041b\u043e\u0432\u0443\u0448\u043a\u0430,KeyBindSetting
+ServerHelper,g_164_R,zakryvatMenyuEnabled,\u0417\u0430\u043a\u0440\u044b\u0432\u0430\u0442\u044c \u043c\u0435\u043d\u044e,BooleanSetting
+ServerHelper,X_933_l,filtrChataEnabled,\u0424\u0438\u043b\u044c\u0442\u0440 \u0447\u0430\u0442\u0430,BooleanSetting
+ServerHelper,Z_976_R,autoFixAllEnabled,Auto /fix all,BooleanSetting
+ServerHelper,H_1990_U,svapGolovyKeyBind,\u0421\u0432\u0430\u043f \u0433\u043e\u043b\u043e\u0432\u044b,KeyBindSetting
+ServerHelper,N_2525_X,svapBotinokKeyBind,\u0421\u0432\u0430\u043f \u0431\u043e\u0442\u0438\u043d\u043e\u043a,KeyBindSetting
+ServerHelper,c_4037_x,avtoEcVklVyklKeyBind,\u0410\u0432\u0442\u043e EC (\u0432\u043a\u043b/\u0432\u044b\u043a\u043b),KeyBindSetting
+ServerHelper,g_2268_R,vyborShlemaMode,\u0412\u044b\u0431\u043e\u0440 \u0448\u043b\u0435\u043c\u0430,ModeSetting
+ServerHelper,T_3594_S,zaderzhkaSvapaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0441\u0432\u0430\u043f\u0430,NumberSetting
+ServerHelper,D_4792_h,avtoBotinkiVodaEnabled,\u0410\u0432\u0442\u043e \u0431\u043e\u0442\u0438\u043d\u043a\u0438 (\u0432\u043e\u0434\u0430),BooleanSetting
+ServerHelper,s_2632_s,radiusEcSetting,\u0420\u0430\u0434\u0438\u0443\u0441 EC,NumberSetting
+ServerHelper,l_1233_K,zeleKilleraKeyBind,\u0417\u0435\u043b\u044c\u0435 \u043a\u0438\u043b\u043b\u0435\u0440\u0430,KeyBindSetting
+ServerHelper,z_1333_t,zeleMedikaKeyBind,\u0417\u0435\u043b\u044c\u0435 \u043c\u0435\u0434\u0438\u043a\u0430,KeyBindSetting
+ServerHelper,O_508_d,pozvatPomoschKeyBind,\u041f\u043e\u0437\u0432\u0430\u0442\u044c \u043f\u043e\u043c\u043e\u0449\u044c,KeyBindSetting
+ServerHelper,r_715_M,porogHpDlyaAvtoSetting,\u041f\u043e\u0440\u043e\u0433 HP \u0434\u043b\u044f \u0430\u0432\u0442\u043e,NumberSetting
+ServerHelper,A_1038_p,avtoMedikPriNizkomHpEnabled,\u0410\u0432\u0442\u043e \u043c\u0435\u0434\u0438\u043a \u043f\u0440\u0438 \u043d\u0438\u0437\u043a\u043e\u043c HP,BooleanSetting
+ServerHelper,i_1637_u,obychnayaTrapkaKeyBind,\u041e\u0431\u044b\u0447\u043d\u0430\u044f \u0442\u0440\u0430\u043f\u043a\u0430,KeyBindSetting
+ServerHelper,Ping,horoshayaTrapkaKeyBind,\u0425\u043e\u0440\u043e\u0448\u0430\u044f \u0442\u0440\u0430\u043f\u043a\u0430,KeyBindSetting
+ServerHelper,p_178_J,otlichnayaTrapkaKeyBind,\u041e\u0442\u043b\u0438\u0447\u043d\u0430\u044f \u0442\u0440\u0430\u043f\u043a\u0430,KeyBindSetting
+ServerHelper,RealmsClientConfig,epicheskayaTrapkaKeyBind,\u042d\u043f\u0438\u0447\u0435\u0441\u043a\u0430\u044f \u0442\u0440\u0430\u043f\u043a\u0430,KeyBindSetting
+ServerHelper,f_4016_n,legendarnayaTrapkaKeyBind,\u041b\u0435\u0433\u0435\u043d\u0434\u0430\u0440\u043d\u0430\u044f \u0442\u0440\u0430\u043f\u043a\u0430,KeyBindSetting
+ServerHelper,j_276_v,livalkaKeyBind,\u041b\u0438\u0432\u0430\u043b\u043a\u0430,KeyBindSetting
+ServerHelper,UploadStatus,amuletTeleportaciiKeyBind,\u0410\u043c\u0443\u043b\u0435\u0442 \u0442\u0435\u043b\u0435\u043f\u043e\u0440\u0442\u0430\u0446\u0438\u0438,KeyBindSetting
+ServerHelper,e_1992_r,skoplenieSvetaKeyBind,\u0421\u043a\u043e\u043f\u043b\u0435\u043d\u0438\u0435 \u0441\u0432\u0435\u0442\u0430,KeyBindSetting
+ServerHelper,D_60_a,volnaOgnyaKeyBind,\u0412\u043e\u043b\u043d\u0430 \u043e\u0433\u043d\u044f,KeyBindSetting
+ServerHelper,k_3961_g,poroshokVozvrascheniyaKeyBind,\u041f\u043e\u0440\u043e\u0448\u043e\u043a \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0435\u043d\u0438\u044f,KeyBindSetting
+ServerHelper,Ops,poroshokDezorganizaciiKeyBind,\u041f\u043e\u0440\u043e\u0448\u043e\u043a \u0434\u0435\u0437\u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0446\u0438\u0438,KeyBindSetting
+ServerHelper,h_4320_q,razrushitelStoekKeyBind,\u0420\u0430\u0437\u0440\u0443\u0448\u0438\u0442\u0435\u043b\u044c \u0421\u0442\u043e\u0435\u043a,KeyBindSetting
+ServerHelper,t_4219_U,fitilKeyBind,\u0424\u0438\u0442\u0438\u043b\u044c,KeyBindSetting
+ServerHelper,V_1446_Y,perestavlyayuscheeZeleKeyBind,\u041f\u0435\u0440\u0435\u0441\u0442\u0430\u0432\u043b\u044f\u044e\u0449\u0435\u0435 \u0437\u0435\u043b\u044c\u0435,KeyBindSetting
+ServerHelper,PlayerInfo,vzryvnoeZeleKeyBind,\u0412\u0437\u0440\u044b\u0432\u043d\u043e\u0435 \u0437\u0435\u043b\u044c\u0435,KeyBindSetting
+ServerHelper,V_1225_t,trapaKeyBind,\u0422\u0440\u0430\u043f\u0430,KeyBindSetting
+ServerHelper,U_1241_n,dezorentKeyBind,\u0414\u0435\u0437\u043e\u0440\u0435\u043d\u0442,KeyBindSetting
+ServerHelper,q_1982_R,plastKeyBind2,\u041f\u043b\u0430\u0441\u0442,KeyBindSetting
+ServerHelper,dtoRealmsServerAddress,yavnayaPylKeyBind2,\u042f\u0432\u043d\u0430\u044f \u043f\u044b\u043b\u044c,KeyBindSetting
+ServerHelper,w_612_n,bozhyaAuraKeyBind2,\u0411\u043e\u0436\u044c\u044f \u0430\u0443\u0440\u0430,KeyBindSetting
+ServerHelper,RealmsServerPing,ognenSmerchKeyBind,\u041e\u0433\u043d\u0435\u043d \u0441\u043c\u0435\u0440\u0447,KeyBindSetting
+ServerHelper,j_1564_a,snezhokKeyBind2,\u0421\u043d\u0435\u0436\u043e\u043a,KeyBindSetting
+ShulkerPreview,v_4262_N,otobrazhatVMireEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0432 \u043c\u0438\u0440\u0435,BooleanSetting
+Skeleton,v_4262_N,igrokiEnabled,\u0418\u0433\u0440\u043e\u043a\u0438,BooleanSetting
+Skeleton,w_1484_f,druzyaEnabled,\u0414\u0440\u0443\u0437\u044c\u044f,BooleanSetting
+Skeleton,t_148_a,naSebyaEnabled,\u041d\u0430 \u0441\u0435\u0431\u044f,BooleanSetting
+Skeleton,s_956_w,tolschinaLiniySetting,\u0422\u043e\u043b\u0449\u0438\u043d\u0430 \u043b\u0438\u043d\u0438\u0439,NumberSetting
+Spammer,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+Spammer,s_956_w,zaderzhkaSekSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 (\u0441\u0435\u043a),NumberSetting
+Spammer,u_2550_I,upominatIgrokovEnabled,\u0423\u043f\u043e\u043c\u0438\u043d\u0430\u0442\u044c \u0438\u0433\u0440\u043e\u043a\u043e\u0432,BooleanSetting
+Spammer,M_588_G,sluchaynyySuffiksEnabled,\u0421\u043b\u0443\u0447\u0430\u0439\u043d\u044b\u0439 \u0441\u0443\u0444\u0444\u0438\u043a\u0441,BooleanSetting
+Speed,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+Speed,w_1484_f,skorostVVodeEnabled,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0432 \u0432\u043e\u0434\u0435,BooleanSetting
+Speed,t_148_a,taymerEnabled,\u0422\u0430\u0439\u043c\u0435\u0440,BooleanSetting
+Speed,s_956_w,obhodTaymeraEnabled,\u041e\u0431\u0445\u043e\u0434 \u0442\u0430\u0439\u043c\u0435\u0440\u0430,BooleanSetting
+Speed,u_2550_I,porogObhodaSetting,\u041f\u043e\u0440\u043e\u0433 \u043e\u0431\u0445\u043e\u0434\u0430,NumberSetting
+Speed,M_588_G,mnozhitelTaymeraSetting,\u041c\u043d\u043e\u0436\u0438\u0442\u0435\u043b\u044c \u0442\u0430\u0439\u043c\u0435\u0440\u0430,NumberSetting
+Speed,P_4830_p,skorostSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+Speed,h_1847_R,avtoPryzhokEnabled,\u0410\u0432\u0442\u043e \u043f\u0440\u044b\u0436\u043e\u043a,BooleanSetting
+Speed,Q_4569_t,metaRezhimMode,Meta \u0440\u0435\u0436\u0438\u043c,ModeSetting
+Speed,M_182_A,metaSkorostSetting,Meta \u0441\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+Speed,t_1786_h,metaBustSDamagomEnabled,Meta \u0431\u0443\u0441\u0442 \u0441 \u0434\u0430\u043c\u0430\u0433\u043e\u043c,BooleanSetting
+Speed,multiplayerClientSuggestionProvider,metaZnachenieBustaSetting,Meta \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u0431\u0443\u0441\u0442\u0430,NumberSetting
+Speed,w_1457_N,metaDlitelnostBustaSetting,Meta \u0434\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u0431\u0443\u0441\u0442\u0430,NumberSetting
+Speed,Y_601_j,skorostBustaSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0431\u0443\u0441\u0442\u0430,NumberSetting
+Speed,Y_259_p,radiusSetting,\u0420\u0430\u0434\u0438\u0443\u0441,NumberSetting
+Spider,v_4262_N,modMode,\u041c\u043e\u0434,ModeSetting
+Spider,w_1484_f,skorostSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+Step,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+Step,w_1484_f,vysotaSetting,\u0412\u044b\u0441\u043e\u0442\u0430,NumberSetting
+Step,t_148_a,taymerEnabled,\u0422\u0430\u0439\u043c\u0435\u0440,BooleanSetting
+Step,s_956_w,reversestepEnabled,ReverseStep,BooleanSetting
+Step,u_2550_I,vysotaReversestepSetting,\u0412\u044b\u0441\u043e\u0442\u0430 ReverseStep,NumberSetting
+Strafe,v_4262_N,uskorenieOtUronaEnabled,\u0423\u0441\u043a\u043e\u0440\u0435\u043d\u0438\u0435 \u043e\u0442 \u0443\u0440\u043e\u043d\u0430,BooleanSetting
+Strafe,w_1484_f,skorostUskoreniyaSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0443\u0441\u043a\u043e\u0440\u0435\u043d\u0438\u044f,NumberSetting
+Strafe,t_148_a,obychnoeUskorenieSetting,\u041e\u0431\u044b\u0447\u043d\u043e\u0435 \u0443\u0441\u043a\u043e\u0440\u0435\u043d\u0438\u0435,NumberSetting
+SuperFirework,v_4262_N,uskorenieEnabled,\u0423\u0441\u043a\u043e\u0440\u0435\u043d\u0438\u0435,BooleanSetting
+SuperFirework,w_1484_f,rezhimUskoreniyaMode,\u0420\u0435\u0436\u0438\u043c \u0443\u0441\u043a\u043e\u0440\u0435\u043d\u0438\u044f,ModeSetting
+SuperFirework,t_148_a,xz05Setting,XZ 0-5\u00b0,NumberSetting
+SuperFirework,s_956_w,xz510Setting,XZ 5-10\u00b0,NumberSetting
+SuperFirework,u_2550_I,xz1015Setting,XZ 10-15\u00b0,NumberSetting
+SuperFirework,M_588_G,xz1520Setting,XZ 15-20\u00b0,NumberSetting
+SuperFirework,P_4830_p,xz2025Setting,XZ 20-25\u00b0,NumberSetting
+SuperFirework,h_1847_R,xz2530Setting,XZ 25-30\u00b0,NumberSetting
+SuperFirework,Q_4569_t,xz3035Setting,XZ 30-35\u00b0,NumberSetting
+SuperFirework,M_182_A,xz3540Setting,XZ 35-40\u00b0,NumberSetting
+SuperFirework,t_1786_h,xz4045Setting,XZ 40-45\u00b0,NumberSetting
+SuperFirework,multiplayerClientSuggestionProvider,y05Setting,Y 0-5\u00b0,NumberSetting
+SuperFirework,w_1457_N,y510Setting,Y 5-10\u00b0,NumberSetting
+SuperFirework,Y_601_j,y1015Setting,Y 10-15\u00b0,NumberSetting
+SuperFirework,Y_259_p,y1520Setting,Y 15-20\u00b0,NumberSetting
+SuperFirework,Q_2552_b,y2025Setting,Y 20-25\u00b0,NumberSetting
+SuperFirework,C_2741_M,y2530Setting,Y 25-30\u00b0,NumberSetting
+SuperFirework,k_2293_S,y3035Setting,Y 30-35\u00b0,NumberSetting
+SuperFirework,q_2307_F,y3540Setting,Y 35-40\u00b0,NumberSetting
+SuperFirework,Z_875_P,y4045Setting,Y 40-45\u00b0,NumberSetting
+Surround,v_4262_N,switchMode,Switch,ModeSetting
+Surround,w_1484_f,timingMode,Timing,ModeSetting
+Surround,t_148_a,limitSetting,Limit,NumberSetting
+Surround,s_956_w,delaySetting,Delay,NumberSetting
+Surround,u_2550_I,rangeSetting,Range,NumberSetting
+Surround,M_588_G,awaitEnabled,Await,BooleanSetting
+Surround,P_4830_p,rotateEnabled,Rotate,BooleanSetting
+Surround,h_1847_R,strictdirectionEnabled,StrictDirection,BooleanSetting
+Surround,Q_4569_t,crystaldestructionEnabled,CrystalDestruction,BooleanSetting
+Surround,M_182_A,centerEnabled,Center,BooleanSetting
+Surround,t_1786_h,floorEnabled,Floor,BooleanSetting
+Surround,multiplayerClientSuggestionProvider,extensionEnabled,Extension,BooleanSetting
+Surround,w_1457_N,whileeatingEnabled,WhileEating,BooleanSetting
+Surround,Y_601_j,selfdisableEnabled,SelfDisable,BooleanSetting
+Surround,Y_259_p,jumpdisableEnabled,JumpDisable,BooleanSetting
+Surround,Q_2552_b,itemdisableEnabled,ItemDisable,BooleanSetting
+Surround,C_2741_M,steptoggleEnabled,StepToggle,BooleanSetting
+Surround,k_2293_S,speedtoggleEnabled,SpeedToggle,BooleanSetting
+Surround,q_2307_F,renderEnabled,Render,BooleanSetting
+Tags,v_4262_N,otobrazhatOptions,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c,MultiBooleanSetting
+Tags,w_1484_f,blyurFonEnabled,\u0411\u043b\u044e\u0440 \u0444\u043e\u043d,BooleanSetting
+Tags,t_148_a,otobrazhatZelyaEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0437\u0435\u043b\u044c\u044f,BooleanSetting
+Tags,s_956_w,otobrazhatBronyuEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0431\u0440\u043e\u043d\u044e,BooleanSetting
+Tags,u_2550_I,otobrazhatZacharovaniyaEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0437\u0430\u0447\u0430\u0440\u043e\u0432\u0430\u043d\u0438\u044f,BooleanSetting
+Tags,M_588_G,obhodHwEnabled,\u041e\u0431\u0445\u043e\u0434 HW,BooleanSetting
+Tags,P_4830_p,otobrazhatPredmetyVRukahEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u044b \u0432 \u0440\u0443\u043a\u0430\u0445,BooleanSetting
+Tags,h_1847_R,otobrazhatVizualnoeImyaPredmetaEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0432\u0438\u0437\u0443\u0430\u043b\u044c\u043d\u043e\u0435 \u0438\u043c\u044f \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0430,BooleanSetting
+Tags,Q_4569_t,otobrazhatStatusVoicechatEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0441\u0442\u0430\u0442\u0443\u0441 VoiceChat,BooleanSetting
+TapeMouse,v_4262_N,klavishaMode,\u041a\u043b\u0430\u0432\u0438\u0448\u0430,ModeSetting
+TapeMouse,w_1484_f,zaderzhkaSetting,\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430,NumberSetting
+TargetPearl,w_1484_f,tolkoZaTargetomEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u0437\u0430 \u0442\u0430\u0440\u0433\u0435\u0442\u043e\u043c,BooleanSetting
+TargetPearl,t_148_a,minDistanciyaSetting,\u041c\u0438\u043d \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+TargetStrafe,t_148_a,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+TargetStrafe,s_956_w,avtoPryzhokEnabled,\u0410\u0432\u0442\u043e \u041f\u0440\u044b\u0436\u043e\u043a,BooleanSetting
+TargetStrafe,u_2550_I,distanciyaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+TargetStrafe,M_588_G,skorostSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+TargetStrafe,P_4830_p,bustPriUdareEnabled,\u0411\u0443\u0441\u0442 \u043f\u0440\u0438 \u0443\u0434\u0430\u0440\u0435,BooleanSetting
+TargetStrafe,h_1847_R,skorostBustaSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0431\u0443\u0441\u0442\u0430,NumberSetting
+TargetStrafe,Q_4569_t,silaSetting,\u0421\u0438\u043b\u0430,NumberSetting
+TargetStrafe,M_182_A,radiusUskoreniyaSetting,\u0420\u0430\u0434\u0438\u0443\u0441 \u0443\u0441\u043a\u043e\u0440\u0435\u043d\u0438\u044f,NumberSetting
+TargetStrafe,t_1786_h,prediktSetting,\u041f\u0440\u0435\u0434\u0438\u043a\u0442,NumberSetting
+TargetStrafe,multiplayerClientSuggestionProvider,silaSetting2,\u0421\u0438\u043b\u0430,NumberSetting
+TargetStrafe,w_1457_N,radiusUskoreniyaSetting2,\u0420\u0430\u0434\u0438\u0443\u0441 \u0443\u0441\u043a\u043e\u0440\u0435\u043d\u0438\u044f,NumberSetting
+TargetStrafe,Y_601_j,prediktSetting2,\u041f\u0440\u0435\u0434\u0438\u043a\u0442,NumberSetting
+TargetStrafe,Y_259_p,avtomaticheskiPrygatEnabled,\u0410\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438 \u043f\u0440\u044b\u0433\u0430\u0442\u044c,BooleanSetting
+TargetStrafe,Q_2552_b,vzhimatsyaVCelEnabled,\u0412\u0436\u0438\u043c\u0430\u0442\u044c\u0441\u044f \u0432 \u0446\u0435\u043b\u044c,BooleanSetting
+TargetStrafe,C_2741_M,distanciyaStreyfaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u0441\u0442\u0440\u0435\u0439\u0444\u0430,NumberSetting
+ThirdPerson,w_1484_f,rezhimObzoraMode,\u0420\u0435\u0436\u0438\u043c \u043e\u0431\u0437\u043e\u0440\u0430,ModeSetting
+ThirdPerson,t_148_a,distanciyaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+ThirdPerson,v_4262_N,bindKeyBind,\u0411\u0438\u043d\u0434,KeyBindSetting
+Timer,t_148_a,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+Timer,s_956_w,bindGrimKeyBind,\u0411\u0438\u043d\u0434 Grim,KeyBindSetting
+Timer,multiplayerClientSuggestionProvider,smartEnabled,\u0421\u043c\u0430\u0440\u0442,BooleanSetting
+Timer,w_1457_N,podemPriDvizheniiEnabled,\u041f\u043e\u0434\u044a\u0451\u043c \u043f\u0440\u0438 \u0434\u0432\u0438\u0436\u0435\u043d\u0438\u0438,BooleanSetting
+Timer,Y_601_j,znacheniePodemaSetting,\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043f\u043e\u0434\u044a\u0451\u043c\u0430,NumberSetting
+Timer,Y_259_p,nakoplenieTikovSetting,\u041d\u0430\u043a\u043e\u043f\u043b\u0435\u043d\u0438\u0435 \u0442\u0438\u043a\u043e\u0432,NumberSetting
+ToggleSounds,v_4262_N,tipZvukaMode,\u0422\u0438\u043f \u0437\u0432\u0443\u043a\u0430,ModeSetting
+ToggleSounds,w_1484_f,gromkostSetting,\u0413\u0440\u043e\u043c\u043a\u043e\u0441\u0442\u044c,NumberSetting
+TotemPop,t_148_a,prizrakiPriPopeTotemaEnabled,\u041f\u0440\u0438\u0437\u0440\u0430\u043a\u0438 \u043f\u0440\u0438 \u043f\u043e\u043f\u0435 \u0442\u043e\u0442\u0435\u043c\u0430,BooleanSetting
+TotemPop,s_956_w,vremyaEffektaMsSetting,"\u0412\u0440\u0435\u043c\u044f \u044d\u0444\u0444\u0435\u043a\u0442\u0430, \u043c\u0441",NumberSetting
+TotemPop,u_2550_I,vysotaPodemaSetting,\u0412\u044b\u0441\u043e\u0442\u0430 \u043f\u043e\u0434\u044a\u0451\u043c\u0430,NumberSetting
+TotemPop,M_588_G,optimizaciyaRenderaEnabled,\u041e\u043f\u0442\u0438\u043c\u0438\u0437\u0430\u0446\u0438\u044f \u0440\u0435\u043d\u0434\u0435\u0440\u0430,BooleanSetting
+TPLoot,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+TPLoot,w_1484_f,distanciyaSetting,\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f,NumberSetting
+Tracers,v_4262_N,otobrazhatOptions,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c,MultiBooleanSetting
+Tracers,s_956_w,tolschinaLiniiSetting,\u0422\u043e\u043b\u0449\u0438\u043d\u0430 \u043b\u0438\u043d\u0438\u0438,NumberSetting
+Tracers,u_2550_I,otrisovyvatKCelyamBlockespEnabled,\u041e\u0442\u0440\u0438\u0441\u043e\u0432\u044b\u0432\u0430\u0442\u044c \u043a \u0446\u0435\u043b\u044f\u043c BlockESP,BooleanSetting
+Tracers,M_588_G,otobrazhatIgrokovTolkoVNezeritovoyBroneEnabled,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0438\u0433\u0440\u043e\u043a\u043e\u0432 \u0442\u043e\u043b\u044c\u043a\u043e \u0432 \u043d\u0435\u0437\u0435\u0440\u0438\u0442\u043e\u0432\u043e\u0439 \u0431\u0440\u043e\u043d\u0435,BooleanSetting
+Trails,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+Trails,w_1484_f,otobrazhatOptions,\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c,MultiBooleanSetting
+Trails,t_148_a,dlinaSetting,\u0414\u043b\u0438\u043d\u0430,NumberSetting
+Trails,s_956_w,razmerChasticSetting,\u0420\u0430\u0437\u043c\u0435\u0440 \u0447\u0430\u0441\u0442\u0438\u0446,NumberSetting
+Trails,u_2550_I,razmerSvecheniyaSetting,\u0420\u0430\u0437\u043c\u0435\u0440 \u0441\u0432\u0435\u0447\u0435\u043d\u0438\u044f,NumberSetting
+Trails,M_588_G,vremyaZhizniSetting,\u0412\u0440\u0435\u043c\u044f \u0436\u0438\u0437\u043d\u0438,NumberSetting
+Trajectory,v_4262_N,predmetyOptions,\u041f\u0440\u0435\u0434\u043c\u0435\u0442\u044b,MultiBooleanSetting
+Trajectory,w_1484_f,vremyaPadeniyaEnabled,\u0412\u0440\u0435\u043c\u044f \u043f\u0430\u0434\u0435\u043d\u0438\u044f,BooleanSetting
+TrashTalk,v_4262_N,prefiksMode,\u041f\u0440\u0435\u0444\u0438\u043a\u0441,ModeSetting
+TrashTalk,w_1484_f,dobavlyatNikEnabled,\u0414\u043e\u0431\u0430\u0432\u043b\u044f\u0442\u044c \u043d\u0438\u043a,BooleanSetting
+TrashTalk,t_148_a,defoltnyeFrazyEnabled,\u0414\u0435\u0444\u043e\u043b\u0442\u043d\u044b\u0435 \u0444\u0440\u0430\u0437\u044b,BooleanSetting
+TriggerBot,w_1484_f,targetsOptions,\u041a\u043e\u0433\u043e \u0430\u0442\u0430\u043a\u043e\u0432\u0430\u0442\u044c,MultiBooleanSetting
+TriggerBot,t_148_a,attackRangeSetting,\u0420\u0430\u0434\u0438\u0443\u0441 \u0430\u0442\u0430\u043a\u0438,NumberSetting
+TriggerBot,s_956_w,skipAttackWhenOptions,\u041d\u0435 \u0431\u0438\u0442\u044c \u0435\u0441\u043b\u0438,MultiBooleanSetting
+TriggerBot,u_2550_I,onlyCriticalsEnabled,\u0411\u0438\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u0440\u0438\u0442\u0430\u043c\u0438,BooleanSetting
+TriggerBot,M_588_G,breakShieldEnabled,\u041b\u043e\u043c\u0430\u0442\u044c \u0449\u0438\u0442,BooleanSetting
+TriggerBot,P_4830_p,onlyWhenSpacePressedEnabled,\u0422\u043e\u043b\u044c\u043a\u043e \u043f\u0440\u0438 \u0437\u0430\u0436\u0430\u0442\u043e\u043c \u043f\u0440\u043e\u0431\u0435\u043b\u0435,BooleanSetting
+TriggerBot,h_1847_R,noWallHitEnabled,\u041d\u0435 \u0431\u0438\u0442\u044c \u0447\u0435\u0440\u0435\u0437 \u0441\u0442\u0435\u043d\u044b,BooleanSetting
+TriggerBot,Q_4569_t,allowDoorHitEnabled,\u041f\u043e\u0437\u0432\u043e\u043b\u044f\u0442\u044c \u0431\u0438\u0442\u044c \u0447\u0435\u0440\u0435\u0437 \u0434\u0432\u0435\u0440\u0438,BooleanSetting
+TriggerBot,M_182_A,tpsSyncEnabled,\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0441 \u0422\u041f\u0421,BooleanSetting
+UseTracker,v_4262_N,otslezhivatSnesennyeTotemyEnabled,\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0442\u044c \u0441\u043d\u0435\u0441\u0435\u043d\u043d\u044b\u0435 \u0442\u043e\u0442\u0435\u043c\u044b,BooleanSetting
+Velocity,v_4262_N,modMode,\u041c\u043e\u0434,ModeSetting
+Velocity,w_1484_f,prygatEnabled,\u041f\u0440\u044b\u0433\u0430\u0442\u044c,BooleanSetting
+Velocity,t_148_a,silaReversaSetting,\u0421\u0438\u043b\u0430 \u0440\u0435\u0432\u0435\u0440\u0441\u0430,NumberSetting
+Velocity,s_956_w,vertikalnyyReversEnabled,\u0412\u0435\u0440\u0442\u0438\u043a\u0430\u043b\u044c\u043d\u044b\u0439 \u0440\u0435\u0432\u0435\u0440\u0441,BooleanSetting
+Velocity,u_2550_I,intervalTikovSetting,\u0418\u043d\u0442\u0435\u0440\u0432\u0430\u043b \u0442\u0438\u043a\u043e\u0432,NumberSetting
+Velocity,M_588_G,otmenyatVertikalnyyEnabled,\u041e\u0442\u043c\u0435\u043d\u044f\u0442\u044c \u0432\u0435\u0440\u0442\u0438\u043a\u0430\u043b\u044c\u043d\u044b\u0439,BooleanSetting
+Velocity,P_4830_p,pryzhokEnabled,\u041f\u0440\u044b\u0436\u043e\u043a,BooleanSetting
+Velocity,h_1847_R,streyfEnabled,\u0421\u0442\u0440\u0435\u0439\u0444,BooleanSetting
+Velocity,Q_4569_t,dlitelnostSetting,\u0414\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c,NumberSetting
+ViewModel,v_4262_N,pravayaRukaXSetting,\u041f\u0440\u0430\u0432\u0430\u044f \u0440\u0443\u043a\u0430 X,NumberSetting
+ViewModel,w_1484_f,pravayaRukaYSetting,\u041f\u0440\u0430\u0432\u0430\u044f \u0440\u0443\u043a\u0430 Y,NumberSetting
+ViewModel,t_148_a,pravayaRukaZSetting,\u041f\u0440\u0430\u0432\u0430\u044f \u0440\u0443\u043a\u0430 Z,NumberSetting
+ViewModel,s_956_w,levayaRukaXSetting,\u041b\u0435\u0432\u0430\u044f \u0440\u0443\u043a\u0430 X,NumberSetting
+ViewModel,u_2550_I,levayaRukaYSetting,\u041b\u0435\u0432\u0430\u044f \u0440\u0443\u043a\u0430 Y,NumberSetting
+ViewModel,M_588_G,levayaRukaZSetting,\u041b\u0435\u0432\u0430\u044f \u0440\u0443\u043a\u0430 Z,NumberSetting
+WaterSpeed,v_4262_N,rezhimMode,\u0420\u0435\u0436\u0438\u043c,ModeSetting
+WaterSpeed,w_1484_f,skorostSetting,\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c,NumberSetting
+WaterSpeed,t_148_a,avtoProbelShiftEnabled,\u0410\u0432\u0442\u043e \u043f\u0440\u043e\u0431\u0435\u043b/\u0448\u0438\u0444\u0442,BooleanSetting
+WaterSpeed,s_956_w,neVsplyvatEnabled,\u041d\u0435 \u0432\u0441\u043f\u043b\u044b\u0432\u0430\u0442\u044c,BooleanSetting
+WorldParticles,v_4262_N,kolichestvoSetting,\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e,NumberSetting
+WorldParticles,w_1484_f,razmerSetting,\u0420\u0430\u0437\u043c\u0435\u0440,NumberSetting
+WorldParticles,t_148_a,otsechivatOtBlokovEnabled,\u041e\u0442\u0441\u0435\u0447\u0438\u0432\u0430\u0442\u044c \u043e\u0442 \u0431\u043b\u043e\u043a\u043e\u0432,BooleanSetting
+WorldParticles,s_956_w,cvetMode,\u0426\u0432\u0435\u0442,ModeSetting

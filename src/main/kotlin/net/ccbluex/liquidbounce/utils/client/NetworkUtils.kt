@@ -20,6 +20,8 @@ package net.ccbluex.liquidbounce.utils.client
 import net.ccbluex.liquidbounce.utils.entity.*
 
 import net.ccbluex.liquidbounce.config.types.NamedChoice
+import net.ccbluex.liquidbounce.event.EventManager
+import net.ccbluex.liquidbounce.event.events.OutgoingPacketSentEvent
 import net.ccbluex.liquidbounce.event.events.PacketEvent
 import net.ccbluex.liquidbounce.event.events.TransferOrigin
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager
@@ -156,7 +158,12 @@ fun sendPacketSilently(packet: Packet<*>) {
     // hack fix for the packet handler not being called on Rotation Manager for tracking
     val packetEvent = PacketEvent(TransferOrigin.OUTGOING, packet, false)
     RotationManager.packetHandler.handler(packetEvent)
-    mc.connection?.connection?.send(packetEvent.packet, null)
+
+    val connection = mc.connection?.connection ?: return
+    if (connection.isConnected) {
+        EventManager.callEvent(OutgoingPacketSentEvent(packetEvent.packet))
+    }
+    connection.send(packetEvent.packet, null)
 }
 
 enum class SwitchMode(override val choiceName: String) : NamedChoice {

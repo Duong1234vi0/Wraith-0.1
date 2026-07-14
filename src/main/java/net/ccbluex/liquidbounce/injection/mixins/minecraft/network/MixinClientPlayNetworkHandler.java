@@ -21,6 +21,7 @@ package net.ccbluex.liquidbounce.injection.mixins.minecraft.network;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.sugar.Cancellable;
 import com.llamalad7.mixinextras.sugar.Local;
+import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
 import net.ccbluex.liquidbounce.common.ChunkUpdateFlag;
 import net.ccbluex.liquidbounce.event.EventManager;
 import net.ccbluex.liquidbounce.event.events.ChunkDeltaUpdateEvent;
@@ -29,6 +30,7 @@ import net.ccbluex.liquidbounce.event.events.ChunkUnloadEvent;
 import net.ccbluex.liquidbounce.event.events.DeathEvent;
 import net.ccbluex.liquidbounce.event.events.HealthUpdateEvent;
 import net.ccbluex.liquidbounce.event.events.TitleEvent;
+import net.ccbluex.liquidbounce.features.module.modules.render.ModuleTotemParticles;
 import net.ccbluex.liquidbounce.features.module.modules.player.Limit;
 import net.ccbluex.liquidbounce.features.module.modules.player.ModuleAntiExploit;
 import net.ccbluex.liquidbounce.features.module.modules.player.ModuleNoRotateSet;
@@ -36,16 +38,20 @@ import net.ccbluex.liquidbounce.utils.aiming.RotationManager;
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation;
 import net.ccbluex.liquidbounce.utils.kotlin.Priority;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import net.minecraft.client.multiplayer.ClientCommonPacketListenerImpl;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.CommonListenerCookie;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.PacketUtils;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundClearTitlesPacket;
+import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.network.protocol.game.ClientboundExplodePacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
@@ -55,6 +61,7 @@ import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundSetHealthPacket;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -185,6 +192,23 @@ public abstract class MixinClientPlayNetworkHandler extends ClientCommonPacketLi
             return 10.0f;
         }
         return original;
+    }
+
+    @WrapWithCondition(
+            method = "handleEntityEvent",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/particle/ParticleEngine;createTrackingEmitter(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/core/particles/ParticleOptions;I)V"
+            )
+    )
+    private boolean replaceTotemParticleEmitter(
+            ParticleEngine particleEngine,
+            Entity entity,
+            ParticleOptions particle,
+            int lifeTime,
+            ClientboundEntityEventPacket packet
+    ) {
+        return particle != ParticleTypes.TOTEM_OF_UNDYING || !ModuleTotemParticles.replaceVanillaTotemEmitter(entity);
     }
 
     @ModifyExpressionValue(method = "handleGameEvent", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/game/ClientboundGameEventPacket;getEvent()Lnet/minecraft/network/protocol/game/ClientboundGameEventPacket$Type;"))

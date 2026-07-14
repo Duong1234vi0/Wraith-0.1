@@ -24,6 +24,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonSerializationContext
 import com.google.gson.JsonSerializer
 import net.ccbluex.liquidbounce.config.types.nesting.Configurable
+import net.ccbluex.liquidbounce.config.types.ActionValue
 import net.ccbluex.liquidbounce.config.types.Value
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
@@ -65,6 +66,7 @@ class ConfigurableSerializer(
         add(
             "value",
             context.serialize(src.inner.filter { includeNotAnOption || !it.notAnOption }
+                .filter { it !is ActionValue }
                 .filter { includePrivate || checkIfInclude(it) }))
         if (withValueType) {
             add("valueType", context.serialize(src.valueType))

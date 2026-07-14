@@ -1,0 +1,21 @@
+﻿/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  com.google.gson.JsonDeserializationContext
+ *  com.google.gson.JsonObject
+ *  com.google.gson.JsonSerializationContext
+ */
+package lightning.product;
+
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonSerializationContext;
+
+public interface Serializer<T> {
+    public void n_1700_B(JsonObject var1, T var2, JsonSerializationContext var3);
+
+    public T n_1700_B(JsonObject var1, JsonDeserializationContext var2);
+}
+
+

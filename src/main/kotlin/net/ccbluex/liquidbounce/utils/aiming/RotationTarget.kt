@@ -26,6 +26,7 @@ import net.ccbluex.liquidbounce.utils.aiming.features.processors.ShortStopRotati
 import net.ccbluex.liquidbounce.utils.client.RestrictedSingleUseAction
 import net.ccbluex.liquidbounce.utils.client.player
 import net.ccbluex.liquidbounce.utils.entity.rotation
+import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.minecraft.world.entity.Entity
 
 /**
@@ -67,6 +68,9 @@ class RotationTarget(
       */
     val whenReached: RestrictedSingleUseAction? = null
 ) {
+
+    /** Set by RotationManager so movement hooks can prove which module owns the active request. */
+    internal var provider: ClientModule? = null
 
     /**
      * Calculates the next rotation to aim at.

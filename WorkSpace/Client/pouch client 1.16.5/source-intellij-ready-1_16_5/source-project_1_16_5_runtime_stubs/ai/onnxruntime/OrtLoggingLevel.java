@@ -1,0 +1,9 @@
+package ai.onnxruntime;
+
+public enum OrtLoggingLevel {
+    ORT_LOGGING_LEVEL_VERBOSE,
+    ORT_LOGGING_LEVEL_INFO,
+    ORT_LOGGING_LEVEL_WARNING,
+    ORT_LOGGING_LEVEL_ERROR,
+    ORT_LOGGING_LEVEL_FATAL
+}

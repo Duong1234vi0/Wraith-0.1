@@ -1,0 +1,74 @@
+plugins {
+    id 'java'
+}
+
+group = 'recovered.client'
+version = '1.16.5-recovered'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+    }
+}
+
+dependencies {
+    implementation files('libs/1_16_5_decrypted.jar')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    enabled = false
+}
+
+tasks.register('runClient', Exec) {
+    group = 'application'
+    description = 'Runs the recovered client with vanilla assets, natives, and runtime stubs.'
+    workingDir = projectDir
+    commandLine 'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', file('run-client.ps1').absolutePath
+    ignoreExitValue = true
+    doLast {
+        if (executionResult.get().exitValue != 0) {
+            logger.lifecycle("runClient exited with code ${executionResult.get().exitValue}. Check ${file('run/logs/latest.log').absolutePath}")
+        }
+    }
+}
+
+tasks.register('prepareClient', Exec) {
+    group = 'application'
+    description = 'Prepares the run directory, natives, vanilla assets, and data without starting Minecraft.'
+    workingDir = projectDir
+    commandLine 'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', file('run-client.ps1').absolutePath, '-PrepareOnly'
+}
+
+tasks.register('runMain', JavaExec) {
+    group = 'application'
+    description = 'Runs net.minecraft.client.main.Main with default MCP-style args.'
+    classpath = files('libs/1_16_5_decrypted.jar')
+    mainClass = 'net.minecraft.client.main.Main'
+    workingDir = file('run')
+    jvmArgs = ['-Dfile.encoding=UTF-8', '-Djava.awt.headless=false']
+    args '--version', 'mcp',
+         '--accessToken', '0',
+         '--assetsDir', file('src/main/resources/assets').absolutePath,
+         '--assetIndex', '1.16',
+         '--userProperties', '{}'
+}
+
+tasks.register('sourceStats') {
+    group = 'verification'
+    doLast {
+        println "Java sources: " + fileTree('src/main/java').matching { include '**/*.java' }.files.size()
+        println "Resources: " + fileTree('src/main/resources').files.size()
+        println "Readable client modules: " + fileTree('readable-client-modules').matching { include '**/*.java' }.files.size()
+    }
+}

@@ -21,6 +21,7 @@ package net.ccbluex.liquidbounce.features.module.modules.render.gui
 import com.mojang.blaze3d.platform.InputConstants
 import net.ccbluex.liquidbounce.config.AutoConfig
 import net.ccbluex.liquidbounce.config.ConfigSystem
+import net.ccbluex.liquidbounce.config.types.ActionValue
 import net.ccbluex.liquidbounce.config.types.BindValue
 import net.ccbluex.liquidbounce.config.types.ChooseListValue
 import net.ccbluex.liquidbounce.config.types.MultiChooseListValue
@@ -839,6 +840,12 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             (panel.right - pad).toInt(), (headerY + 50f).toInt(), DIVIDER)
 
         val entries = visibleSettings(module)
+        val visibleValues: Set<Value<*>> = entries.mapTo(HashSet()) { it.value }
+        if (draggingSlider?.value !in visibleValues) {
+            draggingSlider = null
+            draggingRangeSide = null
+        }
+        bindListening?.let { if (it !in visibleValues) bindListening = null }
         if (entries.isEmpty()) {
             val text = "No settings"
             ExosGuiRenderer.body(context.matrices, text,
@@ -887,6 +894,11 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         if (hovered) {
             ExosGuiRenderer.roundedRect(context.matrices, rect.x - 6f, rect.y - 3f, rect.w + 12f, rect.h + 6f,
                 5f, HOVER_FILL)
+        }
+
+        if (entry.value is ActionValue) {
+            drawAction(context, rect, entry.value, hovered)
+            return
         }
 
         val name = displayName(entry.value.name)
@@ -1165,6 +1177,31 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         ExosGuiRenderer.roundedOutline(context.matrices, box.x, box.y, box.w, box.h, 5f, BORDER_SOFT, 0.8f)
     }
 
+    private fun drawAction(context: DrawContext, rect: Rect, value: ActionValue, hovered: Boolean) {
+        val button = Rect(rect.right - 92f, rect.y + 1f, 92f, 25f)
+        val fill = if (hovered) ExosGuiRenderer.withAlpha(ACCENT, 56) else INPUT_FILL
+        ExosGuiRenderer.roundedRect(context.matrices, button.x, button.y, button.w, button.h, 5f, fill)
+        ExosGuiRenderer.roundedOutline(
+            context.matrices,
+            button.x,
+            button.y,
+            button.w,
+            button.h,
+            5f,
+            if (hovered) ACCENT_BORDER else BORDER_SOFT,
+            0.8f
+        )
+        val label = displayName(value.name)
+        ExosGuiRenderer.body(
+            context.matrices,
+            truncate(label, button.w - 16f, 7.8f, ExosGuiRenderer::bodyWidth),
+            button.x + (button.w - min(button.w - 16f, ExosGuiRenderer.bodyWidth(label, 7.8f))) * 0.5f,
+            button.y + 7f,
+            if (hovered) ACCENT_TEXT else TEXT_SECONDARY,
+            7.8f
+        )
+    }
+
     private fun drawPlainValue(context: DrawContext, rect: Rect, value: Value<*>) {
         val text = truncate(value.getTagValue().toString(), rect.w * 0.5f, 8f, ExosGuiRenderer::bodyWidth)
         ExosGuiRenderer.body(context.matrices, text, rect.right - ExosGuiRenderer.bodyWidth(text, 8f),
@@ -1385,6 +1422,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             is ChoiceConfigurable<*> -> handleChoiceClick(value, rect, mouseX, mouseY)
             is ChooseListValue<*> -> handleChooseClick(value, rect, mouseX, mouseY)
             is MultiChooseListValue<*> -> handleMultiChooseClick(value, rect, mouseX, mouseY)
+            is ActionValue -> value.execute()
             is BindValue -> bindListening = value
             is RangedValue<*> -> {
                 draggingSlider = entry
@@ -1430,7 +1468,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                 val range = value.range as ClosedFloatingPointRange<*>
                 val start = (range.start as Number).toFloat()
                 val end = (range.endInclusive as Number).toFloat()
-                setAny(value, start + (end - start) * progress)
+                setAny(value, snapFloatToStep(start + (end - start) * progress, value).coerceIn(start, end))
             }
             is Int -> {
                 val range = value.range as IntRange
@@ -1694,6 +1732,13 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         (value as Value<Any>).set(newValue)
     }
 
+    private fun snapFloatToStep(value: Float, ranged: RangedValue<*>): Float {
+        val step = ranged.step?.toFloat()?.takeIf { it > 0f } ?: return value
+        val range = ranged.range as? ClosedFloatingPointRange<*> ?: return value
+        val start = (range.start as Number).toFloat()
+        return start + ((value - start) / step).roundToInt() * step
+    }
+
     private fun visibleSettings(module: ClientModule): List<SettingEntry> {
         val values = mutableListOf<SettingEntry>()
         collectValues(module, values, 0)
@@ -1702,7 +1747,8 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
     private fun collectValues(configurable: Configurable, out: MutableList<SettingEntry>, depth: Int) {
         configurable.inner.forEach { value ->
-            if (value.notAnOption || value.name.equals("Enabled", true) || value.name.equals("Hidden", true)) {
+            if (!value.isVisibleInUi() || value.notAnOption ||
+                value.name.equals("Enabled", true) || value.name.equals("Hidden", true)) {
                 return@forEach
             }
 

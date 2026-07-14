@@ -1,0 +1,44 @@
+package dev.client.mixins.hooks;
+
+import dev.client.WildClient;
+import it.unimi.dsi.fastutil.floats.FloatUnaryOperator;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
+import net.minecraft.client.render.RenderTickCounter;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+@Environment(EnvType.CLIENT)
+@Mixin({RenderTickCounter.Dynamic.class})
+public class RenderTickCounterMixin {
+   @Shadow
+   private float lastFrameDuration;
+   @Shadow
+   private float tickDelta;
+   @Shadow
+   private long prevTimeMillis;
+   @Final
+   @Shadow
+   private FloatUnaryOperator targetMillisPerTick;
+   @Final
+   @Shadow
+   private float tickTime;
+
+   @Inject(
+      method = {"beginTick"},
+      at = {@At("HEAD")},
+      cancellable = true
+   )
+   private void onPushOutOfBlocksHook(long timeMillis, CallbackInfoReturnable<Integer> cir) {
+      this.lastFrameDuration = (float)(timeMillis - this.prevTimeMillis) / this.targetMillisPerTick.apply(this.tickTime) * WildClient.INSTANCE.getTimerValue();
+      this.prevTimeMillis = timeMillis;
+      this.tickDelta += this.lastFrameDuration;
+      int i = (int)this.tickDelta;
+      this.tickDelta -= (float)i;
+      cir.setReturnValue(i);
+   }
+}

@@ -4952,3 +4952,45 @@ None for shader math. The only syntax/API adaptations are GLSL version and curre
 Current status: shader mathematics and geometry mapping are source-faithful; full BlockOverlay runtime fidelity is not yet confirmed until FCL visual testing passes.
 
 FCL visual proof is still pending. Plasma must be compared against AlphaDLC after literal shader restoration. Also test Energy, Honeycomb, opacity behavior, outline overlay, camera movement around the selected block, and shader-to-Normal fallback.
+
+## KillAura V-Core Track/Grim + Focused Full architectural re-port (2026-07-11, Codex)
+
+### Request
+
+Replace the simplified Track/Grim AngleSmooth mappings with complete V-Core 0.8 Aura rotation strategies, and restrict MovementCorrection `Focused Full` to KillAura-owned rotation requests.
+
+### Current files checked
+
+KillAura targeting/click/rotation paths, RotationManager/RotationTarget, movement input/velocity/jump/glide hooks, PointTracker/raytracing, AutoCart, ElytraTarget, Style 4 ClickGUI, Value/Configurable, CombatManager, and the mapped 26.1.2 Minecraft jar.
+
+### Reference files checked
+
+V-Core 0.8 `MoveFix.java`, `Aura.java`, `AuraRotationManager.java`, `Track.java`, `Grim.java`, `PlayerManager.java`, `WallsBypass.java`, `EMaceHelper.java`, `ElytraTarget.java`, `PlayerUtility.java`, and `MathUtility.java`.
+
+### Root cause / source behavior
+
+The previous port reduced Track and Grim to generic AngleSmooth processors after PointTracker. V-Core instead owns aim-point selection, yaw/pitch state, target-locked block/entity raytracing, readiness, and mode-specific GCD quantization. Generic normalization and `towardsLinear` are not equivalent.
+
+### Changed
+
+- Added `VCoreAuraRotationController` with Track dynamic-point state, exact point scans, Track/Grim formulas, target-locked `checkRtx`, ElytraTarget integration, and controller-owned `lookingAtHitbox`.
+- Added the V-Core-only AimRange, IgnoreWalls, RayTrace, WallsBypass, and Track settings.
+- Track/Grim remain serialized AngleSmooth choices but are marker containers; KillAura bypasses PointTracker, timing, Fail, ShortStop, and generic GCD for them.
+- Added UI-only `Value.visibleWhen` support and Style 4 dynamic subtree filtering.
+- Focused Full now requires a KillAura-owned rotation request for the current target and gates input, velocity, jump, and glide correction against riding, AutoCart, combat/rotation pause, removed targets, and invalid rotations.
+
+### Deviations
+
+PeakAssist has no active current-project equivalent. The controller contains an isolated identity hook and does not invent PeakAssist state.
+
+### Verification
+
+`assemble -x detekt` and `git diff --check` passed. Compilation verifies mapping/integration only.
+
+### Runtime status
+
+FCL runtime comparison is pending for Track/Grim motion, raytrace/wall bypass behavior, Focused Full movement, Elytra movement, and live ClickGUI visibility.
+
+### Supersedes / reverts
+
+Supersedes the 2026-05-29 journal entry that mapped V-Core Track/Grim onto generic AngleSmooth processors.

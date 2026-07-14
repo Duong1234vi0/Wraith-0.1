@@ -1,0 +1,44 @@
+name: MLSAC
+version: '${version}'
+main: wtf.mlsac.Main
+api-version: '1.16'
+description: "MLSAC.NET - AI Anticheat"
+folia-supported: true
+
+commands:
+  mlsac:
+    description: MLSAC anticheat and data collection commands
+    usage: |
+      /mlsac start <NICK> <CHEAT|LEGIT|UNLABELED> "<comment>"
+      /mlsac stop <NICK>
+      /mlsac alerts - Toggle alerts
+      /mlsac prob <player> - Show player probability
+      /mlsac reload - Reload config
+      /mlsac reinstall - Add missing fields to config, messages, menu, and holograms
+      /mlsac falsepositive restore <player> - Export 5,000 ticks to CSV
+      /mlsac suspects - Open the suspects GUI
+      /mlsac punish <player> - Execute max punishment
+      /mlsac profile <player> - View player profile
+      /mlsac kicklist - View kick history
+      /mlsac punish <player> - Execute max punishment
+    permission: mlsac.admin
+    aliases: [ml, mls]
+
+permissions:
+  mlsac.admin:
+    description: Allows use of all MLSAC commands
+    default: op
+    children:
+      mlsac.alerts: true
+      mlsac.prob: true
+      mlsac.reload: true
+      mlsac.collect: true
+  mlsac.alerts:
+    description: Allows toggling AI alerts
+    default: op
+  mlsac.prob:
+    description: Allows probability tracking
+    default: op
+  mlsac.reload:
+    description: Allows config reload
+    default: op

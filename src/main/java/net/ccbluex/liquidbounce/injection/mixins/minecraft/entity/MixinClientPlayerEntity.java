@@ -217,7 +217,7 @@ public abstract class MixinClientPlayerEntity extends MixinPlayerEntity implemen
 
     @ModifyExpressionValue(method = "modifyInput", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;isUsingItem()Z", ordinal = 0))
     private boolean hookNoSlowItemUse(boolean original) {
-        if (ModuleNoSlow.INSTANCE.getRunning() && ModuleNoSlow.INSTANCE.canNoSlow()) {
+        if (ModuleNoSlow.INSTANCE.shouldBypassItemSlowdownForCurrentTick()) {
             return false;
         }
         return original;
@@ -225,6 +225,9 @@ public abstract class MixinClientPlayerEntity extends MixinPlayerEntity implemen
 
     @Inject(method = "isSlowDueToUsingItem", at = @At("HEAD"), cancellable = true)
     private void hookNoSlowPoseSlowdown(CallbackInfoReturnable<Boolean> cir) {
+        if (ModuleNoSlow.INSTANCE.shouldBypassItemSlowdownForCurrentTick()) {
+            cir.setReturnValue(false);
+        }
     }
 
     // Silent rotations (Rotation Manager)
@@ -345,6 +348,15 @@ public abstract class MixinClientPlayerEntity extends MixinPlayerEntity implemen
 
     @ModifyExpressionValue(method = "canStartSprinting", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;isSlowDueToUsingItem()Z"))
     private boolean hookNoSlowSprintAffectStart(boolean original) {
+        return original && !ModuleNoSlow.INSTANCE.shouldBypassItemSlowdownForCurrentTick();
+    }
+
+    @ModifyExpressionValue(method = "canStartSprinting", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;isMovingSlowly()Z"))
+    private boolean hookNoSlowSprintAffectMovingSlowly(boolean original) {
+        if (ModuleSprint.INSTANCE.getRunning() && ModuleNoSlow.INSTANCE.shouldBypassSneakSprintCheck()) {
+            return false;
+        }
+
         return original;
     }
 
@@ -371,7 +383,7 @@ public abstract class MixinClientPlayerEntity extends MixinPlayerEntity implemen
 
     @ModifyExpressionValue(method = "shouldStopRunSprinting", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;isSlowDueToUsingItem()Z"), require = 0)
     private boolean hookNoSlowSprintAffectStop(boolean original) {
-        return original;
+        return original && !ModuleNoSlow.INSTANCE.shouldBypassItemSlowdownForCurrentTick();
     }
 
     @ModifyReturnValue(method = "canStartSprinting", at = @At("RETURN"))

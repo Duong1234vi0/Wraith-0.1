@@ -28,6 +28,8 @@ import net.ccbluex.liquidbounce.event.events.RotationUpdateEvent
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.ClientModule
+import net.ccbluex.liquidbounce.features.module.modules.combat.backtrack.ModuleBacktrack
+import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
 import net.ccbluex.liquidbounce.utils.aiming.features.MovementCorrection
 import net.ccbluex.liquidbounce.utils.aiming.utils.setRotation
@@ -89,7 +91,7 @@ object RotationManager : EventListener {
     var previousRotation: Rotation? = null
 
     private val fakeLagging
-        get() = PacketQueueManager.isLagging
+        get() = PacketQueueManager.isLagging || ModuleBacktrack.isLagging()
 
     val serverRotation: Rotation
         get() = if (fakeLagging) theoreticalServerRotation else actualServerRotation
@@ -125,6 +127,7 @@ object RotationManager : EventListener {
             return
         }
 
+        plan.provider = provider
         rotationTargetHandler.request(
             RequestHandler.Request(
                 if (plan.movementCorrection == MovementCorrection.CHANGE_LOOK) 1 else plan.ticksUntilReset,
@@ -247,7 +250,9 @@ object RotationManager : EventListener {
 
     @Suppress("unused")
     private val velocityHandler = handler<PlayerVelocityStrafe>(priority = MODEL_STATE) { event ->
-        if (activeRotationTarget?.movementCorrection != MovementCorrection.OFF) {
+        val movementCorrection = activeRotationTarget?.movementCorrection
+        if (movementCorrection != MovementCorrection.OFF &&
+            (movementCorrection != MovementCorrection.FOCUSED_FULL || ModuleKillAura.isFocusedFullMoveFixActive())) {
             val rotation = currentRotation ?: return@handler
 
             event.velocity = movementInputToVelocity(

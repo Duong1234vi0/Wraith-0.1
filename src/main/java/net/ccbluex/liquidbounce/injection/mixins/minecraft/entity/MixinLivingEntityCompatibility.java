@@ -19,25 +19,22 @@
 package net.ccbluex.liquidbounce.injection.mixins.minecraft.entity;
 
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleAnimations;
-import net.minecraft.client.Minecraft;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.Constant;
-import org.spongepowered.asm.mixin.injection.ModifyConstant;
+import org.spongepowered.asm.mixin.Shadow;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import org.spongepowered.asm.mixin.injection.At;
 
 @Mixin(value = LivingEntity.class, priority = 999)
 public abstract class MixinLivingEntityCompatibility {
 
-    // Keep priority 999 to reduce conflicts with mods that target the same hand-swing duration constant.
-    // #Edit By Claude 2026-06-17: VCore Animations SlowAnimation — adds SlowValue ticks to the vanilla
-    // swing duration constant (6) so the custom swing plays out slower/fuller.
-    @ModifyConstant(method = "getCurrentSwingDuration", constant = @Constant(intValue = 6), require = 0)
-    private int hookSwingSpeed(int constant) {
-        if ((Object) this != Minecraft.getInstance().player) {
-            return constant;
-        }
+    @Shadow
+    public InteractionHand swingingArm;
 
-        return constant + ModuleAnimations.INSTANCE.extraSwingDuration();
+    @ModifyReturnValue(method = "getCurrentSwingDuration", at = @At("RETURN"), require = 0)
+    private int hookSwingSpeed(int original) {
+        return ModuleAnimations.INSTANCE.visualSwingDuration(original, this, this.swingingArm);
     }
 
 }

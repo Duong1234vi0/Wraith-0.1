@@ -33,6 +33,8 @@ import net.ccbluex.liquidbounce.utils.client.player
 import net.ccbluex.liquidbounce.utils.entity.isBlockAction
 import net.ccbluex.liquidbounce.utils.inventory.InventoryManager
 import net.ccbluex.liquidbounce.utils.inventory.openInventorySilently
+import net.minecraft.client.gui.screens.PauseScreen
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket
 
 object KillAuraClicker : Clicker<ModuleKillAura>(
@@ -59,9 +61,28 @@ object KillAuraClicker : Clicker<ModuleKillAura>(
             return
         }
 
-        click(attack)
+        val shouldBypassCooldown = shouldBypassScreenAttackCooldown()
+        val previousAttackCooldown = mc.attackCooldown
+        try {
+            if (shouldBypassCooldown && previousAttackCooldown > 0) {
+                mc.attackCooldown = 0
+            }
+            click(attack)
+        } finally {
+            if (shouldBypassCooldown) {
+                mc.attackCooldown = previousAttackCooldown
+            }
+        }
 
         interactiveScene.unprepare()
+    }
+
+    private fun shouldBypassScreenAttackCooldown(): Boolean {
+        if (!ModuleKillAura.ignoreOpenInventory) {
+            return false
+        }
+
+        return mc.screen is AbstractContainerScreen<*> || mc.screen is PauseScreen
     }
 
     /**
@@ -76,7 +97,12 @@ object KillAuraClicker : Clicker<ModuleKillAura>(
         @Suppress("CognitiveComplexMethod")
         suspend fun prepare(): Boolean {
             if (simulateInventoryClosing && isInInventoryScreen) {
-                network.sendPacket(ServerboundContainerClosePacket(0))
+                InventoryManager.permitNextRedundantClosePacket(0)
+                try {
+                    network.sendPacket(ServerboundContainerClosePacket(0))
+                } finally {
+                    InventoryManager.clearRedundantClosePacketPermit()
+                }
             }
 
             if (player.isBlockAction) {
@@ -96,7 +122,8 @@ object KillAuraClicker : Clicker<ModuleKillAura>(
                 return true
             }
 
-            if (rotationTiming == KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK && rotation != null) {
+            if (!KillAuraRotationsConfigurable.isVCoreMode &&
+                rotationTiming == KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK && rotation != null) {
                 network.sendPacket(
                     Full(
                         player.x, player.y, player.z, rotation.yaw, rotation.pitch, player.onGround(),
@@ -108,7 +135,8 @@ object KillAuraClicker : Clicker<ModuleKillAura>(
         }
 
         fun unprepare() {
-            if (rotationTiming == KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK && rotation != null) {
+            if (!KillAuraRotationsConfigurable.isVCoreMode &&
+                rotationTiming == KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK && rotation != null) {
                 network.sendPacket(
                     Full(
                         player.x, player.y, player.z, player.withFixedYaw(rotation), player.pitch, player.onGround(),

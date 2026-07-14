@@ -7,17 +7,15 @@ import net.ccbluex.liquidbounce.event.EventManager;
 import net.ccbluex.liquidbounce.event.events.GameRenderEvent;
 import net.ccbluex.liquidbounce.event.events.PerspectiveEvent;
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent;
-import net.ccbluex.liquidbounce.features.module.modules.render.ModuleCustomAmbience;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleTracers;
 import net.ccbluex.liquidbounce.features.module.modules.render.alphadlc.AlphaProjection;
-import net.ccbluex.liquidbounce.features.module.modules.render.handshader.ModuleHandShader;
+import net.ccbluex.liquidbounce.features.module.modules.render.handshader.HandPostProcessCoordinator;
 import net.ccbluex.liquidbounce.utils.render.WorldToScreen;
 import net.minecraft.client.Camera;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.fog.FogRenderer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
@@ -27,7 +25,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameRenderer.class)
@@ -43,6 +40,7 @@ public abstract class MixinGameRenderer {
 
     @Inject(method = "render", at = @At("HEAD"))
     private void hookGameRender(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
+        HandPostProcessCoordinator.INSTANCE.beginFrame();
         EventManager.INSTANCE.callEvent(GameRenderEvent.INSTANCE);
     }
 
@@ -91,7 +89,7 @@ public abstract class MixinGameRenderer {
         )
     )
     private void hookHandShaderBeforeHandRender(DeltaTracker deltaTracker, CallbackInfo ci) {
-        ModuleHandShader.INSTANCE.beginHandCapture(this.minecraft.getMainRenderTarget());
+        HandPostProcessCoordinator.INSTANCE.beginHandCapture(this.minecraft.getMainRenderTarget());
     }
 
     @Inject(
@@ -103,17 +101,7 @@ public abstract class MixinGameRenderer {
         )
     )
     private void hookHandShaderAfterHandRender(DeltaTracker deltaTracker, CallbackInfo ci) {
-        ModuleHandShader.INSTANCE.finishHandCapture(this.minecraft.getMainRenderTarget());
-    }
-
-    @ModifyArg(
-            method = "renderLevel",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/fog/FogRenderer;getBuffer(Lnet/minecraft/client/renderer/fog/FogRenderer$FogMode;)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;")
-    )
-    private FogRenderer.FogMode injectCustomAmbienceDisableFog(FogRenderer.FogMode fogMode) {
-        return ModuleCustomAmbience.FogConfigurable.INSTANCE.shouldDisableWorldFog()
-                ? FogRenderer.FogMode.NONE
-                : fogMode;
+        HandPostProcessCoordinator.INSTANCE.finishHandCapture(this.minecraft.getMainRenderTarget());
     }
 
     @Inject(method = "bobView", at = @At("HEAD"), cancellable = true)

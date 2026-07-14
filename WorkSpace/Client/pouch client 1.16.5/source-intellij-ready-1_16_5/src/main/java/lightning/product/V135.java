@@ -1,0 +1,31 @@
+﻿/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  com.mojang.datafixers.DSL
+ *  com.mojang.datafixers.schemas.Schema
+ *  com.mojang.datafixers.types.templates.TypeTemplate
+ */
+package lightning.product;
+
+import com.mojang.datafixers.DSL;
+import com.mojang.datafixers.schemas.Schema;
+import com.mojang.datafixers.types.templates.TypeTemplate;
+import java.util.Map;
+import java.util.function.Supplier;
+import lightning.product.References;
+
+public class V135
+extends Schema {
+    public V135(int versionKey, Schema parent) {
+        super(versionKey, parent);
+    }
+
+    public void registerTypes(Schema p_registerTypes_1_, Map<String, Supplier<TypeTemplate>> p_registerTypes_2_, Map<String, Supplier<TypeTemplate>> p_registerTypes_3_) {
+        super.registerTypes(p_registerTypes_1_, p_registerTypes_2_, p_registerTypes_3_);
+        p_registerTypes_1_.registerType(false, References.J_1907_R, () -> DSL.optionalFields((String)"RootVehicle", (TypeTemplate)DSL.optionalFields((String)"Entity", (TypeTemplate)References.Q_4569_t.in(p_registerTypes_1_)), (String)"Inventory", (TypeTemplate)DSL.list((TypeTemplate)References.M_588_G.in(p_registerTypes_1_)), (String)"EnderItems", (TypeTemplate)DSL.list((TypeTemplate)References.M_588_G.in(p_registerTypes_1_))));
+        p_registerTypes_1_.registerType(true, References.Q_4569_t, () -> DSL.optionalFields((String)"Passengers", (TypeTemplate)DSL.list((TypeTemplate)References.Q_4569_t.in(p_registerTypes_1_)), (TypeTemplate)References.M_182_A.in(p_registerTypes_1_)));
+    }
+}
+
+

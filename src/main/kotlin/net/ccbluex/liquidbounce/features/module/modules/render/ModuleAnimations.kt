@@ -21,587 +21,701 @@ package net.ccbluex.liquidbounce.features.module.modules.render
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.math.Axis
 import net.ccbluex.liquidbounce.config.types.NamedChoice
-import net.ccbluex.liquidbounce.event.events.AttackEntityEvent
-import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
 import net.minecraft.client.player.AbstractClientPlayer
 import net.minecraft.core.component.DataComponents
+import net.minecraft.tags.BlockTags
+import net.minecraft.tags.ItemTags
+import net.minecraft.util.Mth
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.entity.HumanoidArm
-import net.minecraft.world.item.CrossbowItem
+import net.minecraft.world.item.AxeItem
+import net.minecraft.world.item.BlockItem
+import net.minecraft.world.item.BucketItem
 import net.minecraft.world.item.Item
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.ItemUseAnimation
 import net.minecraft.world.item.Items
+import net.minecraft.world.item.ShieldItem
+import net.minecraft.world.item.ShovelItem
+import net.minecraft.world.item.TridentItem
 import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * VCore 0.8 `Animations` port.
- *
- * #Edit By Codex 2026-06-28: the previous local port only replaced the main-hand melee branch.
- * VCore cancels first-person item rendering for every non-map item while the module is active, then
- * rebuilds the crossbow/use/bow/spear/brush/normal transforms itself. This file now exposes the same
- * transform state to the 1.26.2 ItemInHandRenderer mixin instead of falling back to vanilla branches.
+ * Pouch Client 1.16.5 `Sword Animations` port.
  */
-object ModuleAnimations : ClientModule("Animations", Category.RENDER) {
+object ModuleAnimations : ClientModule(
+    "SwingAnimation",
+    Category.RENDER,
+    aliases = arrayOf("Animations", "SwordAnimations", "Sword Animations")
+) {
 
+    private val modeValue = enumChoice("Mode", Mode.MODE1)
+    private val renderHand by enumChoice("RenderHand", RenderHand.RIGHT)
+    private val angleValue = int("Angle", 100, 0..360)
+        .visibleWhen { mode == Mode.MODE2 || mode == Mode.MODE4 }
+    private val swingStrengthValue = int("SwingStrength", 8, 1..10)
+        .visibleWhen {
+            mode == Mode.MODE1 || mode == Mode.MODE2 || mode == Mode.MODE3 ||
+                mode == Mode.MODE4 || mode == Mode.MODE6
+        }
+    private val swingDownValue = float("SwingDown", 0.0F, 0.0F..1.0F, 0.1F)
+    private val swingSmoothnessValue = int("SwingSmoothness", 11, 1..20)
     private val onlyAura by boolean("OnlyAura", false)
-    private val disableSwapMain by boolean("DisableSwapMain", true)
-    private val disableSwapOff by boolean("DisableSwapOff", true)
-    private val slowAnimation by boolean("SlowAnimation", true)
-    private val onlyOnHit by boolean("OnlyOnHit", false)
-    private val mode by enumChoice("Mode", Mode.SMOOTH)
-    private val offset by int("Offset", 0, 0..10)
-    private val power by int("Power", 6, 1..10)
-    private val angle by float("Angle", 0.0F, 0.0F..360.0F)
-    private val slowAnimationVal by int("SlowValue", 12, 1..20)
+    private val newLeftHand by boolean("NewLeftHand", false)
+        .visibleWhen { mode == Mode.NEW }
 
-    private var lastHitTime = 0L
+    private var newPrimarySlash = false
+    private var newWasSwinging = false
 
-    @Suppress("unused")
-    private val attackHandler = handler<AttackEntityEvent> {
-        lastHitTime = System.currentTimeMillis()
-    }
+    val mode: Mode
+        @JvmStatic get() = modeValue.get()
+
+    private val swingStrength: Float
+        get() = swingStrengthValue.get().toFloat()
+
+    private val angle: Float
+        get() = angleValue.get().toFloat()
 
     private fun auraReady(): Boolean =
         !onlyAura || (ModuleKillAura.running && ModuleKillAura.targetTracker.target != null)
 
-    private fun hitGateReady(): Boolean =
-        !onlyOnHit || System.currentTimeMillis() - lastHitTime < HIT_ANIMATION_DURATION_MS
+    @JvmStatic
+    fun shouldApply(): Boolean = running && auraReady()
 
-    fun shouldAnimate(item: ItemStack): Boolean = running && auraReady() && hitGateReady()
+    @JvmStatic
+    fun resolveMainArm(player: AbstractClientPlayer): HumanoidArm {
+        if (!running || player !== mc.player) {
+            return player.mainArm
+        }
 
-    fun shouldRenderCustom(item: ItemStack): Boolean =
-        shouldAnimate(item) && !item.isEmpty && !item.has(DataComponents.MAP_ID)
+        return when (renderHand) {
+            RenderHand.RIGHT -> HumanoidArm.RIGHT
+            RenderHand.LEFT -> HumanoidArm.LEFT
+        }
+    }
 
-    fun shouldDisableSwapMain(): Boolean = running && disableSwapMain
+    @JvmStatic
+    fun visualSwingDuration(original: Int, entity: Any, swingingArm: InteractionHand?): Int {
+        if (entity !== mc.player || !shouldApply()) {
+            return original
+        }
 
-    fun shouldDisableSwapOff(): Boolean = running && disableSwapOff
+        val hand = swingingArm ?: InteractionHand.MAIN_HAND
+        return if (hand == InteractionHand.MAIN_HAND) swingSmoothnessValue.get() else original
+    }
 
-    /** VCore SlowAnimation: extends the local hand-swing duration by SlowValue ticks. */
-    fun extraSwingDuration(): Int = if (running && auraReady() && slowAnimation) slowAnimationVal else 0
+    @JvmStatic
+    fun transformEquipProgress(
+        original: Float,
+        hand: InteractionHand,
+        item: ItemStack
+    ): Float {
+        if (!shouldApply() || hand != InteractionHand.MAIN_HAND) {
+            return original
+        }
 
-    /**
-     * Applies the full VCore first-person transform before the mixin submits the item.
-     * The mixin owns push/pop and renderItem, matching VCore's HEAD-cancel render hook.
-     */
-    fun applyVCoreTransforms(
+        if (mode == Mode.NEW && item.isEmpty) {
+            return original
+        }
+
+        return swingDownValue.get()
+    }
+
+    @JvmStatic
+    fun applySwingTransform(
+        matrices: PoseStack,
+        player: AbstractClientPlayer,
+        hand: InteractionHand,
+        arm: HumanoidArm,
+        item: ItemStack,
+        swingProgress: Float
+    ): Boolean {
+        if (!shouldApply() || hand != InteractionHand.MAIN_HAND || item.isEmpty ||
+            item.has(DataComponents.MAP_ID) || item.item == Items.CROSSBOW) {
+            return false
+        }
+
+        val isLeft = arm == HumanoidArm.LEFT
+        val anim = sin(sqrt(swingProgress) * PI).toFloat()
+
+        when (mode) {
+            Mode.MODE1 -> {
+                val swingSqrt = sqrt(swingProgress)
+                val direction = if (isLeft) -1.0F else 1.0F
+                matrices.mulPose(Axis.YP.rotationDegrees(
+                    direction * (20.0F + sin(swingProgress * swingProgress * PI).toFloat() / 4.0F * -10.0F)
+                ))
+                matrices.mulPose(Axis.ZP.rotationDegrees(
+                    direction * sin(swingSqrt * PI).toFloat() * -20.0F
+                ))
+                matrices.mulPose(Axis.XP.rotationDegrees(
+                    sin(swingSqrt * PI).toFloat() * -(swingStrength * 10.0F)
+                ))
+                matrices.mulPose(Axis.YP.rotationDegrees(-direction * 45.0F))
+            }
+
+            Mode.MODE2 -> {
+                matrices.translate(0.0, 0.15, -0.3)
+                matrices.mulPose(Axis.YP.rotationDegrees(if (isLeft) -90.0F else 90.0F))
+                matrices.mulPose(Axis.ZP.rotationDegrees(if (isLeft) 60.0F else -60.0F))
+                matrices.mulPose(Axis.XP.rotationDegrees(-angle - swingStrength * 10.0F * anim))
+            }
+
+            Mode.MODE3 -> {
+                matrices.mulPose(Axis.XP.rotationDegrees(swingProgress * PI.toFloat() - swingStrength * 10.0F * anim))
+            }
+
+            Mode.MODE4 -> {
+                matrices.translate(0.0, 0.15, -0.3)
+                matrices.mulPose(Axis.YP.rotationDegrees(if (isLeft) -70.0F else 70.0F))
+                matrices.mulPose(Axis.ZP.rotationDegrees(if (isLeft) 30.0F else -30.0F))
+                matrices.scale(0.9F, 0.9F, 0.9F)
+                matrices.mulPose(Axis.XP.rotationDegrees(-angle - swingStrength * 10.0F * anim))
+            }
+
+            Mode.MODE5 -> {
+                val direction = if (isLeft) -1.0F else 1.0F
+                matrices.mulPose(Axis.YP.rotationDegrees(direction * 45.0F))
+                matrices.mulPose(Axis.XP.rotationDegrees(anim * -20.0F))
+                matrices.mulPose(Axis.ZP.rotationDegrees(direction * anim * -20.0F))
+                matrices.mulPose(Axis.XP.rotationDegrees(anim * -80.0F))
+                matrices.translate(direction * 0.4F, 0.2F, 0.2F)
+                matrices.translate(direction * -0.5F, 0.08F, 0.0F)
+                matrices.mulPose(Axis.YP.rotationDegrees(direction * 20.0F))
+                matrices.mulPose(Axis.XP.rotationDegrees(-80.0F))
+                matrices.mulPose(Axis.YP.rotationDegrees(direction * 20.0F))
+            }
+
+            Mode.MODE6 -> {
+                val direction = if (isLeft) -1.0F else 1.0F
+                val f = sin(swingProgress * swingProgress * PI).toFloat()
+                matrices.mulPose(Axis.YP.rotationDegrees(direction * (45.0F + f * -20.0F)))
+                val f1 = sin(sqrt(swingProgress) * PI).toFloat()
+                matrices.mulPose(Axis.ZP.rotationDegrees(direction * f1 * -20.0F))
+                matrices.mulPose(Axis.XP.rotationDegrees(f1 * -swingStrength * 10.0F))
+                matrices.mulPose(Axis.YP.rotationDegrees(direction * -45.0F))
+            }
+
+            Mode.MODE7 -> {
+                val direction = if (isLeft) -1.0F else 1.0F
+                matrices.scale(1.0F, 1.0F, 1.0F)
+                matrices.translate(direction * (0.4F - anim * 0.3F), 0.0F, -anim * 0.2F)
+                matrices.mulPose(Axis.YP.rotationDegrees(direction * 90.0F))
+                matrices.mulPose(Axis.ZP.rotationDegrees(direction * -30.0F))
+                matrices.mulPose(Axis.XP.rotationDegrees(-70.0F - 30.0F * anim))
+            }
+
+            Mode.ROTATE_360 -> matrices.mulPose(Axis.XP.rotationDegrees(-360.0F * swingProgress))
+
+            Mode.SLANT -> {
+                val rotate = 35.0F
+                matrices.translate(0.0, 0.0, -0.3 * anim)
+                matrices.mulPose(Axis.XP.rotationDegrees(anim * -rotate))
+                matrices.mulPose(Axis.ZP.rotationDegrees(anim * rotate))
+            }
+
+            Mode.NEW -> return applyNewSlashTransform(matrices, player, hand, item, isLeft, swingProgress)
+
+            Mode.FADE -> {
+                val direction = if (isLeft) -1.0F else 1.0F
+                val f2 = sin(swingProgress * swingProgress * PI).toFloat()
+                matrices.mulPose(Axis.YP.rotationDegrees(direction * (45.0F + f2 * -5.0F)))
+                val f13 = sin(sqrt(swingProgress * swingProgress) * PI).toFloat()
+                matrices.mulPose(Axis.ZP.rotationDegrees(direction * f13 * -20.0F))
+                matrices.mulPose(Axis.XP.rotationDegrees(f13 * -(swingStrength * 8.0F)))
+                matrices.mulPose(Axis.YP.rotationDegrees(direction * -45.0F))
+            }
+
+            Mode.SPIN_SLASH -> {
+                val direction = if (isLeft) -1.0F else 1.0F
+                val wave = sin(swingProgress * PI).toFloat()
+                matrices.translate(direction * 0.15F, -0.1F * wave, -0.35F * wave)
+                matrices.mulPose(Axis.YP.rotationDegrees(direction * (110.0F * wave)))
+                matrices.mulPose(Axis.ZP.rotationDegrees(direction * (-65.0F * wave)))
+                matrices.mulPose(Axis.XP.rotationDegrees(-95.0F * wave))
+            }
+        }
+
+        return true
+    }
+
+    @JvmStatic
+    fun shouldRenderNewSpecial(player: AbstractClientPlayer, hand: InteractionHand, item: ItemStack): Boolean {
+        if (!shouldApply() || mode != Mode.NEW || player !== mc.player || player.isAutoSpinAttack) {
+            return false
+        }
+
+        if (hand == InteractionHand.OFF_HAND && !newLeftHand) {
+            return false
+        }
+
+        if (hand == InteractionHand.OFF_HAND && player.isInvisible) {
+            return false
+        }
+
+        if (!item.isEmpty && (item.has(DataComponents.MAP_ID) || item.item == Items.CROSSBOW)) {
+            return false
+        }
+
+        if (player.isUsingItem && player.useItemRemainingTicks > 0 && player.usedItemHand == hand) {
+            val useAnimation = effectiveUseAnimation(item)
+            if (hand == InteractionHand.MAIN_HAND &&
+                useAnimation != ItemUseAnimation.EAT &&
+                useAnimation != ItemUseAnimation.DRINK &&
+                useAnimation != ItemUseAnimation.BLOCK) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    @JvmStatic
+    fun newSpecialArm(player: AbstractClientPlayer, hand: InteractionHand): HumanoidArm {
+        val mainArm = resolveMainArm(player)
+        return if (hand == InteractionHand.MAIN_HAND) mainArm else mainArm.opposite
+    }
+
+    @JvmStatic
+    fun applyNewSpecialArmPose(
+        matrices: PoseStack,
         player: AbstractClientPlayer,
         tickDelta: Float,
         hand: InteractionHand,
-        swingProgress: Float,
+        arm: HumanoidArm,
         item: ItemStack,
         equipProgress: Float,
-        matrices: PoseStack
-    ) {
-        val mainHand = hand == InteractionHand.MAIN_HAND
-        val arm = if (mainHand) player.mainArm else player.mainArm.opposite
-
-        if (item.item == Items.CROSSBOW) {
-            applyCrossbowTransform(player, tickDelta, hand, swingProgress, item, equipProgress, arm, mainHand, matrices)
-            return
+        swingProgress: Float
+    ): NewArmRender? {
+        if (item.isEmpty) {
+            return applyNewEmptyArmPose(matrices, player, arm, equipProgress, swingProgress)
         }
 
-        val chosenMode = if (isSword(item.item) || isAxe(item.item) || isPickaxe(item.item)) {
-            mode
-        } else {
-            Mode.FADE
-        }
-        val right = arm == HumanoidArm.RIGHT
-
-        if (player.isUsingItem && player.getUseItemRemainingTicks() > 0 && player.usedItemHand == hand) {
-            val side = if (right) 1 else -1
-
-            when (item.useAnimation) {
-                ItemUseAnimation.NONE,
-                ItemUseAnimation.BLOCK -> applyEquipOffset(matrices, arm, equipProgress)
-
+        val usingThisHand = player.isUsingItem && player.useItemRemainingTicks > 0 && player.usedItemHand == hand
+        if (usingThisHand) {
+            val useTicks = item.getUseDuration(player) - (player.useItemRemainingTicks - tickDelta + 1.0F)
+            when (effectiveUseAnimation(item)) {
                 ItemUseAnimation.EAT,
                 ItemUseAnimation.DRINK -> {
-                    applyEatOrDrinkTransformationCustom(matrices, tickDelta, arm, item, player)
-                    applyEquipOffset(matrices, arm, equipProgress)
+                    applyNewEatDrinkHandPose(matrices, arm, useTicks)
+                    return NewArmRender(0.0F, swingProgress)
                 }
 
-                ItemUseAnimation.BOW -> applyBowTransform(matrices, tickDelta, side, arm, equipProgress, item, player)
+                ItemUseAnimation.BLOCK -> {
+                    applyNewBlockHandPose(matrices, arm, useTicks)
+                    return NewArmRender(0.0F, swingProgress)
+                }
 
-                ItemUseAnimation.TRIDENT,
-                ItemUseAnimation.SPEAR -> applySpearTransform(matrices, tickDelta, side, arm, equipProgress, item, player)
-
-                ItemUseAnimation.BRUSH -> applyBrushTransformation(matrices, tickDelta, arm, item, equipProgress, player)
-
-                else -> applyEquipOffset(matrices, arm, equipProgress)
+                else -> {
+                    if (hand == InteractionHand.MAIN_HAND) {
+                        return null
+                    }
+                    applyNewHandBase(matrices, equipProgress, arm)
+                    return NewArmRender(0.0F, 0.0F)
+                }
             }
-        } else if (player.isAutoSpinAttack) {
-            val side = if (right) 1 else -1
-            applyEquipOffset(matrices, arm, equipProgress)
-            matrices.translate(side * -0.4F, 0.8F, 0.3F)
-            matrices.mulPose(Axis.YP.rotationDegrees(side * 65.0F))
-            matrices.mulPose(Axis.ZP.rotationDegrees(side * -85.0F))
-        } else {
-            renderSwordAnimation(matrices, swingProgress, equipProgress, arm, hand, chosenMode)
         }
 
-        applyHeldItemViewModel(matrices, hand)
-        applySelfOldMainHandOffset(matrices, hand, chosenMode)
+        if (hand == InteractionHand.MAIN_HAND && !applyNewSlashTransform(matrices, player, hand, item, arm == HumanoidArm.LEFT, swingProgress)) {
+            return null
+        }
+
+        applyNewHandBase(matrices, equipProgress, arm)
+        return NewArmRender(0.0F, 0.0F)
     }
 
-    private fun applyCrossbowTransform(
+    @JvmStatic
+    fun applyNewSpecialItemPose(matrices: PoseStack, arm: HumanoidArm, item: ItemStack) {
+        applyNewCommonItemAnchor(matrices, arm)
+        applyNewItemPose(matrices, arm, item)
+    }
+
+    private fun applyNewSlashTransform(
+        matrices: PoseStack,
         player: AbstractClientPlayer,
-        tickDelta: Float,
         hand: InteractionHand,
-        swingProgress: Float,
         item: ItemStack,
-        equipProgress: Float,
+        isLeft: Boolean,
+        swingProgress: Float
+    ): Boolean {
+        if (item.isEmpty) {
+            return false
+        }
+
+        updateNewSlashState(swingProgress)
+
+        val direction = if (isLeft) -1.0F else 1.0F
+        val swingRot = newSwingRot(swingProgress)
+        val swing = easeInOutBack(sin(swingProgress * PI).toFloat())
+        val sword = isSwordLike(item)
+        val axe = isAxeLike(item)
+        val shovel = isShovelLike(item)
+        val tool = isGeneralDiggerTool(item)
+        val spear = isSpearLike(item)
+        val block = effectiveUseAnimation(item) == ItemUseAnimation.BLOCK
+        val primarySlash = newPrimarySlash || axe || spear || block
+
+        if (primarySlash && !shovel) {
+            if (sword || axe) {
+                matrices.translate(0.8F * direction * swingRot, 0.3F * swingRot, -0.5F * swing)
+                matrices.mulPose(Axis.YP.rotationDegrees(15.0F * swingRot * direction))
+                matrices.mulPose(Axis.XP.rotationDegrees(-20.0F * swingRot))
+                matrices.mulPose(Axis.ZP.rotationDegrees(-70.0F * swingRot * direction))
+                matrices.mulPose(Axis.XP.rotationDegrees((if (sword) 40.0F else 30.0F) * swing))
+                return true
+            }
+
+            if (spear) {
+                matrices.translate(0.0, 0.0, 0.45 * swingRot)
+                matrices.translate(-0.25 * direction * swing, -0.35 * swingRot, -0.6 * swing)
+                matrices.translate(0.0, 0.1 * swing, 0.0)
+                matrices.mulPose(Axis.YP.rotationDegrees(15.0F * swingRot * direction))
+                matrices.mulPose(Axis.ZP.rotationDegrees(30.0F * swingRot * direction))
+                return true
+            }
+
+            if (tool && !block) {
+                matrices.translate(0.1F * direction * swingRot, 0.1F * swingRot, -0.5F * swing)
+                matrices.mulPose(Axis.XP.rotationDegrees(-30.0F * swingRot))
+                matrices.mulPose(Axis.ZP.rotationDegrees(-20.0F * swingRot * direction))
+                matrices.mulPose(Axis.XP.rotationDegrees(40.0F * swing))
+                return true
+            }
+
+            if (!block) {
+                matrices.translate(0.1F * direction * swingRot, 0.1F * swingRot, -0.1F * swing)
+                matrices.mulPose(Axis.XP.rotationDegrees(-30.0F * swingRot))
+                matrices.mulPose(Axis.ZP.rotationDegrees(-10.0F * swingRot * direction))
+                matrices.mulPose(Axis.XP.rotationDegrees(40.0F * swing))
+                matrices.mulPose(Axis.YP.rotationDegrees(10.0F * swing * direction))
+                return true
+            }
+
+            matrices.translate(0.1F * direction * swingRot, 0.1F * swingRot, -0.2F * swing)
+            matrices.mulPose(Axis.XP.rotationDegrees(-10.0F * swingRot))
+            matrices.mulPose(Axis.ZP.rotationDegrees(-10.0F * swingRot * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(20.0F * swing))
+            return true
+        }
+
+        if (shovel) {
+            matrices.translate(0.0, 0.15 * swingRot, -0.25 * swingRot)
+            matrices.translate(0.0, 0.0, -0.2 * swing)
+            matrices.mulPose(Axis.YP.rotationDegrees(15.0F * swingRot))
+            matrices.mulPose(Axis.XP.rotationDegrees(-35.0F * swingRot))
+            matrices.mulPose(Axis.XP.rotationDegrees(30.0F * swing))
+            return true
+        }
+
+        if (sword) {
+            matrices.translate(-0.55F * direction * swingRot, -0.8F * swingRot, -0.77F * swing)
+            matrices.mulPose(Axis.YP.rotationDegrees(5.0F * swingRot * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(-30.0F * swingRot))
+            matrices.mulPose(Axis.ZP.rotationDegrees(70.0F * swingRot * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(50.0F * swing))
+            return true
+        }
+
+        if (tool) {
+            matrices.translate(0.1F * direction * swingRot, 0.1F * swingRot, -0.5F * swing)
+            matrices.mulPose(Axis.XP.rotationDegrees(-30.0F * swingRot))
+            matrices.mulPose(Axis.ZP.rotationDegrees(-20.0F * swingRot * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(40.0F * swing))
+            return true
+        }
+
+        matrices.translate(0.1F * direction * swingRot, 0.1F * swingRot, -0.1F * swing)
+        matrices.mulPose(Axis.XP.rotationDegrees(-30.0F * swingRot))
+        matrices.mulPose(Axis.ZP.rotationDegrees(-10.0F * swingRot * direction))
+        matrices.mulPose(Axis.XP.rotationDegrees(40.0F * swing))
+        matrices.mulPose(Axis.YP.rotationDegrees(10.0F * swing * direction))
+        return true
+    }
+
+    private fun applyNewEmptyArmPose(
+        matrices: PoseStack,
+        player: AbstractClientPlayer,
         arm: HumanoidArm,
-        mainHand: Boolean,
-        matrices: PoseStack
-    ) {
-        val charged = CrossbowItem.isCharged(item)
-        val right = arm == HumanoidArm.RIGHT
-        val side = if (right) 1 else -1
+        equipProgress: Float,
+        swingProgress: Float
+    ): NewArmRender? {
+        if (player.isInvisible) {
+            return null
+        }
 
-        if (player.isUsingItem && player.getUseItemRemainingTicks() > 0 && player.usedItemHand == hand && !charged) {
-            applyEquipOffset(matrices, arm, equipProgress)
-            matrices.translate(side * -0.4785682F, -0.094387F, 0.05731531F)
-            matrices.mulPose(Axis.XP.rotationDegrees(-11.935F))
-            matrices.mulPose(Axis.YP.rotationDegrees(side * 65.3F))
-            matrices.mulPose(Axis.ZP.rotationDegrees(side * -9.785F))
+        val direction = if (arm == HumanoidArm.RIGHT) 1.0F else -1.0F
+        val movementPose = player.isSwimming || player.isVisuallySwimming || !player.onGround() && player.onClimbable()
 
-            val useTime = item.getUseDuration(player) - (player.getUseItemRemainingTicks() - tickDelta + 1.0F)
-            var charge = useTime / CrossbowItem.getChargeDuration(item, player)
-            if (charge > 1.0F) {
-                charge = 1.0F
+        if (arm == HumanoidArm.LEFT) {
+            val swingRot = newSwingRot(swingProgress)
+            val swing = easeInOutBack(sin(swingProgress * PI).toFloat())
+
+            if (movementPose) {
+                applyNewHandBase(matrices, equipProgress, arm)
+                matrices.translate(0.05, -0.08, -0.1)
+                matrices.mulPose(Axis.YP.rotationDegrees(12.0F))
+            } else {
+                matrices.translate(-0.1, -0.08 - equipProgress * 0.05, -0.12)
+                matrices.translate(-0.03 * swing, 0.04 * swingRot, -0.05 * swing)
+                matrices.mulPose(Axis.YP.rotationDegrees(18.0F))
+                matrices.mulPose(Axis.ZP.rotationDegrees(-10.0F))
+                matrices.mulPose(Axis.XP.rotationDegrees(-12.0F))
+                matrices.mulPose(Axis.YP.rotationDegrees(8.0F * swing))
+                matrices.mulPose(Axis.XP.rotationDegrees(-6.0F * swingRot))
             }
-            if (charge > 0.1F) {
-                val wave = sin((useTime - 0.1F) * 1.3F).toFloat()
-                val strength = charge - 0.1F
-                val jiggle = wave * strength
-                matrices.translate(jiggle * 0.0F, jiggle * 0.004F, jiggle * 0.0F)
-            }
 
-            matrices.translate(charge * 0.0F, charge * 0.0F, charge * 0.04F)
-            matrices.scale(1.0F, 1.0F, 1.0F + charge * 0.2F)
-            matrices.mulPose(Axis.YN.rotationDegrees(side * 45.0F))
+            return NewArmRender(equipProgress * 0.35F, 0.0F)
+        }
+
+        if (movementPose) {
+            applyNewHandBase(matrices, equipProgress, arm)
         } else {
-            val x = -0.4F * sin(sqrt(swingProgress) * PI).toFloat()
-            val y = 0.2F * sin(sqrt(swingProgress) * PI * 2.0).toFloat()
-            val z = -0.2F * sin(swingProgress * PI).toFloat()
-            matrices.translate(side * x, y, z)
-            applyEquipOffset(matrices, arm, equipProgress)
-            applySwingOffset(matrices, arm, swingProgress)
-            if (charged && swingProgress < 0.001F && mainHand) {
-                matrices.translate(side * -0.641864F, 0.0F, 0.0F)
-                matrices.mulPose(Axis.YP.rotationDegrees(side * 10.0F))
-            }
+            val swingRot = newSwingRot(swingProgress)
+            val swing = easeInOutBack(sin(swingProgress * PI).toFloat())
+            matrices.translate(0.0, 0.2 * swingRot, 0.15 * swingRot)
+            matrices.translate(0.1 * direction * swing, 0.15 * swing, -0.45 * swing)
+            matrices.mulPose(Axis.YP.rotationDegrees(35.0F * swing * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(-30.0F * swing))
+            matrices.mulPose(Axis.YP.rotationDegrees(-10.0F * swingRot * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(10.0F * swingRot))
         }
+
+        return NewArmRender(0.0F, 0.0F)
     }
 
-    private fun applyBowTransform(
-        matrices: PoseStack,
-        tickDelta: Float,
-        side: Int,
-        arm: HumanoidArm,
-        equipProgress: Float,
-        item: ItemStack,
-        player: AbstractClientPlayer
-    ) {
-        applyEquipOffset(matrices, arm, equipProgress)
-        matrices.translate(side * -0.2785682F, 0.18344387F, 0.15731531F)
-        matrices.mulPose(Axis.XP.rotationDegrees(-13.935F))
-        matrices.mulPose(Axis.YP.rotationDegrees(side * 35.3F))
-        matrices.mulPose(Axis.ZP.rotationDegrees(side * -9.785F))
-
-        val useTime = item.getUseDuration(player) - (player.getUseItemRemainingTicks() - tickDelta + 1.0F)
-        var pull = useTime / 20.0F
-        pull = (pull * pull + pull * 2.0F) / 3.0F
-        if (pull > 1.0F) {
-            pull = 1.0F
-        }
-        if (pull > 0.1F) {
-            val wave = sin((useTime - 0.1F) * 1.3F).toFloat()
-            val strength = pull - 0.1F
-            val jiggle = wave * strength
-            matrices.translate(jiggle * 0.0F, jiggle * 0.004F, jiggle * 0.0F)
-        }
-
-        matrices.translate(pull * 0.0F, pull * 0.0F, pull * 0.04F)
-        matrices.scale(1.0F, 1.0F, 1.0F + pull * 0.2F)
-        matrices.mulPose(Axis.YN.rotationDegrees(side * 45.0F))
+    private fun applyNewHandBase(matrices: PoseStack, equipProgress: Float, arm: HumanoidArm) {
+        val direction = if (arm == HumanoidArm.RIGHT) 1.0F else -1.0F
+        matrices.translate(direction, -equipProgress * 0.3F, 0.3F)
+        matrices.mulPose(Axis.YP.rotationDegrees(45.0F * direction))
+        matrices.mulPose(Axis.ZP.rotationDegrees(-40.0F * direction))
+        matrices.mulPose(Axis.XP.rotationDegrees(30.0F))
+        matrices.scale(0.9F, 0.9F, 0.9F)
     }
 
-    private fun applySpearTransform(
-        matrices: PoseStack,
-        tickDelta: Float,
-        side: Int,
-        arm: HumanoidArm,
-        equipProgress: Float,
-        item: ItemStack,
-        player: AbstractClientPlayer
-    ) {
-        applyEquipOffset(matrices, arm, equipProgress)
-        matrices.translate(side * -0.5F, 0.7F, 0.1F)
-        matrices.mulPose(Axis.XP.rotationDegrees(-55.0F))
-        matrices.mulPose(Axis.YP.rotationDegrees(side * 35.3F))
-        matrices.mulPose(Axis.ZP.rotationDegrees(side * -9.785F))
+    private fun applyNewEatDrinkHandPose(matrices: PoseStack, arm: HumanoidArm, useTicks: Float) {
+        val direction = if (arm == HumanoidArm.RIGHT) 1.0F else -1.0F
+        val progress = Mth.clamp(useTicks / 5.0F, 0.0F, 1.0F)
+        val wobble = sin(useTicks / 2.0F * PI).toFloat() / 10.0F
 
-        val useTime = item.getUseDuration(player) - (player.getUseItemRemainingTicks() - tickDelta + 1.0F)
-        var pull = useTime / 10.0F
-        if (pull > 1.0F) {
-            pull = 1.0F
-        }
-        if (pull > 0.1F) {
-            val wave = sin((useTime - 0.1F) * 1.3F).toFloat()
-            val strength = pull - 0.1F
-            val jiggle = wave * strength
-            matrices.translate(jiggle * 0.0F, jiggle * 0.004F, jiggle * 0.0F)
-        }
-
-        matrices.translate(0.0F, 0.0F, pull * 0.2F)
-        matrices.scale(1.0F, 1.0F, 1.0F + pull * 0.2F)
-        matrices.mulPose(Axis.YN.rotationDegrees(side * 45.0F))
+        matrices.translate(direction.toDouble(), 0.1, 0.3)
+        matrices.translate(0.2 * direction * progress, -0.7 * progress, -0.2 * progress)
+        matrices.translate(0.0, -0.2 * wobble, -0.2 * wobble)
+        matrices.translate(0.0, 0.1 * easeInOutBack(sin(progress * PI).toFloat()), 0.0)
+        matrices.mulPose(Axis.YP.rotationDegrees(45.0F * direction))
+        matrices.mulPose(Axis.ZP.rotationDegrees(-40.0F * direction))
+        matrices.mulPose(Axis.XP.rotationDegrees(30.0F))
+        matrices.scale(0.9F, 0.9F, 0.9F)
+        matrices.mulPose(Axis.YP.rotationDegrees(45.0F * progress * direction))
     }
 
-    private fun applyBrushTransformation(
-        matrices: PoseStack,
-        tickDelta: Float,
-        arm: HumanoidArm,
-        stack: ItemStack,
-        equipProgress: Float,
-        player: AbstractClientPlayer
-    ) {
-        applyEquipOffset(matrices, arm, equipProgress)
-        val f = player.getUseItemRemainingTicks() - tickDelta + 1.0F
-        val g = 1.0F - f / stack.getUseDuration(player)
-        val m = -15.0F + 75.0F * cos(g * 45.0F * PI).toFloat()
-        if (arm != HumanoidArm.RIGHT) {
-            matrices.translate(0.1F, 0.83F, 0.35F)
-            matrices.mulPose(Axis.XP.rotationDegrees(-80.0F))
-            matrices.mulPose(Axis.YP.rotationDegrees(-90.0F))
-            matrices.mulPose(Axis.XP.rotationDegrees(m))
-            matrices.translate(-0.3F, 0.22F, 0.35F)
-        } else {
-            matrices.translate(-0.25F, 0.22F, 0.35F)
-            matrices.mulPose(Axis.XP.rotationDegrees(-80.0F))
-            matrices.mulPose(Axis.YP.rotationDegrees(90.0F))
-            matrices.mulPose(Axis.ZP.rotationDegrees(0.0F))
-            matrices.mulPose(Axis.XP.rotationDegrees(m))
-        }
+    private fun applyNewBlockHandPose(matrices: PoseStack, arm: HumanoidArm, useTicks: Float) {
+        val direction = if (arm == HumanoidArm.RIGHT) 1.0F else -1.0F
+        val blockProgress = Mth.clamp(useTicks / 4.0F, 0.0F, 1.0F)
+        val settleProgress = Mth.clamp(useTicks / 6.0F, 0.0F, 1.0F)
+
+        matrices.translate(0.0, -0.2, 0.0)
+        matrices.translate(direction.toDouble(), 0.0, 0.3)
+        matrices.translate(0.7 * blockProgress * direction, 0.0, -1.3 * blockProgress)
+        matrices.translate(-0.2 * direction * settleProgress, 0.0, 0.0)
+        matrices.mulPose(Axis.XP.rotationDegrees(10.0F * sin(settleProgress * PI).toFloat()))
+        matrices.mulPose(Axis.YP.rotationDegrees(70.0F * blockProgress * direction))
+        matrices.mulPose(Axis.YP.rotationDegrees(45.0F * direction))
+        matrices.mulPose(Axis.ZP.rotationDegrees(-40.0F * direction))
+        matrices.mulPose(Axis.XP.rotationDegrees(30.0F))
+        matrices.mulPose(Axis.YP.rotationDegrees(5.0F * direction * blockProgress))
+        matrices.mulPose(Axis.XP.rotationDegrees(-10.0F * blockProgress))
+        matrices.translate(0.0, 0.0, -0.2 * blockProgress)
+        matrices.scale(0.9F, 0.9F, 0.9F)
     }
 
-    private fun applyEatOrDrinkTransformationCustom(
-        matrices: PoseStack,
-        tickDelta: Float,
-        arm: HumanoidArm,
-        stack: ItemStack,
-        player: AbstractClientPlayer
-    ) {
-        val f = player.getUseItemRemainingTicks() - tickDelta + 1.0F
-        val g = f / stack.getUseDuration(player)
-        if (g < 0.8F) {
-            val h = abs(cos(f / 4.0F * PI) * 0.005F).toFloat()
-            matrices.translate(0.0F, h, 0.0F)
-        }
-
-        val h = 1.0F - g.toDouble().pow(27.0).toFloat()
-        val side = if (arm == HumanoidArm.RIGHT) 1 else -1
-        matrices.translate(h * 0.6F * side, h * -0.5F, h * 0.0F)
-        matrices.mulPose(Axis.YP.rotationDegrees(side * h * 90.0F))
-        matrices.mulPose(Axis.XP.rotationDegrees(h * 10.0F))
-        matrices.mulPose(Axis.ZP.rotationDegrees(side * h * 30.0F))
+    private fun applyNewCommonItemAnchor(matrices: PoseStack, arm: HumanoidArm) {
+        val direction = if (arm == HumanoidArm.RIGHT) 1.0F else -1.0F
+        matrices.translate(-0.3 * direction, 0.65, -0.1)
+        matrices.mulPose(Axis.YP.rotationDegrees(-65.0F * direction))
+        matrices.mulPose(Axis.XP.rotationDegrees(10.0F))
     }
 
-    private fun renderSwordAnimation(
-        matrices: PoseStack,
-        swingProgress: Float,
-        equipProgress: Float,
-        arm: HumanoidArm,
-        hand: InteractionHand,
-        animMode: Mode
-    ) {
-        if (arm == HumanoidArm.LEFT && (animMode == Mode.SELF || animMode == Mode.OLD)) {
-            val viewModelX = getSelfOldViewModelX(hand, animMode)
-            val viewModelY = getSelfOldViewModelY(hand, animMode)
-            val viewModelZ = viewModelZ()
-            applyEquipOffset(matrices, arm, equipProgress)
-            matrices.translate(-viewModelX, viewModelY, viewModelZ)
-            applySwingOffset(matrices, arm, swingProgress)
-            matrices.translate(viewModelX, -viewModelY, -viewModelZ)
+    private fun applyNewItemPose(matrices: PoseStack, arm: HumanoidArm, stack: ItemStack) {
+        val direction = if (arm == HumanoidArm.RIGHT) 1.0F else -1.0F
+        val item = stack.item
+
+        if (isTorchLike(item)) {
+            matrices.scale(1.5F, 1.5F, 1.5F)
+            matrices.mulPose(Axis.YN.rotationDegrees(25.0F * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(5.0F))
+            matrices.mulPose(Axis.ZP.rotationDegrees(75.0F * direction))
+            matrices.translate(0.2 * direction, 0.2, 0.05)
             return
         }
 
-        val sp = swingProgress.toDouble()
-        val powF = power.toFloat()
-
-        when (animMode) {
-            Mode.DEFAULT -> {
-                applyEquipOffset(matrices, arm, equipProgress)
-                translateToViewModel(matrices, arm)
-                val sin2 = sin(sqrt(sp) * PI).toFloat()
-                matrices.mulPose(Axis.XP.rotationDegrees(sin2 * -(powF * 10.0F)))
-                matrices.mulPose(Axis.ZP.rotationDegrees(sin2 * 45.0F))
-                matrices.mulPose(Axis.YP.rotationDegrees(sin2 * 15.0F))
-                translateBack(matrices, arm)
-            }
-            Mode.SMOOTH -> {
-                applyEquipOffset(matrices, arm, equipProgress)
-                translateToViewModel(matrices, arm)
-                val f = sin(sp * sp * PI).toFloat()
-                val sin2 = sin(sqrt(sp) * PI).toFloat()
-                matrices.mulPose(Axis.YP.rotationDegrees(sin2 * (45.0F + f * -20.0F)))
-                matrices.mulPose(Axis.ZP.rotationDegrees(sin2 * sin2 * -20.0F))
-                matrices.mulPose(Axis.XP.rotationDegrees(sin2 * -(powF * 10.0F)))
-                matrices.mulPose(Axis.YP.rotationDegrees(sin2 * -45.0F))
-                translateBack(matrices, arm)
-            }
-            Mode.FADE -> {
-                applyEquipOffset(matrices, arm, equipProgress)
-                translateToViewModel(matrices, arm)
-                val handDir = if (arm == HumanoidArm.RIGHT) 1 else -1
-                val sinSq = sin(sp * sp * PI).toFloat()
-                val sinSqrt = sin(sqrt(sp) * PI).toFloat()
-                val sinLinear = sin(sp * PI).toFloat()
-                matrices.mulPose(Axis.YP.rotationDegrees(handDir * sinSqrt * (45.0F + sinSq * -5.0F)))
-                matrices.mulPose(Axis.ZP.rotationDegrees(handDir * sinSqrt * sinLinear * -20.0F))
-                matrices.mulPose(Axis.XP.rotationDegrees(sinLinear * -((powF + 2.0F) * 8.0F)))
-                matrices.mulPose(Axis.YP.rotationDegrees(handDir * sinSqrt * -45.0F))
-                translateBack(matrices, arm)
-            }
-            Mode.SELF -> {
-                val anim = sin(sp * PI).toFloat()
-                applyEquipOffset(matrices, arm, 0.0F)
-                translateToSelfOldViewModel(matrices, hand, animMode)
-                matrices.mulPose(Axis.YP.rotationDegrees(90.0F))
-                matrices.mulPose(Axis.ZP.rotationDegrees(-70.0F))
-                val baseX = -90.0F + offset * 10.0F
-                matrices.mulPose(Axis.XP.rotationDegrees(baseX - powF * 10.0F * anim))
-                translateBackSelfOldViewModel(matrices, hand, animMode)
-            }
-            Mode.OLD -> {
-                val anim = sin(sp * PI).toFloat()
-                applyEquipOffset(matrices, arm, 0.0F)
-                translateToSelfOldViewModel(matrices, hand, animMode)
-                matrices.mulPose(Axis.YP.rotationDegrees(90.0F))
-                matrices.mulPose(Axis.ZP.rotationDegrees(-30.0F))
-                val baseX = -90.0F + offset * 10.0F
-                matrices.mulPose(Axis.XP.rotationDegrees(baseX - powF * 10.0F * anim))
-                translateBackSelfOldViewModel(matrices, hand, animMode)
-            }
-            Mode.WYVERN_SELF2,
-            Mode.WYVERN_DOWN,
-            Mode.WYVERN_FORWARD,
-            Mode.WYVERN_TOUCH,
-            Mode.WYVERN_PANDER,
-            Mode.WYVERN_CURT,
-            Mode.WYVERN_BLOCK_HIT -> renderWyvernAnimation(
-                matrices,
-                swingProgress,
-                equipProgress,
-                arm,
-                animMode
-            )
-        }
-    }
-
-    private fun renderWyvernAnimation(
-        matrices: PoseStack,
-        swingProgress: Float,
-        equipProgress: Float,
-        arm: HumanoidArm,
-        animMode: Mode
-    ) {
-        // Wyvern-DLC applies its custom SwingAnimation only for the right arm; left arm falls back
-        // to the original held-item swing path.
-        if (arm != HumanoidArm.RIGHT) {
-            applyEquipOffset(matrices, arm, equipProgress)
-            applySwingOffset(matrices, arm, swingProgress)
+        if (isSmallNewItem(stack)) {
+            matrices.mulPose(Axis.YN.rotationDegrees(5.0F * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(15.0F))
+            matrices.mulPose(Axis.ZP.rotationDegrees(75.0F * direction))
+            matrices.translate(0.0, -0.05, -0.1)
+            matrices.scale(0.7F, 0.7F, 0.7F)
             return
         }
 
-        val anim = sin(swingProgress * (PI / 2.0) * 2.0).toFloat()
-        val sin2 = sin(sqrt(swingProgress) * PI).toFloat()
-        val powerF = power.toFloat()
-
-        when (animMode) {
-            Mode.WYVERN_SELF2 -> {
-                matrices.translate(0.56F, -0.52F, -0.72F)
-                matrices.mulPose(Axis.YP.rotationDegrees(70.0F))
-                matrices.mulPose(Axis.ZP.rotationDegrees(-60.0F))
-                matrices.mulPose(Axis.XP.rotationDegrees(-angle - powerF * 10.0F * anim))
-            }
-            Mode.WYVERN_DOWN -> {
-                matrices.translate(0.56F, -0.52F - anim * powerF / 24.0F, -0.72F)
-                matrices.mulPose(Axis.YP.rotationDegrees(90.0F))
-                matrices.mulPose(Axis.ZP.rotationDegrees(-30.0F))
-                matrices.mulPose(Axis.XP.rotationDegrees(-90.0F))
-            }
-            Mode.WYVERN_FORWARD -> {
-                matrices.translate(0.56F, -0.52F, -0.72F)
-                val f = 35.0F
-                matrices.translate(0.0F, 0.0F, -0.3F * sin2)
-                matrices.mulPose(Axis.XP.rotationDegrees(sin2 * -f))
-                matrices.mulPose(Axis.ZP.rotationDegrees(sin2 * f))
-            }
-            Mode.WYVERN_TOUCH -> {
-                matrices.translate(0.56F, -0.52F, -0.72F)
-                matrices.scale(1.0F, 1.0F, 1.0F + anim * powerF / 4.0F)
-                matrices.translate(0.0F, 0.0F, -0.265F)
-                matrices.mulPose(Axis.XP.rotationDegrees(-100.0F))
-            }
-            Mode.WYVERN_PANDER -> {
-                matrices.translate(0.56F, -0.52F, -0.72F)
-                matrices.scale(0.8F, 0.8F, 0.8F)
-                val swingOffset = anim * 0.15F
-                matrices.translate(0.3F - swingOffset, 0.2F - equipProgress * 0.12F, -0.15F - anim * 0.13F)
-                matrices.mulPose(Axis.YP.rotationDegrees(76.0F - 10.0F * anim))
-                matrices.mulPose(Axis.ZP.rotationDegrees(-16.0F - 8.0F * anim))
-                matrices.mulPose(Axis.XP.rotationDegrees(-83.0F - 26.0F * anim))
-            }
-            Mode.WYVERN_CURT -> {
-                matrices.translate(0.56F, -0.52F, -0.72F)
-                val sqrtSwing = sqrt(swingProgress)
-                val g = sin(sqrtSwing * PI).toFloat()
-                val sinExtra = sin(swingProgress * PI).toFloat()
-                matrices.translate(0.4F - g * 0.2F, -0.2F + g * 0.3F, -0.5F - sinExtra * 0.2F)
-                matrices.mulPose(Axis.YP.rotationDegrees(91.0F))
-                matrices.mulPose(Axis.ZP.rotationDegrees(-40.0F + g * -100.0F))
-                matrices.mulPose(Axis.XP.rotationDegrees(-60.0F))
-            }
-            Mode.WYVERN_BLOCK_HIT -> {
-                matrices.translate(0.56F, -0.52F, -0.72F)
-                val f = sin(swingProgress * swingProgress * PI).toFloat()
-                matrices.mulPose(Axis.YP.rotationDegrees(45.0F))
-                val g = sin(sqrt(swingProgress) * PI).toFloat()
-                matrices.mulPose(Axis.XP.rotationDegrees(f * -20.0F))
-                matrices.mulPose(Axis.ZP.rotationDegrees(g * -20.0F))
-                matrices.mulPose(Axis.XP.rotationDegrees(g * -80.0F))
-                matrices.translate(0.4F, 0.2F, 0.2F)
-                matrices.translate(-0.5F, 0.08F, 0.0F)
-                matrices.mulPose(Axis.YP.rotationDegrees(20.0F))
-                matrices.mulPose(Axis.XP.rotationDegrees(-80.0F))
-                matrices.mulPose(Axis.YP.rotationDegrees(20.0F))
-            }
-            else -> Unit
-        }
-    }
-
-    private fun applyEquipOffset(matrices: PoseStack, arm: HumanoidArm, equipProgress: Float) {
-        val side = if (arm == HumanoidArm.RIGHT) 1 else -1
-        matrices.translate(side * 0.56F, -0.52F + equipProgress * -0.6F, -0.72F)
-    }
-
-    private fun applySwingOffset(matrices: PoseStack, arm: HumanoidArm, swingProgress: Float) {
-        val side = if (arm == HumanoidArm.RIGHT) 1 else -1
-        val f = sin(swingProgress * swingProgress * PI).toFloat()
-        matrices.mulPose(Axis.YP.rotationDegrees(side * (45.0F + f * -20.0F)))
-        val g = sin(sqrt(swingProgress) * PI).toFloat()
-        matrices.mulPose(Axis.ZP.rotationDegrees(side * g * -20.0F))
-        matrices.mulPose(Axis.XP.rotationDegrees(g * -80.0F))
-        matrices.mulPose(Axis.YP.rotationDegrees(side * -45.0F))
-    }
-
-    private fun translateToViewModel(matrices: PoseStack, arm: HumanoidArm) {
-        if (ModuleViewModel.running) {
-            matrices.translate(vmX(arm), vmY(arm), vmZ(arm))
-        }
-    }
-
-    private fun translateBack(matrices: PoseStack, arm: HumanoidArm) {
-        if (ModuleViewModel.running) {
-            matrices.translate(-vmX(arm), -vmY(arm), -vmZ(arm))
-        }
-    }
-
-    private fun translateToSelfOldViewModel(matrices: PoseStack, hand: InteractionHand, animMode: Mode) {
-        matrices.translate(getSelfOldViewModelX(hand, animMode), getSelfOldViewModelY(hand, animMode), viewModelZ())
-    }
-
-    private fun translateBackSelfOldViewModel(matrices: PoseStack, hand: InteractionHand, animMode: Mode) {
-        matrices.translate(-getSelfOldViewModelX(hand, animMode), -getSelfOldViewModelY(hand, animMode), -viewModelZ())
-    }
-
-    private fun applySelfOldMainHandOffset(matrices: PoseStack, hand: InteractionHand, animMode: Mode) {
-        val xOffset = getSelfOldMainHandXOffset(hand, animMode)
-        val yOffset = getSelfOldMainHandYOffset(hand, animMode)
-        if (xOffset != 0.0F || yOffset != 0.0F) {
-            matrices.translate(xOffset, yOffset, 0.0F)
-        }
-    }
-
-    private fun applyHeldItemViewModel(matrices: PoseStack, hand: InteractionHand) {
-        if (!ModuleViewModel.running) {
+        if (isThinNewItem(stack)) {
+            matrices.translate(0.0, 0.0, -0.1)
+            matrices.mulPose(Axis.YN.rotationDegrees(5.0F * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(15.0F))
+            matrices.mulPose(Axis.ZP.rotationDegrees(75.0F * direction))
             return
         }
 
-        if (hand == InteractionHand.MAIN_HAND) {
-            matrices.translate(ModuleViewModel.rightX, ModuleViewModel.rightY, ModuleViewModel.rightZ)
+        if (item is BlockItem) {
+            matrices.mulPose(Axis.YN.rotationDegrees(25.0F * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(5.0F))
+            matrices.mulPose(Axis.ZP.rotationDegrees(75.0F * direction))
+            matrices.translate(0.2 * direction, 0.2, 0.05)
+            return
+        }
+
+        if (effectiveUseAnimation(stack) == ItemUseAnimation.BLOCK) {
+            matrices.mulPose(Axis.ZP.rotationDegrees(160.0F * direction))
+            matrices.mulPose(Axis.YP.rotationDegrees(-60.0F * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(-70.0F))
+            matrices.scale(0.75F, 0.75F, 0.75F)
+            matrices.translate(0.15 * direction, if (arm == HumanoidArm.RIGHT) 0.35 else 0.45, if (arm == HumanoidArm.RIGHT) -0.15 else -0.1)
+            matrices.translate(0.17 * direction, 0.0, 0.3)
+            matrices.mulPose(Axis.YP.rotationDegrees(-90.0F * direction))
+            return
+        }
+
+        if (isSpearLike(stack)) {
+            matrices.mulPose(Axis.YN.rotationDegrees(75.0F * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(90.0F))
+            matrices.mulPose(Axis.ZP.rotationDegrees(45.0F * direction))
+            matrices.translate(-0.3 * direction, 0.0, 0.0)
         } else {
-            matrices.translate(ModuleViewModel.leftX, ModuleViewModel.leftY, ModuleViewModel.leftZ)
+            matrices.mulPose(Axis.YN.rotationDegrees(75.0F * direction))
+            matrices.mulPose(Axis.XP.rotationDegrees(70.0F))
+            matrices.mulPose(Axis.ZP.rotationDegrees(45.0F * direction))
+        }
+
+        matrices.scale(1.2F, 1.2F, 1.2F)
+
+        if (effectiveUseAnimation(stack) == ItemUseAnimation.BOW) {
+            matrices.translate(-0.1 * direction, -0.2, 0.0)
         }
     }
 
-    private fun getSelfOldViewModelX(hand: InteractionHand, animMode: Mode): Float =
-        viewModelX(HumanoidArm.RIGHT) + getSelfOldMainHandXOffset(hand, animMode)
-
-    private fun getSelfOldViewModelY(hand: InteractionHand, animMode: Mode): Float =
-        viewModelY(HumanoidArm.RIGHT) + getSelfOldMainHandYOffset(hand, animMode)
-
-    private fun getSelfOldMainHandXOffset(hand: InteractionHand, animMode: Mode): Float =
-        if (hand == InteractionHand.MAIN_HAND && (animMode == Mode.SELF || animMode == Mode.OLD)) SELF_OLD_X else 0.0F
-
-    private fun getSelfOldMainHandYOffset(hand: InteractionHand, animMode: Mode): Float =
-        if (hand == InteractionHand.MAIN_HAND && (animMode == Mode.SELF || animMode == Mode.OLD)) SELF_OLD_Y else 0.0F
-
-    private fun vmX(arm: HumanoidArm): Float = viewModelX(arm)
-    private fun vmY(arm: HumanoidArm): Float = viewModelY(arm)
-    private fun vmZ(arm: HumanoidArm): Float = viewModelZ(arm)
-
-    private fun viewModelX(arm: HumanoidArm): Float = if (!ModuleViewModel.running) 0.0F else {
-        if (arm == HumanoidArm.RIGHT) ModuleViewModel.rightX else ModuleViewModel.leftX
+    private fun updateNewSlashState(swingProgress: Float) {
+        val swinging = swingProgress > 0.01F
+        if (swinging && !newWasSwinging) {
+            newPrimarySlash = !newPrimarySlash
+        }
+        newWasSwinging = swinging
     }
 
-    private fun viewModelY(arm: HumanoidArm): Float = if (!ModuleViewModel.running) 0.0F else {
-        if (arm == HumanoidArm.RIGHT) ModuleViewModel.rightY else ModuleViewModel.leftY
+    private fun newSwingRot(swingProgress: Float): Float =
+        if (swingProgress < 0.6F) {
+            sin(Mth.clamp(swingProgress, 0.0F, 0.12506F) * 12.56F).toFloat()
+        } else {
+            sin(Mth.clamp(swingProgress, 0.62532F, 0.75038F) * 12.56F).toFloat()
+        }
+
+    private fun easeInOutBack(x: Float): Float {
+        val c1 = 1.70158F
+        val c2 = c1 * 1.525F
+        return if (x < 0.5F) {
+            ((2.0F * x).pow(2.0F) * ((c2 + 1.0F) * 2.0F * x - c2) / 2.0F)
+        } else {
+            (((2.0F * x - 2.0F).pow(2.0F) * ((c2 + 1.0F) * (x * 2.0F - 2.0F) + c2) + 2.0F) / 2.0F)
+        }
     }
 
-    private fun viewModelZ(arm: HumanoidArm = HumanoidArm.RIGHT): Float = if (!ModuleViewModel.running) 0.0F else {
-        if (arm == HumanoidArm.RIGHT) ModuleViewModel.rightZ else ModuleViewModel.leftZ
+    private fun effectiveUseAnimation(stack: ItemStack): ItemUseAnimation = stack.useAnimation
+
+    private fun isSpearLike(stack: ItemStack): Boolean =
+        stack.item is TridentItem ||
+            stack.useAnimation == ItemUseAnimation.TRIDENT ||
+            stack.useAnimation == ItemUseAnimation.SPEAR
+
+    private fun isSwordLike(stack: ItemStack): Boolean = stack.`is`(ItemTags.SWORDS)
+
+    private fun isAxeLike(stack: ItemStack): Boolean =
+        stack.item is AxeItem || stack.`is`(ItemTags.AXES)
+
+    private fun isShovelLike(stack: ItemStack): Boolean =
+        stack.item is ShovelItem || stack.`is`(ItemTags.SHOVELS)
+
+    private fun isGeneralDiggerTool(stack: ItemStack): Boolean =
+        isAxeLike(stack) ||
+            isShovelLike(stack) ||
+            stack.`is`(ItemTags.PICKAXES) ||
+            stack.`is`(ItemTags.HOES)
+
+    private fun isWeaponLike(stack: ItemStack): Boolean {
+        val item = stack.item
+        val useAnimation = effectiveUseAnimation(stack)
+        return isSwordLike(stack) ||
+            isGeneralDiggerTool(stack) ||
+            item is ShieldItem ||
+            item is TridentItem ||
+            useAnimation == ItemUseAnimation.BOW ||
+            useAnimation == ItemUseAnimation.BLOCK ||
+            useAnimation == ItemUseAnimation.TRIDENT ||
+            useAnimation == ItemUseAnimation.SPEAR ||
+            item == Items.SHEARS ||
+            item == Items.CARROT_ON_A_STICK ||
+            item == Items.WARPED_FUNGUS_ON_A_STICK
     }
 
-    private fun isSword(i: Item) = i == Items.WOODEN_SWORD || i == Items.STONE_SWORD ||
-        i == Items.IRON_SWORD || i == Items.GOLDEN_SWORD || i == Items.DIAMOND_SWORD || i == Items.NETHERITE_SWORD ||
-        i == Items.COPPER_SWORD
+    private fun isTorchLike(item: Item): Boolean =
+        item == Items.TORCH || item == Items.SOUL_TORCH || item == Items.REDSTONE_TORCH
 
-    private fun isAxe(i: Item) = i == Items.WOODEN_AXE || i == Items.STONE_AXE ||
-        i == Items.IRON_AXE || i == Items.GOLDEN_AXE || i == Items.DIAMOND_AXE || i == Items.NETHERITE_AXE ||
-        i == Items.COPPER_AXE
+    private fun isThinNewItem(stack: ItemStack): Boolean {
+        val item = stack.item
+        val block = (item as? BlockItem)?.block
+        return item == Items.STRING ||
+            item == Items.REDSTONE ||
+            item == Items.LEVER ||
+            item == Items.TRIPWIRE_HOOK ||
+            block?.defaultBlockState()?.`is`(BlockTags.RAILS) == true ||
+            block?.defaultBlockState()?.`is`(BlockTags.CLIMBABLE) == true ||
+            block?.defaultBlockState()?.`is`(BlockTags.DOORS) == true ||
+            block?.defaultBlockState()?.`is`(BlockTags.BUTTONS) == true ||
+            block?.defaultBlockState()?.`is`(BlockTags.PRESSURE_PLATES) == true
+    }
 
-    private fun isPickaxe(i: Item) = i == Items.WOODEN_PICKAXE || i == Items.STONE_PICKAXE ||
-        i == Items.IRON_PICKAXE || i == Items.GOLDEN_PICKAXE || i == Items.DIAMOND_PICKAXE ||
-        i == Items.NETHERITE_PICKAXE || i == Items.COPPER_PICKAXE
-
-    private const val SELF_OLD_X = 0.12F
-    private const val SELF_OLD_Y = 0.1F
-    private const val HIT_ANIMATION_DURATION_MS = 300L
+    private fun isSmallNewItem(stack: ItemStack): Boolean {
+        val item = stack.item
+        return stack.components.has(DataComponents.FOOD) ||
+            item is BucketItem ||
+            (!isWeaponLike(stack) && item !is BlockItem)
+    }
 
     enum class Mode(override val choiceName: String) : NamedChoice {
-        DEFAULT("Default"),
-        SMOOTH("Smooth"),
+        MODE1("Mode1"),
+        MODE2("Mode2"),
+        MODE3("Mode3"),
+        MODE4("Mode4"),
+        MODE5("Mode5"),
+        MODE6("Mode6"),
+        MODE7("Mode7"),
+        ROTATE_360("360"),
+        SLANT("Slant"),
+        NEW("New"),
         FADE("Fade"),
-        SELF("Self"),
-        OLD("Old"),
-        WYVERN_SELF2("Self2"),
-        WYVERN_DOWN("Down"),
-        WYVERN_FORWARD("Forward"),
-        WYVERN_TOUCH("Touch"),
-        WYVERN_PANDER("Pander"),
-        WYVERN_CURT("Curt"),
-        WYVERN_BLOCK_HIT("BlockHit")
+        SPIN_SLASH("SpinSlash")
     }
+
+    enum class RenderHand(override val choiceName: String) : NamedChoice {
+        RIGHT("Right"),
+        LEFT("Left")
+    }
+
+    class NewArmRender(
+        val equipProgress: Float,
+        val swingProgress: Float
+    )
 }

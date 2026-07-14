@@ -19,9 +19,10 @@
 package net.ccbluex.liquidbounce.features.module.modules.combat
 
 import net.ccbluex.liquidbounce.config.types.NamedChoice
+import net.ccbluex.liquidbounce.event.EventState
+import net.ccbluex.liquidbounce.event.events.PlayerNetworkMovementTickEvent
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
 import net.ccbluex.liquidbounce.event.handler
-import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
@@ -47,10 +48,14 @@ object ModuleElytraTarget : ClientModule("ElytraTarget", Category.COMBAT) {
 
     private val prediction by boolean("Prediction", true)
     private val visual by boolean("Visual", true)
+        .visibleWhen { prediction }
     private val color by color("Color", Color4b(16752640))
+        .visibleWhen { prediction && visual }
     private val mode by enumChoice("Mode", Mode.AUTO)
     private val predictRange by float("Predict Range", 2.6f, 1.5f..6.0f)
+        .visibleWhen { mode == Mode.DEFAULT }
     private val predictMax by float("Predict Max", 10.0f, 1.5f..10.0f)
+        .visibleWhen { mode == Mode.AUTO }
 
     var status = true
         private set
@@ -63,17 +68,13 @@ object ModuleElytraTarget : ClientModule("ElytraTarget", Category.COMBAT) {
         private set
     private var lastHurtAt = 0L
 
-    override fun disable() {
-        status = true
-        disableForward = false
-        bps = 0.0
-        scale = 0.0
-        lastHurtAt = 0L
-    }
-
     @Suppress("unused")
-    private val tickHandler = tickHandler {
-        val localPlayer = mc.player ?: return@tickHandler
+    private val movementSyncHandler = handler<PlayerNetworkMovementTickEvent> { event ->
+        if (event.state != EventState.PRE) {
+            return@handler
+        }
+
+        val localPlayer = mc.player ?: return@handler
         val target = ModuleKillAura.targetTracker.target
 
         status = prediction
@@ -86,7 +87,7 @@ object ModuleElytraTarget : ClientModule("ElytraTarget", Category.COMBAT) {
 
         if (target == null) {
             disableForward = false
-            return@tickHandler
+            return@handler
         }
 
         if (localPlayer.hurtTime > 0) {

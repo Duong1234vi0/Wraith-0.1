@@ -81,7 +81,11 @@ object SkeletonEspRenderer {
         }
 
         try {
+            RenderSystem.enableBlend()
             RenderSystem.defaultBlendFunc()
+            RenderSystem.disableDepthTest()
+            RenderSystem.disableCull()
+            RenderSystem.depthMask(false)
             RenderSystem.lineWidth(lineWidth)
             env.drawCustomMesh(
                 VertexFormat.Mode.DEBUG_LINES,
@@ -106,7 +110,11 @@ object SkeletonEspRenderer {
             }
         } finally {
             RenderSystem.lineWidth(1.0f)
+            RenderSystem.depthMask(true)
+            RenderSystem.enableCull()
+            RenderSystem.enableDepthTest()
             RenderSystem.defaultBlendFunc()
+            RenderSystem.disableBlend()
         }
     }
 

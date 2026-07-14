@@ -19,22 +19,19 @@
 package net.ccbluex.liquidbounce.features.module.modules.movement
 
 import net.ccbluex.liquidbounce.event.events.PlayerMoveEvent
+import net.ccbluex.liquidbounce.event.events.PlayerTickEvent
 import net.ccbluex.liquidbounce.event.handler
-import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleElytraTarget
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
-import net.ccbluex.liquidbounce.utils.aiming.RotationManager
+import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
 import net.ccbluex.liquidbounce.utils.client.Chronometer
-import net.ccbluex.liquidbounce.utils.client.SilentHotbar
 import net.ccbluex.liquidbounce.utils.client.interaction
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.client.network
 import net.ccbluex.liquidbounce.utils.entity.*
 import net.ccbluex.liquidbounce.utils.inventory.OffHandSlot
-import net.ccbluex.liquidbounce.utils.inventory.Slots
-import net.ccbluex.liquidbounce.utils.inventory.findClosestSlot
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket
 import net.minecraft.world.InteractionHand
@@ -56,40 +53,34 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
     var freeze = false
         private set
 
-    private val fireworkTimer = Chronometer()
+    private val fireworkTimer = Chronometer(System.currentTimeMillis())
 
     override fun disable() {
         freeze = false
-        fireworkTimer.reset(0L)
     }
 
     @Suppress("unused")
-    private val tickHandler = tickHandler {
+    private val tickHandler = handler<PlayerTickEvent> {
         val localPlayer = mc.player ?: run {
             freeze = false
-            return@tickHandler
-        }
-
-        if (shouldPauseForPeakAssist()) {
-            freeze = false
-            return@tickHandler
+            return@handler
         }
 
         if (!localPlayer.isGliding) {
             freeze = false
-            return@tickHandler
+            return@handler
         }
 
         val target = ModuleKillAura.targetTracker.target
         freeze = check(target, ModuleElytraTarget)
 
         if (freeze) {
-            if (matrixBypass && fireworkTimer.hasElapsed(FIREWORK_DELAY_MS)) {
+            if (matrixBypass && fireworkTimer.hasAtLeastElapsed(FIREWORK_DELAY_MS)) {
                 useFirework()
                 fireworkTimer.reset()
             }
         } else if (autoFirework && target != null && getBps(localPlayer) <= LOW_SPEED_BPS &&
-            fireworkTimer.hasElapsed(FIREWORK_DELAY_MS)) {
+            fireworkTimer.hasAtLeastElapsed(FIREWORK_DELAY_MS)) {
             useFirework()
             fireworkTimer.reset()
         }
@@ -97,16 +88,13 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
 
     @Suppress("unused")
     private val moveHandler = handler<PlayerMoveEvent> { event ->
-        val localPlayer = mc.player ?: run {
+        if (mc.player == null) {
             freeze = false
             return@handler
         }
 
-        if (shouldPauseForPeakAssist()) {
-            freeze = false
-        } else if (freeze) {
+        if (freeze) {
             event.movement = Vec3.ZERO
-            localPlayer.deltaMovement = Vec3.ZERO
         }
     }
 
@@ -121,12 +109,6 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
         return !canTarget && target.distanceTo(localPlayer) < attackDistance
     }
 
-    private fun shouldPauseForPeakAssist(): Boolean {
-        // #Edit By Codex 2026-07-01: VCore's PeakAssist helper is not present in this branch.
-        // Keep the pause seam safe without adding a fake half-ported module.
-        return false
-    }
-
     private fun useFirework() {
         val localPlayer = mc.player ?: return
         if (mc.gameMode == null || localPlayer.cooldowns.isOnCooldown(Items.FIREWORK_ROCKET.defaultInstance)) {
@@ -139,13 +121,14 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
         }
 
         val fireworkSlot = findFireworkSlot() ?: return
+        val currentSlot = localPlayer.inventory.selectedSlot
         if (localPlayer.isUsingItem && localPlayer.usedItemHand == InteractionHand.MAIN_HAND) {
             useFireworkWithOffhandSwap(fireworkSlot.serverSlot)
             return
         }
 
         when (fireworkSlot) {
-            is FireworkSlot.Hotbar -> useFireworkFromHotbar(fireworkSlot.hotbarSlot, currentServerSlot())
+            is FireworkSlot.Hotbar -> useFireworkFromHotbar(fireworkSlot.hotbarSlot, currentSlot)
             is FireworkSlot.Inventory -> {
                 val swapHotbarSlot = pickSwapHotbarSlot()
                 interaction.clickSlot(
@@ -155,7 +138,7 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
                     ContainerInput.SWAP,
                     localPlayer
                 )
-                useFireworkFromHotbar(swapHotbarSlot, currentServerSlot())
+                useFireworkFromHotbar(swapHotbarSlot, currentSlot)
                 interaction.clickSlot(
                     localPlayer.screenHandler.syncId,
                     fireworkSlot.serverSlot,
@@ -168,28 +151,37 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
     }
 
     private fun findFireworkSlot(): FireworkSlot? {
-        Slots.Hotbar.findClosestSlot(Items.FIREWORK_ROCKET)?.let { slot ->
-            return FireworkSlot.Hotbar(slot.hotbarSlot, slot.getIdForServer(null) ?: return null)
-        }
+        val localPlayer = mc.player ?: return null
 
-        Slots.Inventory.findSlot(Items.FIREWORK_ROCKET)?.let { slot ->
-            return FireworkSlot.Inventory(slot.getIdForServer(null))
+        for (rawSlot in 36 downTo 0) {
+            val stack = localPlayer.inventory.getStack(rawSlot)
+            if (stack.item != Items.FIREWORK_ROCKET) {
+                continue
+            }
+
+            val itemSlot = if (rawSlot < 9) rawSlot + HOTBAR_CONTAINER_OFFSET else rawSlot
+            return if (itemSlot >= HOTBAR_CONTAINER_OFFSET) {
+                FireworkSlot.Hotbar(itemSlot - HOTBAR_CONTAINER_OFFSET, itemSlot)
+            } else {
+                FireworkSlot.Inventory(itemSlot)
+            }
         }
 
         return null
     }
 
     private fun useFireworkFromHotbar(fireworkSlot: Int, returnSlot: Int) {
-        switchToSilent(fireworkSlot)
+        network.sendPacket(ServerboundSetCarriedItemPacket(fireworkSlot))
         useFireworkFromHand(InteractionHand.MAIN_HAND)
-        switchToSilent(returnSlot)
+        network.sendPacket(ServerboundSetCarriedItemPacket(returnSlot))
     }
 
-    private fun useFireworkWithOffhandSwap(slotId: Int) {
+    private fun useFireworkWithOffhandSwap(itemSlot: Int) {
         val localPlayer = mc.player ?: return
+        val slotIndex = if (itemSlot <= 8) itemSlot + HOTBAR_CONTAINER_OFFSET else itemSlot
         interaction.clickSlot(
             localPlayer.screenHandler.syncId,
-            slotId,
+            slotIndex,
             OffHandSlot.hotbarSlotForServer,
             ContainerInput.SWAP,
             localPlayer
@@ -197,7 +189,7 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
         useFireworkFromHand(InteractionHand.OFF_HAND)
         interaction.clickSlot(
             localPlayer.screenHandler.syncId,
-            slotId,
+            slotIndex,
             OffHandSlot.hotbarSlotForServer,
             ContainerInput.SWAP,
             localPlayer
@@ -213,21 +205,10 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
     }
 
     private fun getUseRotation() = if (ModuleKillAura.running && ModuleKillAura.targetTracker.target != null) {
-        RotationManager.currentRotation ?: RotationManager.serverRotation
+        ModuleKillAura.rotationForPacketUse() ?: mc.player?.rotation ?: Rotation.ZERO
     } else {
-        mc.player?.rotation ?: RotationManager.serverRotation
+        mc.player?.rotation ?: Rotation.ZERO
     }
-
-    private fun switchToSilent(slot: Int) {
-        val localPlayer = mc.player ?: return
-        if (slot in 0..8 && localPlayer.inventory.selectedSlot != slot && SilentHotbar.serversideSlot != slot) {
-            network.sendPacket(ServerboundSetCarriedItemPacket(slot))
-        } else if (slot in 0..8 && SilentHotbar.serversideSlot != slot) {
-            network.sendPacket(ServerboundSetCarriedItemPacket(slot))
-        }
-    }
-
-    private fun currentServerSlot(): Int = SilentHotbar.serversideSlot.coerceIn(0, 8)
 
     private fun pickSwapHotbarSlot(): Int {
         val selected = mc.player?.inventory?.selectedSlot ?: 0
@@ -247,4 +228,5 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
     private const val TICKS_PER_SECOND = 20.0
     private const val LOW_SPEED_BPS = 30.0
     private const val FIREWORK_DELAY_MS = 500L
+    private const val HOTBAR_CONTAINER_OFFSET = 36
 }

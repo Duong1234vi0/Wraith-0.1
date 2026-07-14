@@ -30,7 +30,6 @@ open class RotationsConfigurable(
             interpolationAngleSmooth,
             AccelerationAngleSmooth(it),
             if (combatSpecific) MinaraiAngleSmooth(it, interpolationAngleSmooth ?: linearAngleSmooth) else null,
-            // #Edit By Claude: VCore Aura rotation ports, combat-only (like Interpolation/Minarai).
             if (combatSpecific) TrackAngleSmooth(it) else null,
             // #Edit By Claude: humanized Track variant, tuned from recorded-data metrics.
             if (combatSpecific) HumanizedTrackAngleSmooth(it) else null,
@@ -38,12 +37,25 @@ open class RotationsConfigurable(
         ).toTypedArray()
     }
 
-    private var shortStop = ShortStopRotationProcessor(owner).takeIf { combatSpecific }?.also { tree(it) }
-    private val fail = FailRotationProcessor(owner).takeIf { combatSpecific }?.also { tree(it) }
+    private var shortStop = ShortStopRotationProcessor(owner).takeIf { combatSpecific }?.also {
+        tree(it).visibleWhen { !isVCoreMode }
+    }
+    private val fail = FailRotationProcessor(owner).takeIf { combatSpecific }?.also {
+        tree(it).visibleWhen { !isVCoreMode }
+    }
 
-    private val movementCorrection by enumChoice("MovementCorrection", movementCorrection)
-    private val resetThreshold by float("ResetThreshold", 2f, 1f..180f)
-    private val ticksUntilReset by int("TicksUntilReset", 5, 1..30, "ticks")
+    val movementCorrection by enumChoice("MovementCorrection", movementCorrection)
+    private val resetThreshold by float("ResetThreshold", 2f, 1f..180f).visibleWhen { !isVCoreMode }
+    private val ticksUntilReset by int("TicksUntilReset", 5, 1..30, "ticks").visibleWhen { !isVCoreMode }
+
+    val isVCoreTrack: Boolean
+        get() = angleSmooth.activeChoice is TrackAngleSmooth
+
+    val isVCoreGrim: Boolean
+        get() = angleSmooth.activeChoice is GrimAngleSmooth
+
+    val isVCoreMode: Boolean
+        get() = isVCoreTrack || isVCoreGrim
 
     fun toRotationTarget(
         rotation: Rotation,
@@ -76,5 +88,19 @@ open class RotationsConfigurable(
      */
     fun calculateTicks(rotation: Rotation) = angleSmooth.activeChoice
         .calculateTicks(RotationManager.actualServerRotation, rotation)
+
+    fun directRotationTarget(
+        rotation: Rotation,
+        entity: Entity? = null,
+        considerInventory: Boolean
+    ) = RotationTarget(
+        rotation = rotation,
+        entity = entity,
+        processors = emptyList(),
+        ticksUntilReset = 1,
+        resetThreshold = 1f,
+        considerInventory = considerInventory,
+        movementCorrection = movementCorrection
+    )
 
 }

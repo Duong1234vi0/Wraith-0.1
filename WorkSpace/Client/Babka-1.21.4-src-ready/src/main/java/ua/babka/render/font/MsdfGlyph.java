@@ -1,0 +1,63 @@
+package ua.babka.render.font;
+
+import net.minecraft.client.render.VertexConsumer;
+import org.joml.Matrix4f;
+import ua.babka.render.font.FontData;
+
+public final class MsdfGlyph {
+    private final int code;
+    private final float minU;
+    private final float maxU;
+    private final float minV;
+    private final float maxV;
+    private final float advance;
+    private final float topPosition;
+    private final float width;
+    private final float height;
+
+    public MsdfGlyph(FontData.GlyphData data, float atlasWidth, float atlasHeight) {
+        this.code = data.unicode();
+        this.advance = data.advance();
+        FontData.BoundsData atlasBounds = data.atlasBounds();
+        if (atlasBounds != null) {
+            this.minU = atlasBounds.left() / atlasWidth;
+            this.maxU = atlasBounds.right() / atlasWidth;
+            this.minV = 1.0f - atlasBounds.top() / atlasHeight;
+            this.maxV = 1.0f - atlasBounds.bottom() / atlasHeight;
+        } else {
+            this.maxV = 0.0f;
+            this.minV = 0.0f;
+            this.maxU = 0.0f;
+            this.minU = 0.0f;
+        }
+        FontData.BoundsData planeBounds = data.planeBounds();
+        if (planeBounds != null) {
+            this.width = planeBounds.right() - planeBounds.left();
+            this.height = planeBounds.top() - planeBounds.bottom();
+            this.topPosition = planeBounds.top();
+        } else {
+            this.topPosition = 0.0f;
+            this.height = 0.0f;
+            this.width = 0.0f;
+        }
+    }
+
+    public float apply(Matrix4f matrix, VertexConsumer consumer, float size, float x2, float y2, float z2, int color) {
+        float width = this.width * size;
+        float height = this.height * size;
+        consumer.vertex(matrix, x2, y2 -= this.topPosition * size, z2).texture(this.minU, this.minV).color(color);
+        consumer.vertex(matrix, x2, y2 + height, z2).texture(this.minU, this.maxV).color(color);
+        consumer.vertex(matrix, x2 + width, y2 + height, z2).texture(this.maxU, this.maxV).color(color);
+        consumer.vertex(matrix, x2 + width, y2, z2).texture(this.maxU, this.minV).color(color);
+        return this.advance * size;
+    }
+
+    public float getWidth(float size) {
+        return this.advance * size;
+    }
+
+    public int getCharCode() {
+        return this.code;
+    }
+}
+

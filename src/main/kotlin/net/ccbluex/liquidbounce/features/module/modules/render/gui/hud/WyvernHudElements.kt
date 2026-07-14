@@ -35,7 +35,7 @@ import net.ccbluex.liquidbounce.render.gui.CORNERS_BOTTOM
 import net.ccbluex.liquidbounce.render.gui.CORNERS_LEFT
 import net.ccbluex.liquidbounce.render.gui.CORNERS_RIGHT
 import net.ccbluex.liquidbounce.render.gui.CORNERS_TOP
-import net.ccbluex.liquidbounce.render.gui.drawRoundedSkinFace
+import net.ccbluex.liquidbounce.render.gui.drawRoundedPlayerSkinFace
 import net.ccbluex.liquidbounce.render.gui.drawRoundedTexture
 import net.ccbluex.liquidbounce.render.gui.drawSkinFace
 import net.ccbluex.liquidbounce.utils.client.mc
@@ -1208,31 +1208,14 @@ class WyvernTargetHudElement(name: String, x: Int, y: Int, elementMode: WyvernHu
             // mask. The old classic path shrank a square skin tile inside a circular frame,
             // which still looked like a square head pasted onto a round card.
             val drewHead = if (target is Player) {
-                val skin = mc.connection?.getPlayerInfo(target.uuid)?.skin?.body()?.id()
-                    ?: DefaultPlayerSkin.get(target.uuid).body().id()
-                context.drawRoundedSkinFace(skin, x, y, size, radius, HudDraw.fade(HudDraw.WHITE, alpha))
+                context.drawRoundedPlayerSkinFace(target, x, y, size, radius, HudDraw.fade(HudDraw.WHITE, alpha))
             } else {
                 val texture = entityHeadTexture(target)
                 texture != null && drawHeadTextureRegion(context, texture, x, y, size, radius, alpha)
             }
 
             if (!drewHead) {
-                if (target is Player) {
-                    val fallbackSkin = DefaultPlayerSkin.getDefaultSkin().body().id()
-                    val drewFallback = context.drawRoundedSkinFace(
-                        fallbackSkin,
-                        x,
-                        y,
-                        size,
-                        radius,
-                        HudDraw.fade(HudDraw.WHITE, alpha)
-                    )
-                    if (!drewFallback) {
-                        drawEntityPlaceholder(context, target, x, y, size, radius, alpha)
-                    }
-                } else {
-                    drawEntityPlaceholder(context, target, x, y, size, radius, alpha)
-                }
+                drawEntityPlaceholder(context, target, x, y, size, radius, alpha)
             }
             if (hurt > 0.01f) {
                 ExosGuiRenderer.roundedRect(context.matrices, x, y, size, size, radius, HudDraw.argb((55 * hurt * alpha).toInt(), 255, 48, 48))

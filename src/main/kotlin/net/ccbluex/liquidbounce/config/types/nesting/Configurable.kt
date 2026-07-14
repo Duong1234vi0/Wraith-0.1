@@ -232,8 +232,9 @@ open class Configurable(
         defaultValue: T,
         range: ClosedRange<*>,
         suffix: String,
-        valueType: ValueType
-    ) = RangedValue(name, defaultValue = defaultValue, range = range, suffix = suffix, valueType = valueType).apply {
+        valueType: ValueType,
+        step: Number? = null
+    ) = RangedValue(name, defaultValue = defaultValue, range = range, suffix = suffix, step = step, valueType = valueType).apply {
         this@Configurable.inner.add(this)
     }
 
@@ -243,6 +244,9 @@ open class Configurable(
 
     fun float(name: String, default: Float, range: ClosedFloatingPointRange<Float>, suffix: String = "") =
         rangedValue(name, default, range, suffix, ValueType.FLOAT)
+
+    fun float(name: String, default: Float, range: ClosedFloatingPointRange<Float>, step: Float, suffix: String = "") =
+        rangedValue(name, default, range, suffix, ValueType.FLOAT, step)
 
     fun floatRange(
         name: String,
@@ -260,6 +264,10 @@ open class Configurable(
     )
 
     fun bind(name: String, default: InputBind) = BindValue(name, defaultValue = default).apply {
+        this@Configurable.inner.add(this)
+    }
+
+    fun action(name: String, action: () -> Unit) = ActionValue(name, action = action).apply {
         this@Configurable.inner.add(this)
     }
 

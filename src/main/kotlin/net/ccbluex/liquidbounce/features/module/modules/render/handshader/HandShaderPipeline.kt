@@ -28,6 +28,7 @@ import com.mojang.blaze3d.shaders.ShaderType
 import com.mojang.blaze3d.shaders.UniformType
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.textures.FilterMode
+import com.mojang.blaze3d.textures.GpuTextureView
 import net.ccbluex.liquidbounce.LiquidBounce
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
 import net.ccbluex.liquidbounce.utils.io.resourceToString
@@ -64,6 +65,7 @@ object HandShaderPipeline : ShaderSource {
         .withFragmentShader(fragmentId)
         .withSampler("Sampler0")
         .withSampler("DepthSampler")
+        .withSampler("HandMaskSampler")
         .withUniform("HandShaderConfig", UniformType.UNIFORM_BUFFER)
         .withColorTargetState(ColorTargetState.DEFAULT)
         .withDepthStencilState(Optional.empty())
@@ -76,15 +78,24 @@ object HandShaderPipeline : ShaderSource {
         CONFIG_UBO_SIZE
     )
 
+    @Volatile
+    private var unavailable = false
+    private var errorLogged = false
+
+    val isAvailable: Boolean
+        get() = !unavailable
+
     override fun get(identifier: Identifier, type: ShaderType): String? = when (type) {
         ShaderType.FRAGMENT -> if (identifier == fragmentId) fragmentSource else null
         ShaderType.VERTEX -> if (identifier == vertexId) vertexSource else null
     }
 
     fun render(
-        sourceColor: com.mojang.blaze3d.textures.GpuTextureView,
-        handDepth: com.mojang.blaze3d.textures.GpuTextureView,
-        outputColor: com.mojang.blaze3d.textures.GpuTextureView,
+        sourceColor: GpuTextureView,
+        handDepth: GpuTextureView,
+        handMask: GpuTextureView,
+        outputColor: GpuTextureView,
+        maskMode: HandPostProcessCoordinator.HandMaskMode,
         mode: ModuleHandShader.Mode,
         tint: Color4b,
         blurRadius: Float,
@@ -92,38 +103,50 @@ object HandShaderPipeline : ShaderSource {
         opacity: Float,
         time: Float,
         shaderScale: Float
-    ) {
-        RenderSystem.assertOnRenderThread()
-
-        val uniformBuffer = uploadUniforms(
-            mode = mode.ordinal,
-            tint = tint,
-            blurRadius = blurRadius,
-            threshold = threshold,
-            opacity = opacity,
-            time = time,
-            shaderScale = shaderScale
-        )
-
-        val sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST)
-        RenderSystem.getDevice().createCommandEncoder().createRenderPass(
-            Suppliers.ofInstance("LiquidBounce HandShader post-process"),
-            outputColor,
-            OptionalInt.empty()
-        ).use { pass ->
-            pass.setPipeline(pipeline)
-            RenderSystem.bindDefaultUniforms(pass)
-            pass.setUniform("HandShaderConfig", uniformBuffer)
-            pass.bindTexture("Sampler0", sourceColor, sampler)
-            pass.bindTexture("DepthSampler", handDepth, sampler)
-            pass.draw(0, 3)
+    ): Boolean {
+        if (unavailable) {
+            return false
         }
 
-        configUbo.rotate()
+        RenderSystem.assertOnRenderThread()
+
+        return runCatching {
+            val uniformBuffer = uploadUniforms(
+                mode = mode.ordinal,
+                maskMode = maskMode.uniformValue,
+                tint = tint,
+                blurRadius = blurRadius,
+                threshold = threshold,
+                opacity = opacity,
+                time = time,
+                shaderScale = shaderScale
+            )
+
+            val sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST)
+            RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                Suppliers.ofInstance("LiquidBounce HandShader post-process"),
+                outputColor,
+                OptionalInt.empty()
+            ).use { pass ->
+                pass.setPipeline(pipeline)
+                RenderSystem.bindDefaultUniforms(pass)
+                pass.setUniform("HandShaderConfig", uniformBuffer)
+                pass.bindTexture("Sampler0", sourceColor, sampler)
+                pass.bindTexture("DepthSampler", handDepth, sampler)
+                pass.bindTexture("HandMaskSampler", handMask, sampler)
+                pass.draw(0, 3)
+            }
+
+            configUbo.rotate()
+            true
+        }.onFailure { throwable ->
+            markUnavailable("HandShader pipeline failed; disabling only the HandShader module path.", throwable)
+        }.getOrDefault(false)
     }
 
     private fun uploadUniforms(
         mode: Int,
+        maskMode: Int,
         tint: Color4b,
         blurRadius: Float,
         threshold: Float,
@@ -141,7 +164,7 @@ object HandShaderPipeline : ShaderSource {
                 )
                 .putVec4(0.0f, 0.0f, 0.0f, 0.0f)
                 .putVec4(blurRadius, threshold, time, shaderScale)
-                .putIVec4(mode, 0, 0, 0)
+                .putIVec4(mode, maskMode, 0, 0)
                 .get()
 
             val buffer = configUbo.currentBuffer()
@@ -156,8 +179,18 @@ object HandShaderPipeline : ShaderSource {
     fun precompile() {
         runCatching {
             RenderSystem.getDevice().precompilePipeline(pipeline, this)
+            unavailable = false
+            errorLogged = false
         }.onFailure { throwable ->
-            LiquidBounce.logger.error("Failed to precompile HandShader pipeline", throwable)
+            markUnavailable("Failed to precompile HandShader pipeline; HandShader will stay unavailable.", throwable)
+        }
+    }
+
+    private fun markUnavailable(message: String, throwable: Throwable) {
+        unavailable = true
+        if (!errorLogged) {
+            errorLogged = true
+            LiquidBounce.logger.error(message, throwable)
         }
     }
 }

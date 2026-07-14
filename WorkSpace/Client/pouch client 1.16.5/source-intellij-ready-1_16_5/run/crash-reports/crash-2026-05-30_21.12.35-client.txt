@@ -1,0 +1,71 @@
+---- Minecraft Crash Report ----
+// Don't be sad, have a hug! <3
+
+Time: 30.05.2026, 21:12
+Description: Initializing game
+
+java.lang.NoClassDefFoundError: com/viaversion/viaversion/api/protocol/version/ProtocolVersion
+	at mods.viaversion.viamcp.ViaMCP.<init>(lightningproduct:50)
+	at mods.viaversion.viamcp.ViaMCP.create(lightningproduct:40)
+	at lightning.product.o_148_s.k_2293_S(lightningproduct:184)
+	at lightning.product.o_148_s.Y_259_p(lightningproduct:80)
+	at lightning.product.o_148_s.<init>(lightningproduct:74)
+	at lightning.product.c_1404_X.<init>(lightningproduct:435)
+	at net.minecraft.client.main.Main.main(lightningproduct:176)
+	at mcp.client.Start.main(lightningproduct:13)
+Caused by: java.lang.ClassNotFoundException: com.viaversion.viaversion.api.protocol.version.ProtocolVersion
+	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:641)
+	at java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:188)
+	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:526)
+	... 8 more
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Render thread
+Stacktrace:
+	at mods.viaversion.viamcp.ViaMCP.<init>(lightningproduct:50)
+	at mods.viaversion.viamcp.ViaMCP.create(lightningproduct:40)
+	at lightning.product.o_148_s.k_2293_S(lightningproduct:184)
+	at lightning.product.o_148_s.Y_259_p(lightningproduct:80)
+	at lightning.product.o_148_s.<init>(lightningproduct:74)
+	at lightning.product.c_1404_X.<init>(lightningproduct:435)
+
+-- Initialization --
+Details:
+Stacktrace:
+	at net.minecraft.client.main.Main.main(lightningproduct:176)
+	at mcp.client.Start.main(lightningproduct:13)
+
+-- System Details --
+Details:
+	Minecraft Version: 1.16.5
+	Minecraft Version ID: 1.16.5
+	Operating System: Windows 10 (amd64) version 10.0
+	Java Version: 21.0.8, Oracle Corporation
+	Java VM Version: Java HotSpot(TM) 64-Bit Server VM (mixed mode, sharing), Oracle Corporation
+	Memory: 992665456 bytes (946 MB) / 1447034880 bytes (1380 MB) up to 4255121408 bytes (4058 MB)
+	CPUs: 28
+	JVM Flags: 1 total; -Xverify:none
+	Launched Version: mcp
+	Backend library: LWJGL version 3.2.2 build 10
+	Backend API: NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2 GL version 4.6.0 NVIDIA 581.80, NVIDIA Corporation
+	GL Caps: Using framebuffer using OpenGL 3.0
+	Using VBOs: Yes
+	Is Modded: Definitely; Client brand changed to 'Fabric'
+	Type: Client (map_client.txt)
+	CPU: 28x Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz
+	OptiFine Version: OptiFine_1.16.5_HD_U_G8
+	OptiFine Build: ~~NULL~~
+	Render Distance Chunks: 8
+	Mipmaps: 4
+	Anisotropic Filtering: 1
+	Antialiasing: 0
+	Multitexture: false
+	Shaders: null
+	OpenGlVersion: 4.6.0 NVIDIA 581.80
+	OpenGlRenderer: NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2
+	OpenGlVendor: NVIDIA Corporation
+	CpuCount: 28

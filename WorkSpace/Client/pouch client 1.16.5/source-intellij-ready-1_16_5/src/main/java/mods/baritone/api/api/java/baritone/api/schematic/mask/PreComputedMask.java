@@ -1,0 +1,30 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package mods.baritone.api.api.java.baritone.api.schematic.mask;
+
+import mods.baritone.api.api.java.baritone.api.schematic.mask.AbstractMask;
+import mods.baritone.api.api.java.baritone.api.schematic.mask.StaticMask;
+
+final class PreComputedMask
+extends AbstractMask
+implements StaticMask {
+    private final boolean[][][] mask = new boolean[this.heightY()][this.lengthZ()][this.widthX()];
+
+    public PreComputedMask(StaticMask mask) {
+        super(mask.widthX(), mask.heightY(), mask.lengthZ());
+        for (int y = 0; y < this.heightY(); ++y) {
+            for (int z = 0; z < this.lengthZ(); ++z) {
+                for (int x = 0; x < this.widthX(); ++x) {
+                    this.mask[y][z][x] = mask.partOfMask(x, y, z);
+                }
+            }
+        }
+    }
+
+    @Override
+    public boolean partOfMask(int x, int y, int z) {
+        return this.mask[y][z][x];
+    }
+}
+

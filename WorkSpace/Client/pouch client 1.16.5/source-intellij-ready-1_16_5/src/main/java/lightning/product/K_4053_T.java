@@ -1,0 +1,42 @@
+﻿/*
+ * Decompiled with CFR 0.152.
+ */
+package lightning.product;
+
+import java.io.IOException;
+import lightning.product.I_2310_w;
+import lightning.product.b_2585_i;
+import lightning.product.Packet;
+
+public class K_4053_T
+implements Packet<I_2310_w> {
+    private long n_1700_B;
+
+    public K_4053_T() {
+    }
+
+    public K_4053_T(long clientTimeIn) {
+        this.n_1700_B = clientTimeIn;
+    }
+
+    @Override
+    public void n_1700_B(b_2585_i buf) throws IOException {
+        this.n_1700_B = buf.readLong();
+    }
+
+    @Override
+    public void J_1907_R(b_2585_i buf) throws IOException {
+        buf.writeLong(this.n_1700_B);
+    }
+
+    @Override
+    public void n_1700_B(I_2310_w handler) {
+        handler.n_1700_B(this);
+    }
+
+    public long J_1907_R() {
+        return this.n_1700_B;
+    }
+}
+
+

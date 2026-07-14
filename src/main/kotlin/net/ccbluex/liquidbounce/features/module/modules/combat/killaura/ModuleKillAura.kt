@@ -25,12 +25,15 @@ import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.event.Sequence
 import net.ccbluex.liquidbounce.event.events.RotationUpdateEvent
 import net.ccbluex.liquidbounce.event.events.SprintEvent
+import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
+import net.ccbluex.liquidbounce.event.events.DisconnectEvent
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleElytraTarget
+import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleAutoCart
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleAutoWeapon
 import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.ModuleCriticals.CriticalsSelectionMode
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK
@@ -68,8 +71,10 @@ import net.ccbluex.liquidbounce.utils.kotlin.random
 import net.ccbluex.liquidbounce.utils.render.WorldTargetRenderer
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import com.mojang.blaze3d.vertex.PoseStack
+import net.minecraft.util.Mth
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.phys.Vec3
 import kotlin.math.pow
 
 /**
@@ -85,23 +90,37 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
     // Range
     internal val range by float("Range", 4.2f, 1f..8f)
-    internal val wallRange by float("WallRange", 3f, 0f..8f).onChange { wallRange ->
-        if (wallRange > range) {
-            range
-        } else {
-            wallRange
+    internal val wallRange by float("WallRange", 3f, 0f..8f)
+        .onChange { wallRange ->
+            if (wallRange > range) {
+                range
+            } else {
+                wallRange
+            }
         }
-    }
+        .visibleWhen { !rotations.isVCoreMode }
     private val elytraRange by float("ElytraRange", 0.5f, 0f..6f)
     private val elytraAimRange by int("ElytraAimRange", 32, 0..64)
 
-    private val scanExtraRange by floatRange("ScanExtraRange", 2.0f..3.0f, 0.0f..7.0f).onChanged { range ->
-        currentScanExtraRange = range.random()
-    }
+    private val scanExtraRange by floatRange("ScanExtraRange", 2.0f..3.0f, 0.0f..7.0f)
+        .onChanged { range ->
+            currentScanExtraRange = range.random()
+        }
+        .visibleWhen { !rotations.isVCoreMode }
     private var currentScanExtraRange: Float = scanExtraRange.random()
 
     private val activeAttackRange: Float
         get() = if (player.isGliding) elytraRange else range
+
+    internal val activeVCoreAimRange: Float
+        get() = if (player.isGliding) {
+            elytraAimRange.toFloat()
+        } else {
+            VCoreAuraRotationsConfigurable.aimRange
+        }
+
+    internal val targetStrafeMaxRange: Float
+        get() = activeAttackRange + activeVCoreAimRange
 
     private val activeScanRange: Float
         get() = if (player.isGliding) elytraRange + elytraAimRange else range + currentScanExtraRange
@@ -120,7 +139,14 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     // Rotation
     private val rotations = tree(KillAuraRotationsConfigurable)
 
-    private val pointTracker = tree(PointTracker())
+    private val pointTracker = PointTracker().also {
+        tree(it)
+        it.visibleWhen { !rotations.isVCoreMode }
+    }
+
+    init {
+        tree(VCoreAuraRotationsConfigurable).visibleWhen { rotations.isVCoreMode }
+    }
 
     private val requires by multiEnumChoice<KillAuraRequirements>("Requires")
 
@@ -128,7 +154,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         get() = requires.all { it.meets() }
 
     // Bypass techniques
-    internal val raycast by enumChoice("Raycast", TRACE_ALL)
+    internal val raycast by enumChoice("Raycast", TRACE_ALL).visibleWhen { !rotations.isVCoreMode }
     private val criticalsSelectionMode by enumChoice("Criticals", CriticalsSelectionMode.SMART)
     private val keepSprint by boolean("KeepSprint", true)
 
@@ -148,7 +174,12 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         tree(KillAuraFightBot)
     }
 
+    override fun enable() {
+        VCoreAuraRotationController.reset()
+    }
+
     override fun disable() {
+        VCoreAuraRotationController.reset()
         targetTracker.reset()
         failedHits.clear()
         KillAuraAutoBlock.stopBlocking()
@@ -175,6 +206,9 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
     @Suppress("unused")
     private val rotationUpdateHandler = handler<RotationUpdateEvent> {
+        if (!rotations.isVCoreMode) {
+            VCoreAuraRotationController.reset()
+        }
         // Make sure killaura-logic is not running while inventory is open
         val isInInventoryScreen =
             InventoryManager.isInventoryOpen || mc.screen is AbstractContainerScreen<*>
@@ -184,6 +218,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         if (isInInventoryScreen && !ignoreOpenInventory || shouldResetTarget) {
             // Reset current target
             targetTracker.reset()
+            VCoreAuraRotationController.clearTarget()
             return@handler
         }
 
@@ -209,6 +244,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         }
 
         if (target == null) {
+            VCoreAuraRotationController.clearTarget()
             val hasUnblocked = KillAuraAutoBlock.stopBlocking()
 
             // Deal with fake swing when there is no target
@@ -226,14 +262,17 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
             return@tickHandler
         }
 
-        val rotation = (if (rotations.rotationTiming == ON_TICK) {
+        val rotation = (if (!rotations.isVCoreMode && rotations.rotationTiming == ON_TICK) {
             getSpot(target, activeAttackRange.toDouble(), PointTracker.AimSituation.FOR_NOW)?.rotation
         } else {
             null
-        } ?: RotationManager.currentRotation ?: player.rotation).normalize()
+        } ?: RotationManager.currentRotation ?: player.rotation).let {
+            if (rotations.isVCoreMode) it else it.normalize()
+        }
 
         val crosshairTarget = when {
             ModuleElytraTarget.shouldTarget(target) -> target
+            rotations.isVCoreMode -> target
             raycast != TRACE_NONE -> {
                 raytraceEntity(activeAttackRange.toDouble(), rotation, filter = {
                     when (raycast) {
@@ -270,7 +309,13 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         KillAuraAutoBlock.makeSeemBlock()
 
         // Are we actually facing the [chosenEntity]
-        val isFacingEnemy = if (target is LivingEntity && ModuleElytraTarget.shouldTarget(target)) {
+        val isFacingEnemy = if (rotations.isVCoreMode) {
+            isActiveVCoreRotationFor(target) && if (target is LivingEntity && ModuleElytraTarget.shouldTarget(target)) {
+                ModuleElytraTarget.canAttack(target)
+            } else {
+                VCoreAuraRotationController.lookingAtHitbox && isTargetInActualAttackRange(target)
+            }
+        } else if (target is LivingEntity && ModuleElytraTarget.shouldTarget(target)) {
             ModuleElytraTarget.canAttack(target)
         } else {
             facingEnemy(
@@ -363,8 +408,25 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
         // Find suitable target
         val candidates = targetTracker.targets()
-            .filter { entity -> squaredDistanceToTargetPoint(entity) <= squaredMaxRange }
-            .sortedBy { entity -> if (squaredDistanceToTargetPoint(entity) <= squaredNormalRange) 0 else 1 }
+            .filter { entity ->
+                if (rotations.isVCoreMode) {
+                    VCoreAuraRotationController.isInRange(entity, attackRange)
+                } else {
+                    squaredDistanceToTargetPoint(entity) <= squaredMaxRange
+                }
+            }
+            .sortedWith { first, second ->
+                val firstBucket = if (squaredDistanceToTargetPoint(first) <= squaredNormalRange) 0 else 1
+                val secondBucket = if (squaredDistanceToTargetPoint(second) <= squaredNormalRange) 0 else 1
+                val bucketCompare = firstBucket.compareTo(secondBucket)
+                if (bucketCompare != 0) {
+                    bucketCompare
+                } else if (ModuleElytraTarget.shouldTarget(first) && ModuleElytraTarget.shouldTarget(second)) {
+                    squaredDistanceToTargetPoint(first).compareTo(squaredDistanceToTargetPoint(second))
+                } else {
+                    0
+                }
+            }
 
         // #Edit By Claude: VCore LockTarget — hold the current target while it stays valid/in-range
         // (Aura.java:497-514) instead of re-picking the best one each tick. processTarget() fires the
@@ -384,10 +446,17 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
             KillAuraFightBot.updateTarget()
 
             RotationManager.setRotationTarget(
-                rotations.toRotationTarget(
-                    KillAuraFightBot.getMovementRotation(),
-                    considerInventory = !ignoreOpenInventory
-                ),
+                if (rotations.isVCoreMode) {
+                    rotations.directRotationTarget(
+                        KillAuraFightBot.getMovementRotation().copy(isNormalized = true),
+                        considerInventory = !ignoreOpenInventory
+                    )
+                } else {
+                    rotations.toRotationTarget(
+                        KillAuraFightBot.getMovementRotation(),
+                        considerInventory = !ignoreOpenInventory
+                    )
+                },
                 priority = Priority.IMPORTANT_FOR_USAGE_2,
                 provider = ModuleKillAura
             )
@@ -402,6 +471,25 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         maximumRange: Float,
         situation: PointTracker.AimSituation
     ): Boolean {
+        if (rotations.isVCoreMode) {
+            if (!VCoreAuraRotationController.isInRange(entity, activeAttackRange)) {
+                return false
+            }
+
+            val ready = isVCoreAttackReadyNow(entity)
+            val result = VCoreAuraRotationController.rotate(entity, ready, activeAttackRange) ?: return false
+            RotationManager.setRotationTarget(
+                rotations.directRotationTarget(
+                    result.rotation,
+                    entity,
+                    considerInventory = !ignoreOpenInventory
+                ),
+                priority = Priority.IMPORTANT_FOR_USAGE_2,
+                provider = this@ModuleKillAura
+            )
+            return true
+        }
+
         val (rotation, _) = getSpot(entity, maximumRange.toDouble(), situation) ?: return false
         val ticks = rotations.calculateTicks(rotation)
         ModuleDebug.debugParameter(ModuleKillAura, "Rotation Ticks", ticks)
@@ -526,6 +614,68 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         return criticalHit &&
             !isBreakingBlock &&
             !(isInInventoryScreen && !ignoreOpenInventory && !simulateInventoryClosing)
+    }
+
+    /** V-Core's pre-facing `ready`: the current scheduler and attack requirements permit an attack now. */
+    private fun isVCoreAttackReadyNow(target: Entity): Boolean =
+        requirementsMet && clickScheduler.isClickTick && validateAttack(target)
+
+    private fun isActiveKillAuraRotationFor(target: Entity): Boolean {
+        val rotationTarget = RotationManager.activeRotationTarget ?: return false
+        return rotationTarget.provider === this && rotationTarget.entity === target
+    }
+
+    internal fun rotationForPacketUse(): Rotation? {
+        val target = targetTracker.target ?: return null
+        val rotationTarget = RotationManager.activeRotationTarget ?: return null
+
+        if (!running || rotationTarget.provider !== this || rotationTarget.entity !== target) {
+            return null
+        }
+
+        return RotationManager.currentRotation ?: rotationTarget.rotation
+    }
+
+    private fun isActiveVCoreRotationFor(target: Entity): Boolean {
+        return rotations.isVCoreMode && isActiveKillAuraRotationFor(target) &&
+            VCoreAuraRotationController.target === target
+    }
+
+    private fun isTargetInActualAttackRange(target: Entity): Boolean {
+        val eye = player.eyePos
+        val box = target.boundingBox
+        val closest = Vec3(
+            Mth.clamp(eye.x, box.minX, box.maxX),
+            Mth.clamp(eye.y, box.minY, box.maxY),
+            Mth.clamp(eye.z, box.minZ, box.maxZ)
+        )
+
+        return eye.distanceToSqr(closest) <= activeAttackRange * activeAttackRange
+    }
+
+    @JvmStatic
+    fun isFocusedFullMoveFixActive(): Boolean {
+        val target = targetTracker.target ?: return false
+        val rotation = RotationManager.currentRotation ?: return false
+        val rotationTarget = RotationManager.activeRotationTarget ?: return false
+
+        return running && !target.isRemoved && !player.isPassenger &&
+            rotation.yaw.isFinite() && rotation.pitch.isFinite() &&
+            isActiveKillAuraRotationFor(target) &&
+            rotationTarget.movementCorrection ==
+                net.ccbluex.liquidbounce.utils.aiming.features.MovementCorrection.FOCUSED_FULL &&
+            !ModuleAutoCart.isAutoCartMoveFixActive() &&
+            !CombatManager.shouldPauseCombat && !CombatManager.shouldPauseRotation
+    }
+
+    @Suppress("unused")
+    private val worldChangeHandler = handler<WorldChangeEvent> {
+        VCoreAuraRotationController.reset()
+    }
+
+    @Suppress("unused")
+    private val disconnectHandler = handler<DisconnectEvent> {
+        VCoreAuraRotationController.reset()
     }
 
     private fun squaredDistanceToTargetPoint(entity: Entity): Double {

@@ -29,9 +29,11 @@ import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.modules.client.*
 import net.ccbluex.liquidbounce.features.module.modules.combat.*
 import net.ccbluex.liquidbounce.features.module.modules.combat.autoarmor.ModuleAutoArmor
+import net.ccbluex.liquidbounce.features.module.modules.combat.backtrack.ModuleBacktrack
 import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.ModuleCriticals
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
 import net.ccbluex.liquidbounce.features.module.modules.combat.targetstrafe.ModuleTargetStrafe
+import net.ccbluex.liquidbounce.features.module.modules.combat.velocity.ModuleVelocity
 import net.ccbluex.liquidbounce.features.module.modules.exploit.*
 import net.ccbluex.liquidbounce.features.module.modules.exploit.phase.ModulePhase
 import net.ccbluex.liquidbounce.features.module.modules.misc.*
@@ -52,8 +54,11 @@ import net.ccbluex.liquidbounce.features.module.modules.player.autobuff.ModuleAu
 import net.ccbluex.liquidbounce.features.module.modules.player.offhand.ModuleOffhand
 import net.ccbluex.liquidbounce.features.module.modules.render.*
 import net.ccbluex.liquidbounce.features.module.modules.render.esp.ModuleESP
+import net.ccbluex.liquidbounce.features.module.modules.render.hands.ModuleHands
 import net.ccbluex.liquidbounce.features.module.modules.render.handshader.ModuleHandShader
 import net.ccbluex.liquidbounce.features.module.modules.render.hats.ModuleHats
+import net.ccbluex.liquidbounce.features.module.modules.render.hats.ModuleSantaHat
+import net.ccbluex.liquidbounce.features.module.modules.render.ghostplayer.ModuleGhostPlayer
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.ModuleNameTags
 import net.ccbluex.liquidbounce.features.module.modules.render.popchams.ModulePopChams
 import net.ccbluex.liquidbounce.features.module.modules.render.skeletonesp.ModuleSkeletonESP
@@ -178,6 +183,8 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleCriticals,
             ModuleKillAura,
             ModuleTargetStrafe,
+            ModuleVelocity,
+            ModuleBacktrack,
             ModuleKeepSprint,
             ModuleMaceKill,
             ModuleMaceSwap,
@@ -251,22 +258,26 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleFreeLook,
             ModuleFullBright,
             ModuleHandShader,
+            ModuleHands,
             ModuleHats,
+            ModuleSantaHat,
             ModuleHud,
             ModuleItemESP,
             ModuleItemPhysics,
             ModuleItemTags,
             ModuleInventoryAnimation,
             ModuleJumpCircle,
+            ModuleHitEffect,
             ModuleCubes,
             ModuleLineGlyphs,
             ModuleTargetESP,
             ModulePopChams,
+            ModuleGhostPlayer,
             ModuleWings,
             ModuleNameTags,
             ModuleAspect,
             ModuleChunkAnimator,
-            ModuleCustomAmbience,
+            ModuleBetterWorld,
             ModuleRotations,
             ModuleSilentHotbar,
             ModuleSkeletonESP,

@@ -21,16 +21,22 @@ package net.ccbluex.liquidbounce.features.module.modules.misc
 import net.ccbluex.liquidbounce.config.AutoConfig.loadingNow
 import net.ccbluex.liquidbounce.config.types.nesting.Choice
 import net.ccbluex.liquidbounce.config.types.nesting.ChoiceConfigurable
+import net.ccbluex.liquidbounce.config.types.nesting.ToggleableConfigurable
+import net.ccbluex.liquidbounce.event.events.AttackEntityEvent
+import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleClickGui
 import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.client.logger
 import net.ccbluex.liquidbounce.utils.client.mc
+import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
 import net.minecraft.client.resources.sounds.SimpleSoundInstance
 import net.minecraft.resources.Identifier
 import net.minecraft.sounds.SoundEvent
 import net.minecraft.sounds.SoundEvents
+import net.minecraft.sounds.SoundSource
+import net.minecraft.world.entity.LivingEntity
 import kotlin.math.pow
 
 /**
@@ -44,6 +50,10 @@ object ModuleClientSound : ClientModule(
 
     private val soundMode = choices("SoundMode", Wav, arrayOf(Wav, Button)).apply(::tagBy)
     private val volume by int("Volume", 50, 1..100)
+
+    init {
+        tree(CritSound)
+    }
 
     /**
      * Called by [ClientModule] after a real module state change. The source module is explicit so this module can
@@ -67,6 +77,67 @@ object ModuleClientSound : ClientModule(
         }.onFailure {
             logger.warn("Failed to play module toggle sound.", it)
         }
+    }
+
+    private object CritSound : ToggleableConfigurable(ModuleClientSound, "CritSound", false) {
+
+        private val volume by float("Volume", 1.0f, 0.1f..2.0f, 0.05f)
+        private val pitch by float("Pitch", 1.0f, 0.5f..2.0f, 0.05f)
+        private var successLogged = false
+        private var failureLogged = false
+
+        @Suppress("unused")
+        private val attackHandler = handler<AttackEntityEvent>(priority = READ_FINAL_STATE) { event ->
+            if (event.isCancelled || loadingNow || !inGame) {
+                return@handler
+            }
+
+            val player = mc.player ?: return@handler
+            val target = event.entity as? LivingEntity ?: return@handler
+
+            if (!target.isAlive) {
+                return@handler
+            }
+
+            val isKlackCritical =
+                player.fallDistance > 0.0 &&
+                    !player.onGround()
+
+            if (!isKlackCritical) {
+                return@handler
+            }
+
+            playWitherCritSound()
+        }
+
+        private fun playWitherCritSound() {
+            val player = mc.player ?: return
+            val level = mc.level ?: return
+
+            runCatching {
+                level.playLocalSound(
+                    player.x,
+                    player.y,
+                    player.z,
+                    SoundEvents.WITHER_AMBIENT,
+                    SoundSource.PLAYERS,
+                    volume.coerceIn(0.1f, 2.0f),
+                    pitch.coerceIn(0.5f, 2.0f),
+                    false
+                )
+            }.onSuccess {
+                if (!successLogged) {
+                    logger.info("CritSound attack handler reached; playing WITHER_AMBIENT through playLocalSound.")
+                    successLogged = true
+                }
+            }.onFailure {
+                if (!failureLogged) {
+                    logger.error("Failed to play CritSound locally.", it)
+                    failureLogged = true
+                }
+            }
+        }
+
     }
 
     private object Wav : SoundMode("Wav") {

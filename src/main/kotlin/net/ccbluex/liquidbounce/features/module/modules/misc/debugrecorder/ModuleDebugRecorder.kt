@@ -21,6 +21,7 @@
 package net.ccbluex.liquidbounce.features.module.modules.misc.debugrecorder
 import net.ccbluex.liquidbounce.utils.entity.*
 
+import com.google.gson.Gson
 import net.ccbluex.liquidbounce.config.ConfigSystem
 import net.ccbluex.liquidbounce.config.gson.adapter.toUnderlinedString
 import net.ccbluex.liquidbounce.config.gson.publicGson
@@ -44,6 +45,7 @@ object ModuleDebugRecorder : ClientModule("DebugRecorder", Category.MISC, disabl
     val modes = choices("Mode", GenericDebugRecorder, arrayOf(
         MinaraiCombatRecorder,
         MinaraiTrainer,
+        PacketRotationRecorder,
 
         GenericDebugRecorder,
         DebugCPSRecorder,
@@ -59,6 +61,7 @@ object ModuleDebugRecorder : ClientModule("DebugRecorder", Category.MISC, disabl
             mkdirs()
         }
         internal val packets = mutableListOf<T>()
+        protected open val exportGson: Gson = publicGson
 
         protected fun recordPacket(packet: T) {
             if (!this.isSelected) {
@@ -92,7 +95,7 @@ object ModuleDebugRecorder : ClientModule("DebugRecorder", Category.MISC, disabl
                 }
 
                 file.bufferedWriter().use { writer ->
-                    publicGson.toJson(this.packets, writer)
+                    exportGson.toJson(this.packets, writer)
                 }
                 file.absolutePath
             }.onFailure {

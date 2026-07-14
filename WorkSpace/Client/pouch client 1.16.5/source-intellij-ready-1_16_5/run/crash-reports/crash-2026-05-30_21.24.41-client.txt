@@ -1,0 +1,79 @@
+---- Minecraft Crash Report ----
+// You're mean.
+
+Time: 30.05.2026, 21:24
+Description: Rendering overlay
+
+java.lang.NoClassDefFoundError: com/github/javafaker/Faker
+	at lightning.product.l_3729_r.<clinit>(lightningproduct:22)
+	at lightning.product.k_1366_K.R_4764_Y(lightningproduct:58)
+	at lightning.product.y_4842_Z.n_1700_B(lightningproduct:28)
+	at lightning.product.O_922_L.render(lightningproduct:169)
+	at lightning.product.u_2877_K.render(lightningproduct:78)
+	at lightning.product.M_660_m.n_1700_B(lightningproduct:900)
+	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+	at net.minecraft.client.main.Main.main(lightningproduct:225)
+	at mcp.client.Start.main(lightningproduct:13)
+Caused by: java.lang.ClassNotFoundException: com.github.javafaker.Faker
+	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:641)
+	at java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:188)
+	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:526)
+	... 10 more
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Render thread
+Stacktrace:
+	at lightning.product.l_3729_r.<clinit>(lightningproduct:22)
+	at lightning.product.k_1366_K.R_4764_Y(lightningproduct:58)
+	at lightning.product.y_4842_Z.n_1700_B(lightningproduct:28)
+	at lightning.product.O_922_L.render(lightningproduct:169)
+	at lightning.product.u_2877_K.render(lightningproduct:78)
+
+-- Overlay render details --
+Details:
+	Overlay name: lightning.product.u_2877_K
+Stacktrace:
+	at lightning.product.M_660_m.n_1700_B(lightningproduct:900)
+	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+	at net.minecraft.client.main.Main.main(lightningproduct:225)
+	at mcp.client.Start.main(lightningproduct:13)
+
+-- System Details --
+Details:
+	Minecraft Version: 1.16.5
+	Minecraft Version ID: 1.16.5
+	Operating System: Windows 10 (amd64) version 10.0
+	Java Version: 21.0.8, Oracle Corporation
+	Java VM Version: Java HotSpot(TM) 64-Bit Server VM (mixed mode, sharing), Oracle Corporation
+	Memory: 500591560 bytes (477 MB) / 4255121408 bytes (4058 MB) up to 4255121408 bytes (4058 MB)
+	CPUs: 28
+	JVM Flags: 1 total; -Xverify:none
+	Launched Version: mcp
+	Backend library: LWJGL version 3.2.2 build 10
+	Backend API: NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2 GL version 4.6.0 NVIDIA 581.80, NVIDIA Corporation
+	GL Caps: Using framebuffer using OpenGL 3.0
+	Using VBOs: Yes
+	Is Modded: Definitely; Client brand changed to 'Fabric'
+	Type: Client (map_client.txt)
+	Graphics mode: fancy
+	Resource Packs: 
+	Current Language: English (US)
+	CPU: 28x Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz
+	OptiFine Version: OptiFine_1.16.5_HD_U_G8
+	OptiFine Build: ~~NULL~~
+	Render Distance Chunks: 8
+	Mipmaps: 4
+	Anisotropic Filtering: 1
+	Antialiasing: 0
+	Multitexture: false
+	Shaders: null
+	OpenGlVersion: 4.6.0 NVIDIA 581.80
+	OpenGlRenderer: NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2
+	OpenGlVendor: NVIDIA Corporation
+	CpuCount: 28

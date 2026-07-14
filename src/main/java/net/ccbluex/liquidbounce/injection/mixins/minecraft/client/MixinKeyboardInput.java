@@ -25,6 +25,8 @@ import net.ccbluex.liquidbounce.event.EventManager;
 import net.ccbluex.liquidbounce.event.events.MovementInputEvent;
 import net.ccbluex.liquidbounce.event.events.SprintEvent;
 import net.ccbluex.liquidbounce.features.module.modules.movement.inventorymove.ModuleInventoryMove;
+import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura;
+import net.ccbluex.liquidbounce.features.module.modules.movement.noslow.ModuleNoSlow;
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager;
 import net.ccbluex.liquidbounce.utils.aiming.features.MovementCorrection;
 import net.ccbluex.liquidbounce.utils.input.InputTracker;
@@ -37,6 +39,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec2;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -80,6 +83,21 @@ public abstract class MixinKeyboardInput extends MixinInput {
         if (ModuleInventoryMove.INSTANCE.shouldHandleInputs(this.options.keySprint)) {
             this.options.keySprint.setDown(InputTracker.INSTANCE.isPressedOnAny(this.options.keySprint));
         }
+    }
+
+    @Inject(method = "tick", at = @At("RETURN"))
+    private void hookNoSlowMatrixPassengerInput(CallbackInfo ci) {
+        if (!ModuleNoSlow.INSTANCE.shouldApplyMatrixKeyboardInput()) {
+            return;
+        }
+
+        KeyboardInput keyboardInput = (KeyboardInput) (Object) this;
+        Vec2 moveVector = keyboardInput.getMoveVector();
+        float multiplier = 5.0f * ModuleNoSlow.INSTANCE.matrixInputMultiplier(moveVector.y, moveVector.x);
+        ((MixinClientInputAccessor) this).liquid_bounce$setMoveVector(new Vec2(
+                moveVector.x * multiplier,
+                moveVector.y * multiplier
+        ));
     }
 
     @ModifyExpressionValue(method = "tick", at = @At(value = "NEW", target = "(ZZZZZZZ)Lnet/minecraft/world/entity/player/Input;"))
@@ -132,6 +150,11 @@ public abstract class MixinKeyboardInput extends MixinInput {
         }
 
         if (movementCorrection == MovementCorrection.FOCUSED_FULL) {
+            if (!ModuleKillAura.isFocusedFullMoveFixActive()) {
+                resetFullMoveFixState();
+                return input;
+            }
+
             var entity = configurable.getEntity();
             if (entity == null || (z == 0.0f && x == 0.0f)) {
                 resetFullMoveFixState();

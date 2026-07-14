@@ -1,0 +1,72 @@
+{
+  "module_enable": {
+    "subtitle": "Module enabled",
+    "category": "master",
+    "sounds": [
+      {
+        "name": "mre:module_enable",
+        "stream": false
+      }
+    ]
+  },
+  "module_disable": {
+    "subtitle": "Module disabled",
+    "category": "master",
+    "sounds": [
+      {
+        "name": "mre:module_disable",
+        "stream": false
+      }
+    ]
+  },
+  "module_enable1": {
+    "subtitle": "Module enabled",
+    "category": "master",
+    "sounds": [
+      {
+        "name": "mre:module_enable1",
+        "stream": false
+      }
+    ]
+  },
+  "module_disable1": {
+    "subtitle": "Module disabled",
+    "category": "master",
+    "sounds": [
+      {
+        "name": "mre:module_disable1",
+        "stream": false
+      }
+    ]
+  },
+  "module_enable2": {
+    "subtitle": "Module enabled",
+    "category": "master",
+    "sounds": [
+      {
+        "name": "mre:module_enable2",
+        "stream": false
+      }
+    ]
+  },
+  "module_disable2": {
+    "subtitle": "Module disabled",
+    "category": "master",
+    "sounds": [
+      {
+        "name": "mre:module_disable2",
+        "stream": false
+      }
+    ]
+  },
+  "spek": {
+    "subtitle": "Spek detected",
+    "category": "master",
+    "sounds": [
+      {
+        "name": "mre:spek",
+        "stream": false
+      }
+    ]
+  }
+}

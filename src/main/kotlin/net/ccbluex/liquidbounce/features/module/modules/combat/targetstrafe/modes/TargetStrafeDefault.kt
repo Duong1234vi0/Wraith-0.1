@@ -55,6 +55,7 @@ object TargetStrafeDefault : Choice("Default") {
     private val speed by float("Speed", 0.4f, 0.05f..1.0f)
     private val damageBoost by boolean("DamageBoost", false)
     private val boostSpeed by float("BoostSpeed", 0.5f, 0.1f..1.5f)
+        .visibleWhen { damageBoost }
 
     private var clockwise = true
     private var hasQueuedMotion = false
@@ -90,7 +91,7 @@ object TargetStrafeDefault : Choice("Default") {
             player.jumpFromGround()
         }
 
-        val maxDistance = ModuleKillAura.range
+        val maxDistance = ModuleKillAura.targetStrafeMaxRange
         val distanceToTarget = player.distanceTo(target)
         if (distanceToTarget > maxDistance) return@handler
 
@@ -140,9 +141,11 @@ object TargetStrafeDefault : Choice("Default") {
         val level = mc.level ?: return true
         val mutable = BlockPos.MutableBlockPos()
         val top = (player.y + 4.0).toInt()
+        val blockX = Mth.floor(x)
+        val blockZ = Mth.floor(z)
 
         for (y in top downTo level.minY) {
-            mutable.set(x.toInt(), y, z.toInt())
+            mutable.set(blockX, y, blockZ)
             val state = level.getBlockState(mutable)
             val block = state.block
             if (block === Blocks.LAVA || block === Blocks.FIRE || block === Blocks.COBWEB) {
@@ -157,8 +160,10 @@ object TargetStrafeDefault : Choice("Default") {
     private fun isVoidAboveVoid(x: Double, z: Double): Boolean {
         val level = mc.level ?: return true
         val mutable = BlockPos.MutableBlockPos()
+        val blockX = Mth.floor(x)
+        val blockZ = Mth.floor(z)
         for (y in player.y.toInt() downTo (level.minY + 1)) {
-            mutable.set(x.toInt(), y, z.toInt())
+            mutable.set(blockX, y, blockZ)
             if (!level.getBlockState(mutable).isAir) return false
         }
         return true

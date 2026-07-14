@@ -1,0 +1,1501 @@
+[01:41:53] [main/INFO]: [OptiFine] (Reflector) Field not found: World.tileEntitiesToBeRemoved
+[01:41:53] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.eventbus.api.Event$Result
+[01:41:53] [main/INFO]: [OptiFine] (Reflector) Method not present: net.minecraftforge.common.extensions.IForgeBlockState.hasTileEntity
+[01:41:53] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.extensions.IForgeEntity
+[01:41:53] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.fml.CrashReportExtender
+[01:41:53] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.N_1709_M.createOptional
+[01:41:59] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.ForgeHooksClient
+[01:41:59] [main/INFO]: Environment: authHost='https://authserver.mojang.com', accountsHost='https://api.mojang.com', sessionHost='https://sessionserver.mojang.com', servicesHost='https://api.minecraftservices.com', name='PROD'
+[01:42:00] [main/INFO]: Setting user: Player248
+[01:42:00] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.settings.KeyConflictContext
+[01:42:00] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraft.launchwrapper.Launch
+[01:42:00] [main/INFO]: Backend library: LWJGL version 3.2.2 build 10
+[01:42:00] [main/INFO]: [OptiFine] (Reflector) Method not present: net.minecraftforge.fml.loading.progress.EarlyProgressVisualization.handOffWindow
+[01:42:01] [main/INFO]: [STDERR]: [LWJGL] [ThreadLocalUtil] Unsupported JNI version detected, this may result in a crash. Please inform LWJGL developers.
+[01:42:02] [main/INFO]: [OptiFine] 
+[01:42:02] [main/INFO]: [OptiFine] OptiFine_1.16.5_HD_U_G8
+[01:42:02] [main/INFO]: [OptiFine] (Reflector) Class not present: optifine.OptiFineResourceLocator
+[01:42:02] [main/INFO]: [OptiFine] Build: null
+[01:42:02] [main/INFO]: [OptiFine] OS: Windows 10 (amd64) version 10.0
+[01:42:02] [main/INFO]: [OptiFine] Java: 21.0.8, Oracle Corporation
+[01:42:02] [main/INFO]: [OptiFine] VM: Java HotSpot(TM) 64-Bit Server VM (mixed mode, sharing), Oracle Corporation
+[01:42:02] [main/INFO]: [OptiFine] LWJGL: 3.3.0 Win32 WGL EGL OSMesa VisualC DLL
+[01:42:02] [main/INFO]: [OptiFine] OpenGL: NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2, version 4.6.0 NVIDIA 581.80, NVIDIA Corporation
+[01:42:02] [main/INFO]: [OptiFine] OpenGL Version: 4.6.0
+[01:42:02] [main/INFO]: [OptiFine] Maximum texture size: 32768x32768
+[01:42:02] [VersionCheck/INFO]: [OptiFine] Checking for new version
+[01:42:02] [main/INFO]: [Shaders] OpenGL Version: 4.6.0 NVIDIA 581.80
+[01:42:02] [main/INFO]: [Shaders] Vendor:  NVIDIA Corporation
+[01:42:02] [main/INFO]: [Shaders] Renderer: NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2
+[01:42:02] [main/INFO]: [Shaders] Capabilities:  2.0  2.1  3.0  3.2  4.0 
+[01:42:02] [main/INFO]: [Shaders] GL_MAX_DRAW_BUFFERS: 8
+[01:42:02] [main/INFO]: [Shaders] GL_MAX_COLOR_ATTACHMENTS_EXT: 8
+[01:42:02] [main/INFO]: [Shaders] GL_MAX_TEXTURE_IMAGE_UNITS: 32
+[01:42:02] [main/INFO]: [Shaders] Load shaders configuration.
+[01:42:02] [main/INFO]: [Shaders] Save shaders configuration.
+[01:42:02] [main/INFO]: [Shaders] No shaderpack loaded.
+[01:42:02] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.fml.common.Loader
+[01:42:02] [VersionCheck/INFO]: [OptiFine] Version found: G7
+[01:42:02] [main/WARN]: [OptiFine] java.lang.ClassNotFoundException: sun.misc.SharedSecrets
+[01:42:02] [main/WARN]: [OptiFine] java.lang.ClassNotFoundException: jdk.internal.misc.SharedSecrets
+[01:42:02] [main/WARN]: [OptiFine] java.lang.ClassNotFoundException: sun.misc.VM
+[01:42:02] [main/WARN]: [OptiFine] java.lang.reflect.InaccessibleObjectException: Unable to make public static long jdk.internal.misc.VM.maxDirectMemory() accessible: module java.base does not "exports jdk.internal.misc" to unnamed module @17d677df
+[01:42:02] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.ItemModelMesherForge
+[01:42:02] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.model.pipeline.ForgeBlockModelRenderer
+[01:42:03] [main/INFO]: Narrator library for x64 successfully loaded
+[01:42:10] [main/INFO]: [voicechat] Compatibility version 20
+[01:42:10] [main/WARN]: Failed to load service CommonCompatibilityManager with ServiceLoader
+[01:42:10] [main/INFO]: [voicechat] Loading plugins
+[01:42:10] [main/INFO]: [voicechat] Loaded 0 plugin(s)
+[01:42:10] [main/INFO]: [voicechat] Initializing plugins
+[01:42:10] [main/INFO]: [voicechat] Initialized 0 plugin(s)
+[01:42:10] [main/INFO]: [voicechat] Successfully migrated config voicechat-client.toml
+[01:42:10] [main/WARN]: Failed to load service ClientCompatibilityManager with ServiceLoader
+[01:42:10] [main/INFO]: [voicechat] Loading Opus
+[01:42:10] [main/WARN]: [voicechat] Failed to load native Opus implementation
+java.lang.NoSuchMethodError: 'void de.maxhenkel.opus4j.OpusEncoder.<init>(int, int, de.maxhenkel.opus4j.OpusEncoder$Application)'
+	at mods.voicechat.plugins.impl.opus.NativeOpusEncoderImpl.<init>(lightningproduct:11) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.lambda$opusNativeCheck$0(lightningproduct:24) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.common.Utils.lambda$createSafe$1(lightningproduct:301) ~[1_16_5_decrypted.jar:?]
+	at java.lang.Thread.run(Thread.java:1583) ~[?:?]
+[01:42:10] [main/WARN]: [voicechat] Failed to load native Opus encoder - Falling back to Java Opus implementation
+[01:42:10] [main/INFO]: [STDERR]: Failed to load config from themes: C:\Pouch\themes
+[01:42:10] [main/INFO]: [CHAT] [Baritone] Baritone settings file not found, resetting.
+[01:42:11] [main/INFO]: Reloading ResourceManager: Default
+[01:42:11] [main/INFO]: [OptiFine] *** Reloading textures ***
+[01:42:11] [main/INFO]: [OptiFine] Resource packs: Default
+[01:42:12] [Worker-Main-14/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.model.ModelLoaderRegistry
+[01:42:12] [Worker-Main-10/INFO]: [OptiFine] Multitexture: false
+[01:42:12] [Worker-Main-12/INFO]: [OptiFine] Multitexture: false
+[01:42:12] [Worker-Main-13/INFO]: [OptiFine] Multitexture: false
+[01:42:12] [Worker-Main-10/INFO]: [OptiFine] Scaled non power of 2: maseffects:particle/revive_spark, 5 -> 10
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.d_1620_j.canRenderInLayer
+[01:42:20] [main/INFO]: [OptiFine] *** Reflector Forge ***
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: mods.betterfoliage.client.BetterFoliageClient
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.fml.BrandingControl
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.capabilities.ICapabilityProvider
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.capabilities.CapabilityProvider
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.fml.client.ClientModLoader
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.event.world.ChunkDataEvent$Save
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.event.world.ChunkEvent$Load
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.event.world.ChunkEvent$Unload
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.fml.client.ClientHooks
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.GuiScreenEvent$DrawScreenEvent$Pre
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.GuiScreenEvent$DrawScreenEvent$Post
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.event.entity.EntityLeaveWorldEvent
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.EntityViewRenderEvent$CameraSetup
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.EntityViewRenderEvent$FogColors
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.EntityViewRenderEvent$RenderFogEvent
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.event.entity.EntityJoinWorldEvent
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: net.minecraftforge.eventbus.api.Event.isCanceled
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: net.minecraftforge.eventbus.api.Event.getResult
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.eventbus.api.IEventBus
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.extensions.IForgeBlock
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.s_4566_m.getTexture
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: net.minecraftforge.common.extensions.IForgeBlockState.addDestroyEffects
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: net.minecraftforge.common.extensions.IForgeBlockState.addHitEffects
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: net.minecraftforge.common.extensions.IForgeBlockState.getLightValue
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: net.minecraftforge.common.extensions.IForgeBlockState.getSoundType
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: net.minecraftforge.common.extensions.IForgeBlockState.getStateAtViewpoint
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: net.minecraftforge.common.extensions.IForgeBlockState.isAir
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: net.minecraftforge.common.extensions.IForgeBlockState.shouldDisplayFluidOverlay
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.extensions.IForgeFluid
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.fluids.FluidAttributes
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.t_5_h.getTags
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.event.ForgeEventFactory
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.s_586_k.getTags
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.ForgeHooks
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.ForgeConfig
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.ForgeConfig$Client
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.ForgeConfigSpec
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.ForgeConfigSpec$ConfigValue
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.d_2497_W.getWorldForge
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.extensions.IForgeItem
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.extensions.IForgeItemStack
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.fml.ForgeI18n
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.extensions.IForgeEffectInstance
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.registries.ForgeRegistryEntry
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.d_1620_j.canRenderInLayer
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Constructor not present: lightning.product.r_3890_d, params: class lightning.product.j_1817_S, int, class java.lang.Object, boolean
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.r_3890_d.isForceTicks
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.extensions.IForgeTileEntity
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.J_4684_J.getCloudRenderHandler
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.J_4684_J.getSkyRenderHandler
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.J_4684_J.getWeatherParticleRenderHandler
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Method not present: lightning.product.J_4684_J.getWeatherRenderHandler
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.IRenderHandler
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.model.pipeline.LightUtil
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.common.MinecraftForge
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.MinecraftForgeClient
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.fml.common.ModContainer
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.fml.client.gui.screen.ModListScreen
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.gui.NotificationModUpdateScreen
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.entity.PartEntity
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.event.entity.PlaySoundAtEntityEvent
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.RenderBlockOverlayEvent$OverlayType
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.fml.client.registry.RenderingRegistry
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.RenderGameOverlayEvent$BossInfo
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.RenderItemInFrameEvent
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.RenderLivingEvent$Pre
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.RenderLivingEvent$Post
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.RenderNameplateEvent
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.client.event.ScreenshotEvent
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.fml.server.ServerLifecycleHooks
+[01:42:20] [main/INFO]: [OptiFine] (Reflector) Class not present: net.minecraftforge.event.world.WorldEvent$Load
+[01:42:20] [main/INFO]: [OptiFine] *** Reflector Vanilla ***
+[01:42:22] [Worker-Main-14/INFO]: [OptiFine] Multitexture: false
+[01:42:22] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/00_glass_white/glass_pane_white.properties
+[01:42:22] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/00_glass_white/glass_white.properties
+[01:42:22] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/01_glass_orange/glass_orange.properties
+[01:42:22] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/01_glass_orange/glass_pane_orange.properties
+[01:42:22] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/02_glass_magenta/glass_magenta.properties
+[01:42:22] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/02_glass_magenta/glass_pane_magenta.properties
+[01:42:22] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/03_glass_light_blue/glass_light_blue.properties
+[01:42:22] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/03_glass_light_blue/glass_pane_light_blue.properties
+[01:42:22] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/04_glass_yellow/glass_pane_yellow.properties
+[01:42:22] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/04_glass_yellow/glass_yellow.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/05_glass_lime/glass_lime.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/05_glass_lime/glass_pane_lime.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/06_glass_pink/glass_pane_pink.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/06_glass_pink/glass_pink.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/07_glass_gray/glass_gray.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/07_glass_gray/glass_pane_gray.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/08_glass_light_gray/glass_light_gray.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/08_glass_light_gray/glass_pane_light_gray.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/09_glass_cyan/glass_cyan.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/09_glass_cyan/glass_pane_cyan.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/10_glass_purple/glass_pane_purple.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/10_glass_purple/glass_purple.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/11_glass_blue/glass_blue.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/11_glass_blue/glass_pane_blue.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/12_glass_brown/glass_brown.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/12_glass_brown/glass_pane_brown.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/13_glass_green/glass_green.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/13_glass_green/glass_pane_green.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/14_glass_red/glass_pane_red.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/14_glass_red/glass_red.properties
+[01:42:23] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/15_glass_black/glass_black.properties
+[01:42:24] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/15_glass_black/glass_pane_black.properties
+[01:42:24] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/20_glass/glass.properties
+[01:42:24] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/20_glass/glass_pane.properties
+[01:42:24] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/30_bookshelf/bookshelf.properties
+[01:42:24] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/40_sandstone/sandstone.properties
+[01:42:24] [Worker-Main-14/INFO]: [OptiFine] ConnectedTextures: optifine/ctm/default/41_red_sandstone/red_sandstone.properties
+[01:42:24] [Worker-Main-14/INFO]: [OptiFine] Multipass connected textures: false
+[01:42:24] [Worker-Main-14/INFO]: [OptiFine] BetterGrass: Parsing default configuration optifine/bettergrass.properties
+[01:42:32] [Worker-Main-14/INFO]: [OptiFine] Mipmap levels: 4
+[01:42:34] [Worker-Main-14/INFO]: [OptiFine] Multitexture: false
+[01:42:34] [Worker-Main-14/INFO]: [OptiFine] Sprite size: 64
+[01:42:34] [Worker-Main-14/INFO]: [OptiFine] Mipmap levels: 6
+[01:42:34] [Worker-Main-14/INFO]: [OptiFine] Multitexture: false
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Sprite size: 64
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Mipmap levels: 6
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Multitexture: false
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Sprite size: 64
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Mipmap levels: 6
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Multitexture: false
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Sprite size: 64
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Mipmap levels: 6
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Multitexture: false
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Sprite size: 64
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Mipmap levels: 6
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Multitexture: false
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Sprite size: 64
+[01:42:35] [Worker-Main-14/INFO]: [OptiFine] Mipmap levels: 6
+[01:42:36] [main/INFO]: OpenAL initialized.
+[01:42:36] [main/INFO]: Sound engine started
+[01:42:36] [main/INFO]: Created: 1024x512x4 minecraft:textures/atlas/blocks.png-atlas
+[01:42:36] [main/INFO]: [OptiFine] Animated sprites: 43
+[01:42:36] [main/INFO]: Created: 256x128x4 minecraft:textures/atlas/signs.png-atlas
+[01:42:36] [main/INFO]: [OptiFine] Animated sprites: 0
+[01:42:36] [main/INFO]: Created: 512x512x4 minecraft:textures/atlas/banner_patterns.png-atlas
+[01:42:36] [main/INFO]: [OptiFine] Animated sprites: 0
+[01:42:36] [main/INFO]: Created: 512x512x4 minecraft:textures/atlas/shield_patterns.png-atlas
+[01:42:36] [main/INFO]: [OptiFine] Animated sprites: 0
+[01:42:36] [main/INFO]: Created: 256x256x4 minecraft:textures/atlas/chest.png-atlas
+[01:42:36] [main/INFO]: [OptiFine] Animated sprites: 0
+[01:42:36] [main/INFO]: Created: 512x256x4 minecraft:textures/atlas/beds.png-atlas
+[01:42:36] [main/INFO]: [OptiFine] Animated sprites: 0
+[01:42:36] [main/INFO]: Created: 512x256x4 minecraft:textures/atlas/shulker_boxes.png-atlas
+[01:42:36] [main/INFO]: [OptiFine] Animated sprites: 0
+[01:42:37] [main/INFO]: Created: 512x512x0 minecraft:textures/atlas/particles.png-atlas
+[01:42:37] [main/INFO]: [OptiFine] Animated sprites: 0
+[01:42:37] [main/INFO]: Created: 256x256x0 minecraft:textures/atlas/paintings.png-atlas
+[01:42:37] [main/INFO]: [OptiFine] Animated sprites: 0
+[01:42:37] [main/INFO]: Created: 128x128x0 minecraft:textures/atlas/mob_effects.png-atlas
+[01:42:37] [main/INFO]: [OptiFine] Animated sprites: 0
+[01:42:37] [main/INFO]: [OptiFine] *** Reloading custom textures ***
+[01:42:41] [main/INFO]: [OptiFine] Disable Forge light pipeline
+[01:43:06] [Worker-Main-10/ERROR]: Couldn't download http texture
+java.net.UnknownHostException: skins.minecraft.net
+	at sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:567) ~[?:?]
+	at java.net.Socket.connect(Socket.java:751) ~[?:?]
+	at java.net.Socket.connect(Socket.java:686) ~[?:?]
+	at sun.net.NetworkClient.doConnect(NetworkClient.java:183) ~[?:?]
+	at sun.net.www.http.HttpClient.openServer(HttpClient.java:531) ~[?:?]
+	at sun.net.www.http.HttpClient.openServer(HttpClient.java:636) ~[?:?]
+	at sun.net.www.http.HttpClient.<init>(HttpClient.java:282) ~[?:?]
+	at sun.net.www.http.HttpClient.New(HttpClient.java:386) ~[?:?]
+	at sun.net.www.http.HttpClient.New(HttpClient.java:408) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.getNewHttpClient(HttpURLConnection.java:1320) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.plainConnect0(HttpURLConnection.java:1298) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.plainConnect(HttpURLConnection.java:1139) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.connect(HttpURLConnection.java:1068) ~[?:?]
+	at lightning.product.r_1020_F.u_1723_Y(lightningproduct:152) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CompletableFuture$AsyncRun.run(CompletableFuture.java:1804) [?:?]
+	at java.util.concurrent.CompletableFuture$AsyncRun.exec(CompletableFuture.java:1796) [?:?]
+	at java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387) [?:?]
+	at java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1310) [?:?]
+	at java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1841) [?:?]
+	at java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1806) [?:?]
+	at java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188) [?:?]
+[01:43:06] [Worker-Main-12/ERROR]: Couldn't download http texture
+java.net.UnknownHostException: skins.minecraft.net
+	at sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:567) ~[?:?]
+	at java.net.Socket.connect(Socket.java:751) ~[?:?]
+	at java.net.Socket.connect(Socket.java:686) ~[?:?]
+	at sun.net.NetworkClient.doConnect(NetworkClient.java:183) ~[?:?]
+	at sun.net.www.http.HttpClient.openServer(HttpClient.java:531) ~[?:?]
+	at sun.net.www.http.HttpClient.openServer(HttpClient.java:636) ~[?:?]
+	at sun.net.www.http.HttpClient.<init>(HttpClient.java:282) ~[?:?]
+	at sun.net.www.http.HttpClient.New(HttpClient.java:386) ~[?:?]
+	at sun.net.www.http.HttpClient.New(HttpClient.java:408) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.getNewHttpClient(HttpURLConnection.java:1320) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.plainConnect0(HttpURLConnection.java:1298) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.plainConnect(HttpURLConnection.java:1139) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.connect(HttpURLConnection.java:1068) ~[?:?]
+	at lightning.product.r_1020_F.u_1723_Y(lightningproduct:152) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CompletableFuture$AsyncRun.run(CompletableFuture.java:1804) [?:?]
+	at java.util.concurrent.CompletableFuture$AsyncRun.exec(CompletableFuture.java:1796) [?:?]
+	at java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387) [?:?]
+	at java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1310) [?:?]
+	at java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1841) [?:?]
+	at java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1806) [?:?]
+	at java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188) [?:?]
+[01:43:06] [Worker-Main-14/ERROR]: Couldn't download http texture
+java.net.UnknownHostException: skins.minecraft.net
+	at sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:567) ~[?:?]
+	at java.net.Socket.connect(Socket.java:751) ~[?:?]
+	at java.net.Socket.connect(Socket.java:686) ~[?:?]
+	at sun.net.NetworkClient.doConnect(NetworkClient.java:183) ~[?:?]
+	at sun.net.www.http.HttpClient.openServer(HttpClient.java:531) ~[?:?]
+	at sun.net.www.http.HttpClient.openServer(HttpClient.java:636) ~[?:?]
+	at sun.net.www.http.HttpClient.<init>(HttpClient.java:282) ~[?:?]
+	at sun.net.www.http.HttpClient.New(HttpClient.java:386) ~[?:?]
+	at sun.net.www.http.HttpClient.New(HttpClient.java:408) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.getNewHttpClient(HttpURLConnection.java:1320) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.plainConnect0(HttpURLConnection.java:1298) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.plainConnect(HttpURLConnection.java:1139) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.connect(HttpURLConnection.java:1068) ~[?:?]
+	at lightning.product.r_1020_F.u_1723_Y(lightningproduct:152) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CompletableFuture$AsyncRun.run(CompletableFuture.java:1804) [?:?]
+	at java.util.concurrent.CompletableFuture$AsyncRun.exec(CompletableFuture.java:1796) [?:?]
+	at java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387) [?:?]
+	at java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1310) [?:?]
+	at java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1841) [?:?]
+	at java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1806) [?:?]
+	at java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188) [?:?]
+[01:43:06] [Worker-Main-9/ERROR]: Couldn't download http texture
+java.net.UnknownHostException: skins.minecraft.net
+	at sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:567) ~[?:?]
+	at java.net.Socket.connect(Socket.java:751) ~[?:?]
+	at java.net.Socket.connect(Socket.java:686) ~[?:?]
+	at sun.net.NetworkClient.doConnect(NetworkClient.java:183) ~[?:?]
+	at sun.net.www.http.HttpClient.openServer(HttpClient.java:531) ~[?:?]
+	at sun.net.www.http.HttpClient.openServer(HttpClient.java:636) ~[?:?]
+	at sun.net.www.http.HttpClient.<init>(HttpClient.java:282) ~[?:?]
+	at sun.net.www.http.HttpClient.New(HttpClient.java:386) ~[?:?]
+	at sun.net.www.http.HttpClient.New(HttpClient.java:408) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.getNewHttpClient(HttpURLConnection.java:1320) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.plainConnect0(HttpURLConnection.java:1298) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.plainConnect(HttpURLConnection.java:1139) ~[?:?]
+	at sun.net.www.protocol.http.HttpURLConnection.connect(HttpURLConnection.java:1068) ~[?:?]
+	at lightning.product.r_1020_F.u_1723_Y(lightningproduct:152) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CompletableFuture$AsyncRun.run(CompletableFuture.java:1804) [?:?]
+	at java.util.concurrent.CompletableFuture$AsyncRun.exec(CompletableFuture.java:1796) [?:?]
+	at java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387) [?:?]
+	at java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1310) [?:?]
+	at java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1841) [?:?]
+	at java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1806) [?:?]
+	at java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188) [?:?]
+[01:43:06] [main/WARN]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[01:43:06] [main/WARN]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[01:43:06] [main/WARN]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[01:43:06] [main/WARN]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[01:43:06] [main/WARN]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[01:43:06] [main/WARN]: Ambiguity between arguments [voicechat, join, group_id] and [voicechat, join, group_name] with inputs: [dd12be42-52a9-4a91-a8a1-11c01849e498]
+[01:43:06] [main/INFO]: Reloading ResourceManager: Default
+[01:43:10] [main/INFO]: Loaded 7 recipes
+[01:43:11] [main/INFO]: Loaded 927 advancements
+[01:43:12] [main/INFO]: Environment: authHost='https://authserver.mojang.com', accountsHost='https://api.mojang.com', sessionHost='https://sessionserver.mojang.com', servicesHost='https://api.minecraftservices.com', name='PROD'
+[01:43:12] [Server thread/INFO]: Starting integrated minecraft server version 1.16.5
+[01:43:12] [Server thread/INFO]: Generating keypair
+[01:43:12] [Server thread/INFO]: [voicechat] Successfully migrated config voicechat-server.toml
+[01:43:12] [Server thread/INFO]: [voicechat] Successfully migrated config voicechat-server.toml
+[01:43:12] [Server thread/INFO]: [voicechat] Successfully migrated config voicechat-server.toml
+[01:43:12] [Server thread/INFO]: Preparing start region for dimension minecraft:overworld
+[01:43:14] [main/INFO]: Preparing spawn area: 0%
+[01:43:14] [main/INFO]: Preparing spawn area: 0%
+[01:43:14] [main/INFO]: Preparing spawn area: 0%
+[01:43:14] [main/INFO]: Preparing spawn area: 0%
+[01:43:15] [main/INFO]: Preparing spawn area: 3%
+[01:43:17] [main/INFO]: Preparing spawn area: 83%
+[01:43:17] [main/INFO]: Preparing spawn area: 83%
+[01:43:17] [main/INFO]: Preparing spawn area: 83%
+[01:43:17] [main/INFO]: Preparing spawn area: 83%
+[01:43:17] [main/INFO]: Preparing spawn area: 83%
+[01:43:18] [main/INFO]: Preparing spawn area: 83%
+[01:43:18] [main/INFO]: Preparing spawn area: 83%
+[01:43:18] [main/INFO]: Preparing spawn area: 83%
+[01:43:19] [main/INFO]: Preparing spawn area: 83%
+[01:43:20] [main/INFO]: Preparing spawn area: 87%
+[01:43:20] [main/INFO]: Preparing spawn area: 94%
+[01:43:20] [main/INFO]: Time elapsed: 7881 ms
+[01:43:20] [VoiceChatServerThread/INFO]: [voicechat] Voice chat server started at port 52717
+[01:43:21] [Server thread/INFO]: Changing view distance to 11, from 10
+[01:43:22] [Server thread/INFO]: TROJANKONb[local:E:2e4b4c33] logged in with entity id 269 at (-133.95456848291974, 68.0, -127.71492195558585)
+[01:43:23] [Server thread/INFO]: TROJANKONb joined the game
+[01:43:23] [main/INFO]: [STDOUT]: Baritone world data dir: .\saves\New World\.\baritone
+[01:43:23] [main/INFO]: [STDOUT]: Cached world directory: .\saves\New World\.\baritone\cache
+[01:43:23] [main/INFO]: [STDOUT]: Would save waypoints to .\saves\New World\.\baritone\waypoints
+[01:43:23] [Server thread/INFO]: Saving and pausing game...
+[01:43:23] [main/INFO]: [voicechat] Sending secret request to the server
+[01:43:23] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:overworld
+[01:43:24] [main/INFO]: Loaded 0 advancements
+[01:43:24] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_nether
+[01:43:24] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_end
+[01:43:24] [Server thread/INFO]: [voicechat] Received secret request of TROJANKONb (20)
+[01:43:24] [Server thread/INFO]: [voicechat] Sent secret to TROJANKONb
+[01:43:24] [main/INFO]: [voicechat] Received secret
+[01:43:24] [main/INFO]: [voicechat] Connecting to voice chat server: '127.0.0.1:52717'
+[01:43:24] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /127.0.0.1:52717
+[01:43:24] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:43:24] [VoiceChatPacketProcessingThread/INFO]: [voicechat] Successfully authenticated player 8f2ecf49-60e3-3c84-b5c7-945f8f24636d
+[01:43:24] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:43:25] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:43:25] [VoiceChatPacketProcessingThread/INFO]: [voicechat] Successfully validated connection of player 8f2ecf49-60e3-3c84-b5c7-945f8f24636d
+[01:43:25] [VoiceChatPacketProcessingThread/INFO]: [voicechat] Player TROJANKONb (8f2ecf49-60e3-3c84-b5c7-945f8f24636d) successfully connected to voice chat
+[01:43:25] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:43:25] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	at jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:641) ~[?:?]
+	at jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:188) ~[?:?]
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:526) ~[?:?]
+	... 11 more
+[01:43:35] [Server thread/INFO]: Saving and pausing game...
+[01:43:35] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:overworld
+[01:43:35] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_nether
+[01:43:35] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_end
+[01:43:35] [main/INFO]: [voicechat] Clearing audio channels
+[01:43:35] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:43:35] [Server thread/INFO]: TROJANKONb lost connection: Disconnected
+[01:43:35] [Server thread/INFO]: TROJANKONb left the game
+[01:43:35] [Server thread/INFO]: [voicechat] Disconnecting client TROJANKONb
+[01:43:35] [Server thread/INFO]: Stopping singleplayer server as player logged out
+[01:43:35] [Server thread/INFO]: Stopping server
+[01:43:35] [Server thread/INFO]: Saving players
+[01:43:35] [Server thread/INFO]: Saving worlds
+[01:43:35] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:overworld
+[01:43:36] [Server thread/INFO]: ThreadedAnvilChunkStorage (New World): All chunks are saved
+[01:43:36] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_nether
+[01:43:36] [Server thread/INFO]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[01:43:36] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_end
+[01:43:36] [Server thread/INFO]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[01:43:36] [Server thread/INFO]: ThreadedAnvilChunkStorage (New World): All chunks are saved
+[01:43:37] [Server thread/INFO]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[01:43:37] [Server thread/INFO]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[01:43:41] [main/INFO]: Connecting to mc.bravohvh.su, 25565
+[01:43:41] [main/INFO]: Environment: authHost='https://authserver.mojang.com', accountsHost='https://api.mojang.com', sessionHost='https://sessionserver.mojang.com', servicesHost='https://api.minecraftservices.com', name='PROD'
+[01:43:41] [pool-5-thread-3/INFO]: [STDOUT]: Started saving the world in a new thread
+[01:43:41] [pool-5-thread-3/INFO]: [STDOUT]: Not saving to disk; chunk caching is disabled.
+[01:43:41] [main/INFO]: [STDOUT]: Baritone world data dir: .\baritone\mc.bravohvh.su
+[01:43:41] [main/INFO]: [STDOUT]: Cached world directory: .\baritone\mc.bravohvh.su\cache
+[01:43:41] [main/INFO]: [STDOUT]: Would save waypoints to .\baritone\mc.bravohvh.su\waypoints
+[01:43:41] [main/INFO]: [voicechat] Sending secret request to the server
+[01:43:42] [main/INFO]: [CHAT]  (1)
+[01:43:42] [main/INFO]: [CHAT]  (2)
+[01:43:42] [main/INFO]: [CHAT]   ❙ Добро пожаловать на BravoHVH!
+[01:43:42] [main/INFO]: [CHAT]   ❙ Лучший ХВХ сервер своего рода — наслаждайтесь игрой!
+[01:43:42] [main/INFO]: [CHAT] 
+[01:43:42] [main/INFO]: [CHAT]   ❙ Привяжите аккаунт к Telegram, чтобы не потерять доступ.
+[01:43:42] [main/INFO]: [CHAT]   ❙ Используйте: /link tg
+[01:43:42] [main/INFO]: [CHAT]   ❙ Айпи сервера: ᴍᴄ.ʙʀᴀᴠᴏʜᴠʜ.ꜰᴜɴ
+[01:43:42] [main/INFO]: [CHAT] 
+[01:43:42] [main/INFO]: Loaded 0 advancements
+[01:43:42] [main/INFO]: [CHAT] ▶ Сессия сохранена, ввод пароля не требуется.
+[01:43:47] [main/INFO]: [CHAT]  
+[01:43:47] [main/INFO]: [CHAT]                         BravoHVH 
+[01:43:47] [main/INFO]: [CHAT]   
+[01:43:47] [main/INFO]: [CHAT]               Идет процесс подключения... 
+[01:43:47] [main/INFO]: [CHAT]           Подключаем вас к серверу FFA ARENA 
+[01:43:47] [main/INFO]: [CHAT]                  Пожалуйста ожидайте... 
+[01:43:47] [main/INFO]: [CHAT]  
+[01:43:47] [main/INFO]: Environment: authHost='https://authserver.mojang.com', accountsHost='https://api.mojang.com', sessionHost='https://sessionserver.mojang.com', servicesHost='https://api.minecraftservices.com', name='PROD'
+[01:43:47] [pool-5-thread-3/INFO]: [STDOUT]: Started saving the world in a new thread
+[01:43:47] [pool-5-thread-3/INFO]: [STDOUT]: Not saving to disk; chunk caching is disabled.
+[01:43:47] [main/INFO]: [STDOUT]: Baritone world data dir: .\baritone\mc.bravohvh.su
+[01:43:47] [main/INFO]: [voicechat] Disconnecting from previous connection due to server change
+[01:43:47] [main/INFO]: [voicechat] Clearing audio channels
+[01:43:47] [pool-5-thread-3/INFO]: [STDOUT]: Baritone world data dir: .\baritone\mc.bravohvh.su
+[01:43:47] [main/INFO]: [voicechat] Sending secret request to the server
+[01:43:48] [main/INFO]: Loaded 0 advancements
+[01:43:48] [main/INFO]: [voicechat] Received secret
+[01:43:48] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:43:48] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:43:48] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:43:48] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:43:49] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:43:49] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:43:49] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:43:50] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Hrusultan победил игрока teraflu663 в ките FunTime+!
+[01:43:53] [pool-5-thread-2/INFO]: [STDOUT]: Not saving to disk; chunk caching is disabled.
+[01:44:00] [main/INFO]: [voicechat] Received secret
+[01:44:00] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:44:00] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:44:00] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:44:00] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:44:00] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:44:01] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:44:01] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:44:01] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:44:04] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » qwerty1488 победил игрока super_lovekaka в ките RW (Кристалы)!
+[01:44:05] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » wasapmabooi победил игрока fansyhill1Twink в ките Универсал!
+[01:44:07] [main/INFO]: [CHAT] [ɢ] ᴋɪʟʟᴇʀ kryLegend1337 ✟ᴋʏʟᴇʀ✟ > venom12323 купи димас нуб
+[01:44:10] [main/INFO]: [CHAT] [ɢ] ᴋɪʟʟᴇʀ kryLegend1337 ✟ᴋʏʟᴇʀ✟ > venom12323 fuck u bich sasi kirpi4
+[01:44:11] [pool-5-thread-5/INFO]: [STDOUT]: Not saving to disk; chunk caching is disabled.
+[01:44:12] [main/INFO]: [voicechat] Received secret
+[01:44:12] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:44:12] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:44:12] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:44:12] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:44:12] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:44:13] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:44:13] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:44:13] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:44:16] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » DoMSAber победил игрока fanta1488 в ките Элитра!
+[01:44:19] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » EndermanRomaNas победил игрока epapa67000 в ките Элитра!
+[01:44:24] [main/INFO]: [voicechat] Received secret
+[01:44:24] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:44:24] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:44:24] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:44:24] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:44:24] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:44:24] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » m0rgue победил игрока ttlMRWArb в ките BravOHVH!
+[01:44:25] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:44:25] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:44:25] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:44:26] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » SHARLOTA победил игрока dhkddbjsjd в ките ОП!
+[01:44:28] [main/INFO]: [CHAT] [ɢ] ᴋɪʟʟᴇʀ kryLegend1337 ✟ᴋʏʟᴇʀ✟ > venom12323 dimasik client - это не чит, это стиль жизни
+[01:44:28] [main/INFO]: [CHAT] [ɢ] ᴋɪʟʟᴇʀ kryLegend1337 ✟ᴋʏʟᴇʀ✟ > venom12323 dimasik client - единственный кто меня понимает
+[01:44:35] [main/INFO]: [CHAT] [ɢ] ᴋɪʟʟᴇʀ kryLegend1337 ✟ᴋʏʟᴇʀ✟ > venom12323 я много ошибался, ведь был без Dimasik Client (p-q)
+[01:44:35] [main/INFO]: [voicechat] Received secret
+[01:44:35] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:44:35] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:44:35] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:44:35] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:44:35] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:44:36] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:44:36] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:44:36] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:44:41] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » qwerty1488 победил игрока Mr_sand14 в ките RW (Кристалы)!
+[01:44:47] [main/INFO]: [voicechat] Received secret
+[01:44:47] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:44:47] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:44:47] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:44:47] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:44:47] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:44:48] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:44:48] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:44:48] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:44:49] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Tranzet победил игрока GitHub69 в ките Анархия!
+[01:44:49] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » dron22012 победил игрока EndermanRomaNas в ките Элитра!
+[01:44:49] [main/INFO]: [CHAT] [ɢ] ₪ ᴘᴜᴍᴘᴋɪɴ dron22012 EbalNejdanov > -EnderмanRomaNas пососал хуй теперь плачь на спавне by Paunt DLC
+[01:44:49] [main/INFO]: [CHAT] [ɢ] ʀᴀʙʙɪᴛ bestone ʟᴇᴇᴛᴄʟɪᴇɴᴛ > DarkFlaMYT Дружище, с таким уровнем игры иди убейся об стену, прям как твой батя
+[01:44:53] [main/INFO]: [CHAT] 
+[01:44:53] [main/INFO]: [CHAT]   ❙ Хотите иметь свой титул?
+[01:44:53] [main/INFO]: [CHAT]   ❙ Приобретите приватный титул на нашем сайте!
+[01:44:53] [main/INFO]: [CHAT] 
+[01:44:53] [main/INFO]: [CHAT]   ❙ Открыть сайт • https://bravohvh.fun/
+[01:44:53] [main/INFO]: [CHAT]  
+[01:44:59] [main/INFO]: [voicechat] Received secret
+[01:44:59] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:44:59] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:44:59] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:44:59] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:44:59] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:45:00] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:45:00] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:45:00] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:45:03] [main/INFO]: [CHAT] [ɢ] ʀᴀʙʙɪᴛ bestone ʟᴇᴇᴛᴄʟɪᴇɴᴛ > CatFly0978 не пиши мне
+[01:45:05] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Hrusultan победил игрока My__BeXuS__Xx_n в ките ОП+!
+[01:45:09] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » DoodleMoonPoo победил игрока cyraga в ките ОП!
+[01:45:09] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » aniversary победил игрока Svin_Dimasik в ките Элитра!
+[01:45:11] [main/INFO]: [voicechat] Received secret
+[01:45:11] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:45:11] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:45:11] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:45:11] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:45:11] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:45:12] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:45:12] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:45:12] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:45:16] [main/INFO]: [CHAT] [ɢ] ʀᴀʙʙɪᴛ bestone ʟᴇᴇᴛᴄʟɪᴇɴᴛ > rekaoll тяжело с ме##енсом наверно????
+[01:45:16] [main/INFO]: [CHAT] [ɢ] ᴋʀᴀᴋᴇɴ cfgbest ЧСП > иди нахуй
+[01:45:21] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » DarkFlaMYT победил игрока iserega11ato в ките Элитра!
+[01:45:21] [main/INFO]: [CHAT] [ɢ] ᴋʀᴀᴋᴇɴ cfgbest ЧСП > у меня бустер слетел
+[01:45:21] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » fanta1488 победил игрока super_lovekaka в ките BravOHVH!
+[01:45:21] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » DoMSAber победил игрока fafgan в ките Элитра!
+[01:45:23] [main/INFO]: [voicechat] Received secret
+[01:45:23] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:45:23] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:45:23] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:45:23] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:45:23] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:45:24] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:45:24] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:45:24] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:45:25] [main/INFO]: [CHAT] [ɢ] ʀᴀʙʙɪᴛ bestone ʟᴇᴇᴛᴄʟɪᴇɴᴛ > JirniyOslik долбаеб иди башмачки в сундучок школьный собирай
+[01:45:27] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Jigetoga победил игрока 52CYKA в ките FunTime+!
+[01:45:35] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » TimeSetDay победил игрока dhkddbjsjd в ките ОП!
+[01:45:35] [main/INFO]: [voicechat] Received secret
+[01:45:35] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:45:35] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:45:35] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:45:35] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:45:35] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:45:36] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:45:36] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:45:36] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:45:40] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Hrusultan победил игрока epapa67000 в ките Элитра!
+[01:45:47] [main/INFO]: [voicechat] Received secret
+[01:45:47] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:45:47] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:45:47] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:45:47] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:45:47] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:45:48] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:45:48] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:45:48] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:45:49] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » akvoboost победил игрока dron22012 в ките ОП!
+[01:45:49] [main/INFO]: [CHAT] [ɢ] ᴋʀᴀᴋᴇɴ akvoboost POUCH > у тя клитор лопнул dron22012
+[01:45:51] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » m0rgue победил игрока Mr_sand14 в ките BravOHVH!
+[01:45:53] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » TimeSetDay победил игрока Hrusultan в ките RW!
+[01:45:57] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » HoRIIFik победил игрока zubilo в ките RW!
+[01:45:59] [main/INFO]: [voicechat] Received secret
+[01:45:59] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:45:59] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:45:59] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:45:59] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:45:59] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:46:00] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:46:00] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:46:00] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:46:02] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » iserega11ato победил игрока fanta1488 в ките Элитра!
+[01:46:03] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » DoMSAber победил игрока super_lovekaka в ките ОП!
+[01:46:10] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Josten_69 победил игрока dhkddbjsjd в ките ОП!
+[01:46:10] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » NeXxXar_ победил игрока cyraga в ките Элитра!
+[01:46:10] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » GitHub69 победил игрока Tranzet в ките Анархия!
+[01:46:11] [main/INFO]: [voicechat] Received secret
+[01:46:11] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:46:11] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:46:11] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:46:11] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:46:11] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:46:12] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:46:12] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:46:12] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:19] [main/INFO]: [STDERR]: java.lang.NullPointerException: Cannot invoke "java.lang.Boolean.booleanValue()" because the return value of "lightning.product.N_4463_r.J_1907_R(String)" is null
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.Z_2468_O.n_1700_B(lightningproduct:83)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[01:46:19] [main/INFO]: [STDERR]: 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:282)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.A_4115_X.n_1700_B(lightningproduct:262)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.z_883_p.n_1700_B(lightningproduct:1877)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:1108)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.M_660_m.n_1700_B(lightningproduct:806)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.P_1922_E(lightningproduct:1018)
+[01:46:19] [main/INFO]: [STDERR]: 	at lightning.product.c_1404_X.R_4764_Y(lightningproduct:564)
+[01:46:19] [main/INFO]: [STDERR]: 	at net.minecraft.client.main.Main.main(lightningproduct:225)
+[01:46:19] [main/INFO]: [STDERR]: 	at mcp.client.Start.main(lightningproduct:13)
+[01:46:21] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Svin_Dimasik победил игрока DarkFlaMYT в ките Элитра!
+[01:46:22] [main/INFO]: [CHAT] Pouch Beta ⇨ [LogoutSpots] Загружены точки для: mc.bravohvh.su
+[01:46:23] [main/INFO]: [voicechat] Received secret
+[01:46:23] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:46:23] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:46:23] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:46:23] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:46:23] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:46:24] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:46:24] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:46:24] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:46:27] [main/INFO]: [CHAT] [ɢ] ʀᴀʙʙɪᴛ bestone ʟᴇᴇᴛᴄʟɪᴇɴᴛ > JirniyOslik go take some estrogen tranny
+[01:46:31] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » KANeQuneyveng победил игрока umbrella_gofren в ките RW!
+[01:46:31] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » akvoboost победил игрока leluch в ките ОП!
+[01:46:31] [main/INFO]: [CHAT] [ɢ] ᴋʀᴀᴋᴇɴ akvoboost POUCH > пялю пялил и буду пялить leluch
+[01:46:32] [main/INFO]: [CHAT] [ɢ] ʀᴀʙʙɪᴛ bestone ʟᴇᴇᴛᴄʟɪᴇɴᴛ > crushsystems ало норм чит дада пошел нахуй
+[01:46:35] [main/INFO]: [voicechat] Received secret
+[01:46:35] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:46:35] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:46:35] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:46:35] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:46:35] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:46:36] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:46:36] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:46:36] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:46:37] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » DoMSAber победил игрока dhkddbjsjd в ките ОП!
+[01:46:39] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » DarkFlaMYT победил игрока iserega11ato в ките Элитра!
+[01:46:40] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » mirel_onda победил игрока tt_maloi в ките BravOHVH!
+[01:46:47] [main/INFO]: [voicechat] Received secret
+[01:46:47] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:46:47] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:46:47] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:46:47] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:46:47] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:46:47] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Hrusultan победил игрока fanta1488 в ките Элитра!
+[01:46:48] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:46:48] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:46:48] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:46:53] [main/INFO]: [CHAT] 
+[01:46:53] [main/INFO]: [CHAT]   ❙ Теперь можно получать донаты, бравлики 
+[01:46:53] [main/INFO]: [CHAT]   ❙ и ключи просто играя на сервере!
+[01:46:53] [main/INFO]: [CHAT] 
+[01:46:53] [main/INFO]: [CHAT]   ❙ Открой меню • /free
+[01:46:53] [main/INFO]: [CHAT]  
+[01:46:53] [main/INFO]: [CHAT] [ɢ] ʀᴀʙʙɪᴛ bestone ʟᴇᴇᴛᴄʟɪᴇɴᴛ > leluch ахаха улетел чмошник
+[01:46:59] [main/INFO]: [voicechat] Received secret
+[01:46:59] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:46:59] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:46:59] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:46:59] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:46:59] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:47:00] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:47:00] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:47:00] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:47:01] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » akvoboost победил игрока fanta1488 в ките ОП!
+[01:47:05] [main/INFO]: [CHAT] §7[§6AutoFarm§7] §fЦели в радиусе не найдены, начинаю исследование...
+[01:47:05] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » dron22012 победил игрока Mr_sand14 в ките Универсал!
+[01:47:05] [main/INFO]: [CHAT] [ɢ] ₪ ᴘᴜᴍᴘᴋɪɴ dron22012 EbalNejdanov > -Мr_sand14 проебался как сука иди на спавн блядуха by Paunt DLC
+[01:47:06] [main/INFO]: [CHAT] Телепортируемся на спавн!
+[01:47:06] [main/INFO]: [CHAT] Телепортируемся на спавн! (2)
+[01:47:07] [main/INFO]: [CHAT] BravoHvH > Не спамь!
+[01:47:11] [main/INFO]: [voicechat] Received secret
+[01:47:11] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:47:11] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:47:11] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:47:11] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:47:11] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:47:12] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:47:12] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:47:12] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:47:17] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » sin_arsi победил игрока qwerty1488 в ките ХВ!
+[01:47:20] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » fanta1488 победил игрока DarkFlaMYT в ките Элитра!
+[01:47:23] [main/INFO]: [voicechat] Received secret
+[01:47:23] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:47:23] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:47:23] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:47:23] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:47:23] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:47:24] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:47:24] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:47:24] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:47:28] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » umbrella_gofren победил игрока dhkddbjsjd в ките ОП!
+[01:47:29] [main/INFO]: [CHAT] [ɢ] crushsystems > корды 16 1
+[01:47:32] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » zubilo победил игрока TimeSetDay в ките RW!
+[01:47:34] [main/INFO]: [CHAT] Pouch Beta ⇨ Перезайдите в мир, для работы Voice Chat
+[01:47:34] [main/INFO]: [voicechat] Clearing audio channels
+[01:47:34] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:47:34] [main/INFO]: [CHAT] Pouch Beta ⇨ Подключение разорвано
+[01:47:35] [main/INFO]: [voicechat] Received secret
+[01:47:35] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:47:35] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:47:35] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:47:35] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:47:35] [main/INFO]: [CHAT] Pouch Beta ⇨ Перезайдите в мир, для работы Voice Chat
+[01:47:36] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:47:36] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:47:36] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:47:36] [main/INFO]: [voicechat] Clearing audio channels
+[01:47:37] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:47:37] [main/INFO]: [CHAT] Pouch Beta ⇨ Подключение разорвано
+[01:47:37] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » JirniyOslik победил игрока super_lovekaka в ките Элитра!
+[01:47:42] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Josten_69 победил игрока cyraga в ките RW!
+[01:47:43] [main/INFO]: [CHAT] Pouch Beta ⇨ §7Для работы ТП Лута нужно держать в инвентаре шалкер и иметь заполненный инвентарь
+[01:47:44] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » dron22012 победил игрока Mr_sand14 в ките BravOHVH!
+[01:47:44] [main/INFO]: [CHAT] [ɢ] ₪ ᴘᴜᴍᴘᴋɪɴ dron22012 EbalNejdanov > -Mг_sand14 разъебал сучку посиди на спавне by Paunt DLC
+[01:47:46] [main/INFO]: [voicechat] Received secret
+[01:47:46] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:47:46] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:47:46] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:47:46] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:47:47] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:47:47] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:47:47] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:47:47] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » qwerty1488 победил игрока DarkFlaMYT в ките Элитра!
+[01:47:58] [main/INFO]: [voicechat] Received secret
+[01:47:58] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:47:58] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:47:58] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:47:58] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:47:58] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:47:59] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:47:59] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:47:59] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:48:01] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » akvoboost победил игрока fart51235641 в ките ОП!
+[01:48:01] [main/INFO]: [CHAT] [ɢ] ᴋʀᴀᴋᴇɴ akvoboost POUCH > N1GG fart51235641 ER
+[01:48:02] [main/INFO]: [CHAT] Pouch Beta ⇨ Запущен скан маркета
+[01:48:02] [main/INFO]: [CHAT] BravOHVH » Команда не найдена
+[01:48:04] [main/INFO]: [CHAT] Pouch Beta ⇨ Запущен скан маркета
+[01:48:04] [main/INFO]: [CHAT] BravOHVH » Команда не найдена
+[01:48:06] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » JirniyOslik победил игрока TimeSetDay в ките Элитра!
+[01:48:07] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Svin_Dimasik победил игрока danya2910 в ките Элитра!
+[01:48:09] [main/INFO]: [CHAT] [ɢ] rekaoll > headless DEAD пофикси нищ
+[01:48:10] [main/INFO]: [voicechat] Received secret
+[01:48:10] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:48:10] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:48:10] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:48:10] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:48:10] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:48:11] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:48:11] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:48:11] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:48:16] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » cyraga победил игрока super_lovekaka в ките ОП!
+[01:48:17] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » EndermanRomaNas победил игрока sergant75 в ките Элитра!
+[01:48:18] [main/INFO]: [CHAT] [ʟ] Mr_sand14 > e
+[01:48:22] [main/INFO]: [voicechat] Received secret
+[01:48:22] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:48:22] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:48:22] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:48:22] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:48:22] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:48:23] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:48:23] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:48:23] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:48:25] [main/INFO]: [CHAT] [ʟ] Mr_sand14 > soft kypi
+[01:48:26] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » JirniyOslik победил игрока TimeSetDay в ките Элитра!
+[01:48:28] [main/INFO]: [CHAT] Pouch Beta ⇨ Укажите цель! .autocontract <name> | .act <name>
+[01:48:28] [main/INFO]: [CHAT] Pouch Beta ⇨ Укажите цель! .autocontract <name> | .act <name> (3)
+[01:48:28] [Netty Client IO #1/INFO]: [CHAT] Pouch Beta ⇨ Укажите цель! .autocontract <name> | .act <name> (2)
+[01:48:28] [Netty Client IO #1/INFO]: [CHAT] Pouch Beta ⇨ Укажите цель! .autocontract <name> | .act <name> (4)
+[01:48:30] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » umbrella_gofren победил игрока DarkFlaMYT в ките Элитра!
+[01:48:34] [main/INFO]: [voicechat] Received secret
+[01:48:34] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:48:34] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:48:34] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:48:34] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:48:34] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:48:35] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:48:35] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:48:35] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:48:36] [main/INFO]: [CHAT] [ɢ] rekaoll > headless Хуй знает, не противник
+[01:48:37] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Jigetoga победил игрока 52CYKA в ките RW!
+[01:48:37] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » aniversary победил игрока fafgan в ките RW!
+[01:48:41] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Вы встали в очередь для кита 'ОП' (ELO: 800)
+[01:48:42] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » wasapmabooi победил игрока fansyhill1Twink в ките RW (Кристалы)!
+[01:48:42] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Дуэль найдена против super_lovekaka!
+[01:48:42] [main/INFO]: Environment: authHost='https://authserver.mojang.com', accountsHost='https://api.mojang.com', sessionHost='https://sessionserver.mojang.com', servicesHost='https://api.minecraftservices.com', name='PROD'
+[01:48:42] [pool-5-thread-6/INFO]: [STDOUT]: Started saving the world in a new thread
+[01:48:42] [pool-5-thread-6/INFO]: [STDOUT]: Not saving to disk; chunk caching is disabled.
+[01:48:42] [main/INFO]: [STDOUT]: Baritone world data dir: .\baritone\mc.bravohvh.su\dimensions\minecraft\arenas
+[01:48:42] [main/INFO]: [STDOUT]: Cached world directory: .\baritone\mc.bravohvh.su\dimensions\minecraft\arenas\cache
+[01:48:42] [pool-5-thread-6/INFO]: [STDOUT]: Baritone world data dir: .\baritone\mc.bravohvh.su\dimensions\minecraft\arenas
+[01:48:42] [main/INFO]: [STDOUT]: Would save waypoints to .\baritone\mc.bravohvh.su\dimensions\minecraft\arenas\waypoints
+[01:48:42] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Дуэль начнется через 5
+[01:48:43] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Дуэль начнется через 4
+[01:48:44] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Дуэль начнется через 3
+[01:48:45] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Дуэль начнется через 2
+[01:48:45] [main/INFO]: [voicechat] Received secret
+[01:48:45] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:48:45] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:48:45] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:48:45] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:48:45] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:48:46] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Дуэль начнется через 1
+[01:48:46] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:48:46] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:48:46] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:48:47] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Дуэль началась! В бой!
+[01:48:47] [main/INFO]: [CHAT]   
+[01:48:47] [main/INFO]: [CHAT]  ▍ 
+[01:48:47] [main/INFO]: [CHAT]  ▍ Дуэль начинается!
+[01:48:47] [main/INFO]: [CHAT]  ▍ 
+[01:48:47] [main/INFO]: [CHAT]  ▍ Набор - ОП
+[01:48:47] [main/INFO]: [CHAT]  ▍ Карта - Кровавая арена
+[01:48:47] [main/INFO]: [CHAT]  ▍
+[01:48:47] [main/INFO]: [CHAT]   
+[01:48:51] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » JirniyOslik победил игрока TimeSetDay в ките Элитра!
+[01:48:52] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Tranzet победил игрока GitHub69 в ките Анархия!
+[01:48:53] [main/INFO]: [CHAT] 
+[01:48:53] [main/INFO]: [CHAT]   ❙ Хотите получить 500 рублей?
+[01:48:53] [main/INFO]: [CHAT]   ❙ Займите топ-1 в любом топе!
+[01:48:53] [main/INFO]: [CHAT] 
+[01:48:53] [main/INFO]: [CHAT]   ❙ Подробнее • https://discord.gg/bravohvh
+[01:48:53] [main/INFO]: [CHAT]  
+[01:48:57] [main/INFO]: [voicechat] Received secret
+[01:48:57] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:48:57] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:48:57] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:48:57] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:48:57] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:48:58] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:48:58] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:48:58] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:49:00] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » topka331 победил игрока iserega11ato в ките RW!
+[01:49:07] [main/INFO]: [CHAT] BravOHVH » Вы убили super_lovekaka.
+[01:49:07] [main/INFO]: [CHAT] BravOHVH » Ваш текущий стрик: 0
+[01:49:07] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » TROJANKONb победил игрока super_lovekaka в ките ОП!
+[01:49:07] [main/INFO]: [CHAT] 
+[01:49:07] [main/INFO]: [CHAT] ▍  статистика дуэли:
+[01:49:07] [main/INFO]: [CHAT] ▍ 
+[01:49:07] [main/INFO]: [CHAT] ▍  TROJANKONb - ПОБЕДА
+[01:49:07] [main/INFO]: [CHAT] ▍ 
+[01:49:07] [main/INFO]: [CHAT] ▍  Длительность: 24с
+[01:49:07] [main/INFO]: [CHAT] ▍  Урона нанесено: 34.35
+[01:49:07] [main/INFO]: [CHAT] ▍  Всего ударов: 13
+[01:49:07] [main/INFO]: [CHAT] ▍  Из них критов: 11
+[01:49:07] [main/INFO]: [CHAT] ▍  Предметов использовано: 6
+[01:49:07] [main/INFO]: [CHAT] 
+[01:49:07] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » Победитель дуэли: TROJANKONb
+[01:49:07] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » qwerty1488 победил игрока vykbi в ките RW!
+[01:49:08] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » fafgan победил игрока Mr_sand14 в ките ОП!
+[01:49:09] [main/INFO]: [voicechat] Received secret
+[01:49:09] [main/INFO]: [voicechat] Disconnecting voicechat
+[01:49:09] [main/INFO]: [voicechat] Connecting to voice chat server: '80.242.59.66:6666'
+[01:49:09] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to authenticate voice chat connection to /80.242.59.66:6666
+[01:49:09] [main/INFO]: [CHAT] [VoiceMode] Press  to set up
+[01:49:09] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged authentication
+[01:49:10] [VoiceChatAuthenticationThread/INFO]: [voicechat] Trying to validate voice chat connection
+[01:49:10] [VoiceChatConnectionThread/INFO]: [voicechat] Server acknowledged connection check
+[01:49:10] [VoiceChatConnectionThread/ERROR]: [voicechat] Uncaught exception in thread VoiceChatConnectionThread
+java.lang.NoClassDefFoundError: org/concentus/OpusEncoder
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.open(lightningproduct:28) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.JavaOpusEncoderImpl.<init>(lightningproduct:20) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.plugins.impl.opus.OpusManager.createEncoder(lightningproduct:90) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.MicThread.<init>(lightningproduct:41) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.startMicThread(lightningproduct:131) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechat.onVoiceChatConnected(lightningproduct:48) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientManager.lambda$new$0(lightningproduct:52) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.lambda$emitVoiceChatConnectedEvent$6(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?]
+	at mods.voicechat.intercompatibility.ForgeClientCompatibilityManager.emitVoiceChatConnectedEvent(lightningproduct:167) ~[1_16_5_decrypted.jar:?]
+	at mods.voicechat.voice.client.ClientVoicechatConnection.run(lightningproduct:72) ~[1_16_5_decrypted.jar:?]
+Caused by: java.lang.ClassNotFoundException: org.concentus.OpusEncoder
+	... 11 more
+[01:49:11] [main/INFO]: Environment: authHost='https://authserver.mojang.com', accountsHost='https://api.mojang.com', sessionHost='https://sessionserver.mojang.com', servicesHost='https://api.minecraftservices.com', name='PROD'
+[01:49:11] [pool-5-thread-6/INFO]: [STDOUT]: Started saving the world in a new thread
+[01:49:11] [pool-5-thread-6/INFO]: [STDOUT]: Not saving to disk; chunk caching is disabled.
+[01:49:11] [main/INFO]: [STDOUT]: Baritone world data dir: .\baritone\mc.bravohvh.su
+[01:49:11] [pool-5-thread-6/INFO]: [STDOUT]: Baritone world data dir: .\baritone\mc.bravohvh.su
+[01:49:12] [pool-5-thread-8/INFO]: [STDOUT]: Not saving to disk; chunk caching is disabled.
+[01:49:12] [main/INFO]: [CHAT] ᴅᴜᴇʟꜱ » mirel_onda победил игрока cyraga в ките ОП+!
+[01:49:13] [main/INFO]: Stopping!

@@ -33,6 +33,7 @@ import net.ccbluex.liquidbounce.features.command.commands.ingame.fakeplayer.from
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.ModuleCriticals
+import net.ccbluex.liquidbounce.features.module.modules.render.ModuleTotemParticles
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.client.player
 import net.ccbluex.liquidbounce.utils.client.world
@@ -254,7 +255,9 @@ object ModuleFakePlayer : ClientModule("FakePlayer", Category.MISC) {
     }
 
     private fun playTotemPopEffects(clone: FakePlayer) {
-        mc.particleEngine.createTrackingEmitter(clone, ParticleTypes.TOTEM_OF_UNDYING, 30)
+        if (!ModuleTotemParticles.shouldSuppressVanillaTotemEmitter(clone)) {
+            mc.particleEngine.createTrackingEmitter(clone, ParticleTypes.TOTEM_OF_UNDYING, 30)
+        }
         mc.level?.playLocalSound(
             clone.x, clone.y, clone.z,
             SoundEvents.TOTEM_USE,

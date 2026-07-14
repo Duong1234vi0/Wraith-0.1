@@ -35,6 +35,9 @@ class PipelineEvent(val channelPipeline: ChannelPipeline, val local: Boolean) : 
 @Nameable("packet")
 class PacketEvent(val origin: TransferOrigin, val packet: Packet<*>, val original: Boolean = true) : CancellableEvent()
 
+@Nameable("outgoingPacketSent")
+class OutgoingPacketSentEvent(val packet: Packet<*>) : Event()
+
 @Nameable("queuePacket")
 class QueuePacketEvent(
     val packet: Packet<*>?,

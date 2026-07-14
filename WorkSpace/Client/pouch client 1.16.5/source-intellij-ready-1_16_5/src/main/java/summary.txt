@@ -1,0 +1,30 @@
+Summary for D:\Telegram Desktop\1_16_5_decrypted.jar
+Decompiled with CFR 0.152
+
+
+lightning.product.Tags
+----------------------------
+
+n_1700_B(lightning.product.b_3528_u lightning.product.r_4811_B lightning.product.Z_2491_A lightning.product.Z_3822_q lightning.product.Z_3822_q lightning.product.Z_3822_q lightning.product.Z_3822_q int )
+  Unable to fully structure code
+
+
+mods.baritone.command.defaults.SelCommand
+----------------------------
+
+<clinit>()
+  Exception : java.lang.UnsupportedOperationException
+
+
+mods.baritone.command.defaults.WaypointsCommand
+----------------------------
+
+execute(java.lang.String mods.baritone.api.api.java.baritone.api.command.argument.IArgConsumer )
+  Unable to fully structure code
+
+
+net.optifine.shaders.config.MacroProcessor
+----------------------------
+
+getMacroHeader(java.lang.String boolean )
+  Unable to fully structure code

@@ -18,475 +18,411 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.render.trajectories
 
-import com.mojang.blaze3d.vertex.DefaultVertexFormat
-import com.mojang.blaze3d.vertex.VertexFormat
+import net.ccbluex.liquidbounce.event.events.DisconnectEvent
 import net.ccbluex.liquidbounce.event.events.OverlayRenderEvent
+import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.ClientTheme
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.ExosGuiRenderer
-import net.ccbluex.liquidbounce.render.BoxRenderer
 import net.ccbluex.liquidbounce.render.WorldRenderEnvironment
-import net.ccbluex.liquidbounce.render.compat.GlStateManager
-import net.ccbluex.liquidbounce.render.compat.RenderSystem
-import net.ccbluex.liquidbounce.render.compat.ShaderProgramKeys
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
-import net.ccbluex.liquidbounce.render.drawCustomMesh
+import net.ccbluex.liquidbounce.render.engine.type.Vec3 as RenderVec3
+import net.ccbluex.liquidbounce.render.drawLines
+import net.ccbluex.liquidbounce.render.longLines
+import net.ccbluex.liquidbounce.render.relativeToCamera
 import net.ccbluex.liquidbounce.render.renderEnvironmentForWorld
-import net.ccbluex.liquidbounce.render.vertex
+import net.ccbluex.liquidbounce.render.withColor
+import net.ccbluex.liquidbounce.render.compat.RenderSystem
 import net.ccbluex.liquidbounce.utils.client.mc
-import net.ccbluex.liquidbounce.utils.client.player
+import net.ccbluex.liquidbounce.utils.entity.deltaMovement
 import net.ccbluex.liquidbounce.utils.entity.drawItem
-import net.ccbluex.liquidbounce.utils.entity.eyePos
+import net.ccbluex.liquidbounce.utils.entity.drawStackOverlay
+import net.ccbluex.liquidbounce.utils.entity.getEntities
+import net.ccbluex.liquidbounce.utils.entity.isTouchingWater
 import net.ccbluex.liquidbounce.utils.entity.matrices
-import net.ccbluex.liquidbounce.utils.entity.pitch
-import net.ccbluex.liquidbounce.utils.entity.yaw
+import net.ccbluex.liquidbounce.utils.entity.stack
 import net.ccbluex.liquidbounce.utils.render.WorldToScreen
 import net.minecraft.client.gui.DrawContext
-import net.minecraft.core.BlockPos
-import net.minecraft.tags.FluidTags
 import net.minecraft.world.entity.Entity
-import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.item.ItemEntity
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow
-import net.minecraft.world.entity.projectile.arrow.ThrownTrident
-import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrowableItemProjectile
-import net.minecraft.world.item.BowItem
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl
 import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.Items
 import net.minecraft.world.level.ClipContext
-import net.minecraft.world.phys.AABB
-import net.minecraft.world.phys.BlockHitResult
+import net.minecraft.world.level.Level
 import net.minecraft.world.phys.HitResult
 import net.minecraft.world.phys.Vec3
-import kotlin.math.cos
-import kotlin.math.roundToInt
-import kotlin.math.sin
-import kotlin.math.sqrt
+import java.util.Locale
+import kotlin.math.max
+import kotlin.math.min
 
-/**
- * Wyvern-DLC Predictions port. Simulates active projectile and dropped item motion.
- */
 object ModulePredictions : ClientModule(
-    "Predictions",
+    "Prediction",
     Category.RENDER,
-    aliases = arrayOf("Prediction", "Trajectories")
+    aliases = arrayOf("Predictions", "Trajectories")
 ) {
 
-    private val bowMarkers by boolean("Markers", true)
-    private val bowLandingBox by boolean("LandingBox", true)
-    private val bowThickness by float("Thickness", 2.0f, 0.5f..5.0f)
+    private val pearl by boolean("Pearl", true)
+    private val item by boolean("Item", false)
+    private val showTags by boolean("Tag", true)
 
-    private val landingPoints = ArrayList<LandingPoint>(32)
+    private var cacheWorldTime = Long.MIN_VALUE
+    private var cachePearlSetting = pearl
+    private var cacheItemSetting = item
+    private var cachedResults: List<PredictionResult> = emptyList()
 
     @Suppress("unused")
     private val worldRenderHandler = handler<WorldRenderEvent> { event ->
-        val level = mc.level ?: return@handler
-        if (mc.player == null) {
-            landingPoints.clear()
+        val level = mc.level
+        val player = mc.player
+        if (level == null || player == null) {
+            clearCache()
             return@handler
         }
 
-        val projectiles = level.entitiesForRendering()
-            .asSequence()
-            .filter { it.isPredictedEntity() && !it.isSettledProjectile() }
-            .take(MAX_PROJECTILES)
-            .toList()
-        val bowPrediction = simulateHeldBow()
-
-        landingPoints.clear()
-        if (projectiles.isEmpty() && bowPrediction == null) {
+        val results = getPredictions(level)
+        if (results.isEmpty()) {
             return@handler
         }
 
         renderEnvironmentForWorld(event.matrixStack) {
-            RenderSystem.enableBlend()
-            RenderSystem.defaultBlendFunc()
+            RenderSystem.lineWidth(2.5f)
             RenderSystem.disableDepthTest()
             RenderSystem.disableCull()
-            RenderSystem.depthMask(false)
-            drawPredictionMesh(projectiles, event.camera.position())
-            bowPrediction?.let { drawBowPrediction(it, event.camera.position()) }
-            RenderSystem.depthMask(true)
-            RenderSystem.enableCull()
-            RenderSystem.enableDepthTest()
-            RenderSystem.defaultBlendFunc()
+            try {
+                longLines {
+                    for (result in results) {
+                        renderPath(result)
+                    }
+                }
+            } finally {
+                RenderSystem.lineWidth(1.0f)
+                RenderSystem.enableCull()
+                RenderSystem.enableDepthTest()
+                RenderSystem.setShaderColor(1f, 1f, 1f, 1f)
+            }
         }
     }
 
     @Suppress("unused")
     private val overlayHandler = handler<OverlayRenderEvent> { event ->
-        if (landingPoints.isEmpty()) {
+        val level = mc.level
+        if (level == null || mc.player == null) {
+            clearCache()
             return@handler
         }
 
-        for (point in landingPoints) {
-            drawLandingLabel(event.context, point)
+        if (!showTags || mc.options.hideGui) {
+            return@handler
         }
+
+        for (result in getPredictions(level)) {
+            drawTag(event.context, result)
+        }
+    }
+
+    @Suppress("unused")
+    private val worldChangeHandler = handler<WorldChangeEvent> {
+        clearCache()
+    }
+
+    @Suppress("unused")
+    private val disconnectHandler = handler<DisconnectEvent> {
+        clearCache()
     }
 
     override fun disable() {
-        landingPoints.clear()
+        clearCache()
         super.disable()
     }
 
-    private fun WorldRenderEnvironment.drawPredictionMesh(projectiles: List<Entity>, cameraPos: Vec3) {
-        val predictions = ArrayList<PredictionPath>(projectiles.size)
-        for (entity in projectiles) {
-            val prediction = simulate(entity) ?: continue
-            predictions += prediction
-            prediction.landingPoint?.let(landingPoints::add)
-        }
-        if (predictions.isEmpty()) {
-            return
+    private fun clearCache() {
+        cachedResults = emptyList()
+        cacheWorldTime = Long.MIN_VALUE
+    }
+
+    private fun getPredictions(level: Level): List<PredictionResult> {
+        val player = mc.player
+        if (player == null || mc.level == null) {
+            clearCache()
+            return emptyList()
         }
 
-        RenderSystem.lineWidth(2.0f)
-        drawCustomMesh(
-            VertexFormat.Mode.DEBUG_LINES,
-            DefaultVertexFormat.POSITION_COLOR,
-            ShaderProgramKeys.POSITION_COLOR
-        ) { matrix ->
-            for (prediction in predictions) {
-                val points = prediction.points
-                for (tick in 0 until points.lastIndex) {
-                    val from = points[tick]
-                    val to = points[tick + 1]
-                    val alpha = (tick / 25.0f).coerceIn(0.15f, 1.0f)
-                    val lineColor = themeColor(tick, alpha)
-                    this.vertex(
-                        matrix,
-                        (from.x - cameraPos.x).toFloat(),
-                        (from.y - cameraPos.y).toFloat(),
-                        (from.z - cameraPos.z).toFloat()
-                    ).setColor(lineColor)
-                    this.vertex(
-                        matrix,
-                        (to.x - cameraPos.x).toFloat(),
-                        (to.y - cameraPos.y).toFloat(),
-                        (to.z - cameraPos.z).toFloat()
-                    ).setColor(lineColor)
+        val worldTime = level.gameTime
+        if (
+            cachedResults.isEmpty() ||
+            worldTime != cacheWorldTime ||
+            pearl != cachePearlSetting ||
+            item != cacheItemSetting
+        ) {
+            cachedResults = computePredictions(level, pearl, item)
+            cacheWorldTime = worldTime
+            cachePearlSetting = pearl
+            cacheItemSetting = item
+        }
+
+        return cachedResults
+    }
+
+    private fun computePredictions(level: Level, pearlsEnabled: Boolean, itemsEnabled: Boolean): List<PredictionResult> {
+        if (!pearlsEnabled && !itemsEnabled) {
+            return emptyList()
+        }
+
+        val results = ArrayList<PredictionResult>()
+        for (entity in level.getEntities()) {
+            when {
+                entity is ThrownEnderpearl && pearlsEnabled && !entity.onGround() -> {
+                    simulate(level, entity, ItemStack(Items.ENDER_PEARL))?.let(results::add)
+                }
+                entity is ItemEntity && itemsEnabled && shouldSimulateItem(entity) -> {
+                    simulate(level, entity, entity.stack.copy())?.let(results::add)
                 }
             }
         }
 
-        RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE)
-        RenderSystem.enableAdditive()
-        RenderSystem.lineWidth(5.5f)
-        drawCustomMesh(
-            VertexFormat.Mode.DEBUG_LINES,
-            DefaultVertexFormat.POSITION_COLOR,
-            ShaderProgramKeys.POSITION_COLOR
-        ) { matrix ->
-            for (prediction in predictions) {
-                val points = prediction.points
-                for (tick in 0 until points.lastIndex) {
-                    val from = points[tick]
-                    val to = points[tick + 1]
-                    val alpha = (tick / 50.0f).coerceIn(0.0f, 0.25f)
-                    val glowColor = themeColor(tick, alpha)
-                    this.vertex(
-                        matrix,
-                        (from.x - cameraPos.x).toFloat(),
-                        (from.y - cameraPos.y).toFloat(),
-                        (from.z - cameraPos.z).toFloat()
-                    ).setColor(glowColor)
-                    this.vertex(
-                        matrix,
-                        (to.x - cameraPos.x).toFloat(),
-                        (to.y - cameraPos.y).toFloat(),
-                        (to.z - cameraPos.z).toFloat()
-                    ).setColor(glowColor)
-                }
-            }
-        }
-        RenderSystem.defaultBlendFunc()
+        return results
     }
 
-    private fun WorldRenderEnvironment.drawBowPrediction(prediction: BowPredictionPath, cameraPos: Vec3) {
-        val points = prediction.points
-        if (points.size < 2) {
-            return
-        }
-
-        RenderSystem.defaultBlendFunc()
-        RenderSystem.lineWidth(bowThickness)
-        drawCustomMesh(
-            VertexFormat.Mode.DEBUG_LINES,
-            DefaultVertexFormat.POSITION_COLOR,
-            ShaderProgramKeys.POSITION_COLOR
-        ) { matrix ->
-            for (i in 0 until points.lastIndex) {
-                val from = points[i]
-                val to = points[i + 1]
-                val color = bowColor(1.0f)
-                this.vertex(
-                    matrix,
-                    (from.x - cameraPos.x).toFloat(),
-                    (from.y - cameraPos.y).toFloat(),
-                    (from.z - cameraPos.z).toFloat()
-                ).setColor(color)
-                this.vertex(
-                    matrix,
-                    (to.x - cameraPos.x).toFloat(),
-                    (to.y - cameraPos.y).toFloat(),
-                    (to.z - cameraPos.z).toFloat()
-                ).setColor(color)
-            }
-        }
-
-        if (bowMarkers) {
-            drawBowMarkers(points, cameraPos)
-        }
-        if (bowLandingBox) {
-            drawBowLandingBox(prediction.hit, cameraPos)
-        }
+    private fun shouldSimulateItem(itemEntity: ItemEntity): Boolean {
+        return !itemEntity.onGround() && itemEntity.deltaMovement.lengthSqr() > 1.0E-4
     }
 
-    private fun WorldRenderEnvironment.drawBowMarkers(points: List<Vec3>, cameraPos: Vec3) {
-        val faceColor = bowBoxColor(45)
-        val outlineColor = bowBoxColor(255)
-
-        RenderSystem.lineWidth(1.0f)
-        BoxRenderer.drawWith(this) {
-            for (i in 0 until points.lastIndex) {
-                if (i % 3 != 0) {
-                    continue
-                }
-
-                val end = points[i + 1]
-                val marker = AABB(
-                    end.subtract(BOW_MARKER_SIZE, BOW_MARKER_SIZE, BOW_MARKER_SIZE),
-                    end.add(BOW_MARKER_SIZE, BOW_MARKER_SIZE, BOW_MARKER_SIZE)
-                ).move(-cameraPos.x, -cameraPos.y, -cameraPos.z)
-                drawBox(marker, faceColor, outlineColor)
-            }
-        }
-    }
-
-    private fun WorldRenderEnvironment.drawBowLandingBox(hit: HitResult?, cameraPos: Vec3) {
-        if (hit !is BlockHitResult) {
-            return
-        }
-
-        val hitPos = hit.location
-        val landing = AABB(
-            hitPos.subtract(BOW_LANDING_BOX_SIZE, BOW_LANDING_BOX_SIZE, BOW_LANDING_BOX_SIZE),
-            hitPos.add(BOW_LANDING_BOX_SIZE, BOW_LANDING_BOX_SIZE, BOW_LANDING_BOX_SIZE)
-        ).move(-cameraPos.x, -cameraPos.y, -cameraPos.z)
-
-        RenderSystem.lineWidth(1.5f)
-        BoxRenderer.drawWith(this) {
-            drawBox(landing, bowBoxColor(55), bowBoxColor(255))
-        }
-    }
-
-    private fun simulate(entity: Entity): PredictionPath? {
-        val level = mc.level ?: return null
-        var pos = entity.position()
+    private fun simulate(level: Level, entity: Entity, icon: ItemStack): PredictionResult? {
+        var position = entity.position()
         var motion = entity.deltaMovement
-        var ticks = 0
-        val points = ArrayList<Vec3>(MAX_TICKS + 1)
-        var landingPoint: LandingPoint? = null
-        points += pos
+        val points = ArrayList<Vec3>()
+        var landing = position
+        var display = position
+        var time = 0.0
 
-        while (ticks < MAX_TICKS) {
-            val previous = pos
-            pos = pos.add(motion)
-            val blockHit = level.clip(ClipContext(previous, pos, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, entity))
-            if (blockHit.type != HitResult.Type.MISS) {
-                pos = blockHit.location
-            }
+        for (i in 0 until MAX_STEPS) {
+            points += position
+            val next = position.add(motion)
+            val halfHeight = entity.bbHeight * 0.5
+            val start = position.add(0.0, halfHeight, 0.0)
+            val end = next.add(0.0, halfHeight, 0.0)
+            val hit = findCollision(level, start, end)
 
-            points += pos
+            motion = updateMotion(entity, motion)
+            time += STEP_SECONDS
 
-            val entityHit = hitsEntity(entity, previous, pos)
-            if (blockHit.type != HitResult.Type.MISS || entityHit || pos.y < level.minY - 8.0) {
-                landingPoint = LandingPoint(entity.landingStack(), pos, ticks)
+            if (hit != null) {
+                val hitPos = hit.location
+                val segment = hitPos.subtract(position)
+                var renderEnd = hitPos
+                val segmentLength = segment.length()
+                if (segmentLength > 0.001) {
+                    val trim = min(0.5, max(0.0, segmentLength - 0.01))
+                    if (trim > 0.0) {
+                        renderEnd = hitPos.subtract(segment.normalize().scale(trim))
+                    }
+                }
+
+                points += renderEnd
+                landing = hitPos
+                display = renderEnd
                 break
             }
 
-            motion = calculateMotion(entity, previous, motion)
-            ticks++
-        }
-
-        return if (points.size > 1) PredictionPath(points, landingPoint) else null
-    }
-
-    private fun simulateHeldBow(): BowPredictionPath? {
-        val level = mc.level ?: return null
-        val localPlayer = mc.player ?: return null
-        val isUsingBow = localPlayer.mainHandItem.item is BowItem || localPlayer.offhandItem.item is BowItem
-        if (!isUsingBow) {
-            return null
-        }
-
-        var pullProgress = bowPullProgress(localPlayer.ticksUsingItem)
-        if (pullProgress == 0.0f && !localPlayer.isUsingItem) {
-            return null
-        }
-        if (pullProgress == 0.0f) {
-            pullProgress = 1.0f
-        }
-
-        val velocity = pullProgress * 3.0
-        val yawRad = Math.toRadians(localPlayer.yaw.toDouble())
-        val pitchRad = Math.toRadians(localPlayer.pitch.toDouble())
-        var motionX = -sin(yawRad) * cos(pitchRad)
-        var motionY = -sin(pitchRad)
-        var motionZ = cos(yawRad) * cos(pitchRad)
-        val length = sqrt(motionX * motionX + motionY * motionY + motionZ * motionZ)
-        if (length <= 0.0) {
-            return null
-        }
-
-        motionX = motionX / length * velocity
-        motionY = motionY / length * velocity
-        motionZ = motionZ / length * velocity
-
-        var pos = localPlayer.eyePos
-        val trajectory = ArrayList<Vec3>(BOW_MAX_TICKS + 1)
-        trajectory += pos
-        var hit: HitResult? = null
-
-        for (i in 0 until BOW_MAX_TICKS) {
-            var nextPos = pos.add(motionX, motionY, motionZ)
-            val raycast = level.clip(
-                ClipContext(pos, nextPos, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, localPlayer)
-            )
-
-            if (raycast.type != HitResult.Type.MISS) {
-                nextPos = raycast.location
-                trajectory += nextPos
-                hit = raycast
+            if (next.y <= level.minY) {
+                points += next
+                landing = next
+                display = next
                 break
             }
 
-            trajectory += nextPos
-            pos = nextPos
-
-            motionX *= 0.99
-            motionY *= 0.99
-            motionZ *= 0.99
-            motionY -= 0.05
+            position = next
+            landing = next
+            display = next
         }
 
-        return if (trajectory.size > 1) BowPredictionPath(trajectory, hit) else null
-    }
-
-    private fun bowPullProgress(useTime: Int): Float {
-        var pullProgress = useTime / 20.0f
-        pullProgress = (pullProgress * pullProgress + pullProgress * 2.0f) / 3.0f
-        return pullProgress.coerceAtMost(1.0f)
-    }
-
-    private fun calculateMotion(entity: Entity, previous: Vec3, motion: Vec3): Vec3 {
-        val level = mc.level ?: return motion
-        val inWater = level.getFluidState(BlockPos.containing(previous)).`is`(FluidTags.WATER)
-        val drag = when (entity) {
-            is ThrownTrident -> 0.99
-            is AbstractArrow -> if (inWater) 0.6 else 0.99
-            else -> if (inWater) 0.8 else 0.99
+        return if (points.size < 2) {
+            null
+        } else {
+            PredictionResult(points.toList(), landing, display, time, icon.copy())
         }
-        val gravity = if (entity.isNoGravity) 0.0 else entity.gravity
-        return motion.scale(drag).add(0.0, -gravity, 0.0)
     }
 
-    private fun hitsEntity(projectile: Entity, previous: Vec3, next: Vec3): Boolean {
-        val level = mc.level ?: return false
-        val box = AABB(previous, next).inflate(0.3)
-        return level.getEntities(projectile, box) { entity ->
-            entity !== projectile &&
-                entity !== player &&
-                entity is LivingEntity &&
-                entity.isAlive &&
-                !entity.isSpectator &&
-                entity.boundingBox.inflate(0.25).clip(previous, next).isPresent
-        }.isNotEmpty()
-    }
-
-    private fun drawLandingLabel(context: DrawContext, point: LandingPoint) {
-        val screen = WorldToScreen.calculateScreenPos(point.pos) ?: return
-        if (screen.z < 0.0 || screen.z > 1.0) {
-            return
+    private fun updateMotion(entity: Entity, original: Vec3): Vec3 {
+        var updated = if (entity.isTouchingWater) {
+            original.scale(0.8)
+        } else {
+            original.scale(0.99)
         }
 
-        val text = "${((point.ticks * 50.0) / 1000.0).roundToTenth()}s"
-        val textSize = 7.5f
-        val textWidth = ExosGuiRenderer.bodyWidth(text, textSize)
-        val width = textWidth + 19.0f
-        val height = 13.0f
-        val x = screen.x.toFloat() - width * 0.5f
-        val y = screen.y.toFloat() - height * 0.5f
+        updated = if ((entity.isNoGravity || entity !is AbstractArrow) && entity !is ItemEntity) {
+            if (!entity.isNoGravity && entity is ThrownEnderpearl) {
+                updated.add(0.0, -0.03, 0.0)
+            } else {
+                updated
+            }
+        } else {
+            updated.add(0.0, -0.05, 0.0)
+        }
+
+        return updated
+    }
+
+    private fun findCollision(level: Level, start: Vec3, end: Vec3): HitResult? {
+        val player = mc.player ?: return null
+        val result = level.clip(ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
+        return result.takeIf { it.type == HitResult.Type.BLOCK }
+    }
+
+    private fun WorldRenderEnvironment.renderPath(result: PredictionResult) {
+        val path = result.path
+        val layout = if (showTags && !mc.options.hideGui) {
+            WorldToScreen.calculateScreenPos(result.displayPos)?.takeIf(::isOnScreen)?.let {
+                createTagLayout(result, it)
+            }
+        } else {
+            null
+        }
+
+        for (i in 0 until path.lastIndex) {
+            val start = path[i]
+            var end = path[i + 1]
+            var clipSegment = false
+
+            if (layout != null) {
+                val startScreen = WorldToScreen.calculateScreenPos(start)
+                val endScreen = WorldToScreen.calculateScreenPos(end)
+                if (startScreen != null && endScreen != null && isValidScreenPoint(startScreen) &&
+                    isValidScreenPoint(endScreen)
+                ) {
+                    val topY = layout.y.toDouble()
+                    if (!(startScreen.y <= topY) || !(endScreen.y <= topY)) {
+                        if (startScreen.y < topY && endScreen.y > topY) {
+                            val t = ((topY - startScreen.y) / (endScreen.y - startScreen.y)).coerceIn(0.0, 1.0)
+                            end = start.lerp(end, t)
+                            clipSegment = true
+                        } else if (startScreen.y >= topY && endScreen.y >= topY) {
+                            break
+                        }
+                    }
+                }
+            }
+
+            drawSegment(start, end, i)
+            if (clipSegment) {
+                break
+            }
+        }
+    }
+
+    private fun WorldRenderEnvironment.drawSegment(start: Vec3, end: Vec3, index: Int) {
+        withColor(themeColor(index * 2)) {
+            drawLines(relativeToCamera(start), relativeToCamera(end))
+        }
+    }
+
+    private fun drawTag(context: DrawContext, result: PredictionResult) {
+        val screen = WorldToScreen.calculateScreenPos(result.displayPos)?.takeIf(::isOnScreen) ?: return
+        val layout = createTagLayout(result, screen)
         val matrices = context.matrices
 
-        ExosGuiRenderer.roundedRect(matrices, x, y, width, height, 2.5f, 0xA8000000.toInt())
         context.pose().pushMatrix()
         try {
-            context.pose().translate(x + 2.0f, y + 1.8f)
-            context.pose().scale(0.55f, 0.55f)
-            context.drawItem(point.stack, 0, 0)
+            applyTagScale(context, layout)
+            ExosGuiRenderer.roundedRect(matrices, layout.x, layout.y, layout.width, layout.height, 3f, TAG_BACKGROUND)
+            if (!result.icon.isEmpty) {
+                context.pose().pushMatrix()
+                try {
+                    context.pose().translate(layout.iconX, layout.iconY)
+                    context.pose().scale(layout.iconScale, layout.iconScale)
+                    context.drawItem(result.icon, 0, 0)
+                    context.drawStackOverlay(mc.font, result.icon, 0, 0)
+                } finally {
+                    context.pose().popMatrix()
+                }
+            }
+
+            ExosGuiRenderer.text(matrices, layout.text, layout.textX, layout.textY, WHITE, TAG_TEXT_SIZE)
         } finally {
             context.pose().popMatrix()
         }
-        ExosGuiRenderer.body(matrices, text, x + 14.0f, y + 2.1f, 0xFFFFFFFF.toInt(), textSize)
     }
 
-    private fun Entity.isPredictedEntity(): Boolean {
-        return this is AbstractArrow || this is ThrowableItemProjectile || this is ItemEntity
+    private fun applyTagScale(context: DrawContext, layout: TagLayout) {
+        val centerX = layout.x + layout.width / 2f
+        val centerY = layout.y + layout.height / 2f
+        context.pose().translate(centerX, centerY)
+        context.pose().scale(TAG_SCALE, TAG_SCALE)
+        context.pose().translate(-centerX, -centerY)
     }
 
-    private fun Entity.isSettledProjectile(): Boolean {
-        val unmoving = deltaMovement.lengthSqr() < 1.0E-5
-        val settledItem = this is ItemEntity && (onGround() || isInWater)
-        return unmoving || settledItem
+    private fun createTagLayout(result: PredictionResult, screen: RenderVec3): TagLayout {
+        val text = formatTime(result.timeSeconds)
+        val textWidth = ExosGuiRenderer.textWidth(text, TAG_TEXT_SIZE)
+        val width = max(TAG_MIN_WIDTH, textWidth + 20f)
+        val height = TAG_HEIGHT
+        val x = screen.x.toFloat() - width / 2f
+        val y = screen.y.toFloat() + 4f
+        val iconScale = 0.8f
+        val iconSize = 16f * iconScale
+        val iconX = x + 2f
+        val iconY = y + (height - iconSize) / 2f
+        val centeredTextX = x + width / 2f - textWidth / 2f
+        val minTextX = iconX + iconSize + 2f
+        val textX = max(minTextX, centeredTextX)
+        val textHeight = ExosGuiRenderer.textHeight(text, TAG_TEXT_SIZE)
+        val textY = y + (height - textHeight) / 2f
+
+        return TagLayout(text, x, y, width, height, iconX, iconY, iconScale, textX, textY)
     }
 
-    private fun Entity.landingStack(): ItemStack {
-        return when (this) {
-            is ItemEntity -> item
-            is ThrowableItemProjectile -> item
-            is AbstractArrow -> pickupItemStackOrigin
-            else -> ItemStack.EMPTY
-        }.copy()
+    private fun isOnScreen(screenPos: RenderVec3): Boolean {
+        return screenPos.x.isFinite() && screenPos.y.isFinite() && screenPos.z > 0.0 && screenPos.z < 1.0
     }
 
-    private fun themeColor(tick: Int, alpha: Float): Int {
-        val color = if (tick % 40 < 20) ClientTheme.accentA else ClientTheme.accentB
-        val alphaChannel = (alpha.coerceIn(0.0f, 1.0f) * 255.0f).roundToInt().coerceIn(0, 255)
-        return (alphaChannel shl 24) or (color and 0x00FFFFFF)
-    }
+    private fun isValidScreenPoint(screenPos: RenderVec3): Boolean = isOnScreen(screenPos)
 
-    private fun bowColor(alpha: Float): Int {
-        val alphaChannel = (alpha.coerceIn(0.0f, 1.0f) * 255.0f).roundToInt().coerceIn(0, 255)
-        return (alphaChannel shl 24) or (ClientTheme.accentA and 0x00FFFFFF)
-    }
+    private fun formatTime(seconds: Double): String = String.format(Locale.ROOT, "%.1f s", seconds)
 
-    private fun bowBoxColor(alpha: Int): Color4b {
-        val color = ClientTheme.accentA
+    private fun themeColor(count: Int): Color4b {
+        val angleBase = ((System.currentTimeMillis() / 10.0 + count) % 360.0).toInt()
+        val angle = (if (angleBase >= 180) 360 - angleBase else angleBase) * 2
+        val color = ExosGuiRenderer.mix(ClientTheme.accentA, ClientTheme.accentB, angle / 360f)
         return Color4b(
             (color shr 16) and 0xFF,
             (color shr 8) and 0xFF,
             color and 0xFF,
-            alpha.coerceIn(0, 255)
+            200
         )
     }
 
-    private fun Double.roundToTenth(): String {
-        val rounded = (this * 10.0).roundToInt() / 10.0
-        return if (rounded % 1.0 == 0.0) rounded.toInt().toString() else rounded.toString()
-    }
+    private data class PredictionResult(
+        val path: List<Vec3>,
+        val landingPos: Vec3,
+        val displayPos: Vec3,
+        val timeSeconds: Double,
+        val icon: ItemStack
+    )
 
-    private data class PredictionPath(val points: List<Vec3>, val landingPoint: LandingPoint?)
+    private data class TagLayout(
+        val text: String,
+        val x: Float,
+        val y: Float,
+        val width: Float,
+        val height: Float,
+        val iconX: Float,
+        val iconY: Float,
+        val iconScale: Float,
+        val textX: Float,
+        val textY: Float
+    )
 
-    private data class BowPredictionPath(val points: List<Vec3>, val hit: HitResult?)
-
-    private data class LandingPoint(val stack: ItemStack, val pos: Vec3, val ticks: Int)
-
-    private const val MAX_TICKS = 300
-    private const val MAX_PROJECTILES = 32
-    private const val BOW_MAX_TICKS = 100
-    private const val BOW_MARKER_SIZE = 0.05
-    private const val BOW_LANDING_BOX_SIZE = 0.2
+    private const val MAX_STEPS = 600
+    private const val STEP_SECONDS = 0.05
+    private const val TAG_SCALE = 0.85f
+    private const val TAG_HEIGHT = 14f
+    private const val TAG_MIN_WIDTH = 35f
+    private const val TAG_TEXT_SIZE = 9f
+    private const val TAG_BACKGROUND = 0x96000000.toInt()
+    private const val WHITE = 0xFFFFFFFF.toInt()
 }

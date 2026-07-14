@@ -1,0 +1,35 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package mods.baritone.api.api.java.baritone.api.schematic.mask;
+
+import mods.baritone.api.api.java.baritone.api.schematic.mask.Mask;
+
+public abstract class AbstractMask
+implements Mask {
+    private final int widthX;
+    private final int heightY;
+    private final int lengthZ;
+
+    public AbstractMask(int widthX, int heightY, int lengthZ) {
+        this.widthX = widthX;
+        this.heightY = heightY;
+        this.lengthZ = lengthZ;
+    }
+
+    @Override
+    public int widthX() {
+        return this.widthX;
+    }
+
+    @Override
+    public int heightY() {
+        return this.heightY;
+    }
+
+    @Override
+    public int lengthZ() {
+        return this.lengthZ;
+    }
+}
+

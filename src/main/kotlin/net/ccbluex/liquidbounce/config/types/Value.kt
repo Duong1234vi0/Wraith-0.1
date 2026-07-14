@@ -97,6 +97,11 @@ open class Value<T : Any>(
     var doNotInclude = { false }
         private set
 
+    /** UI-only visibility. This does not affect serialization or public configuration output. */
+    @Exclude
+    @ProtocolExclude
+    private var uiVisibility = { true }
+
     /**
      * If true, value will not be included in generated RestAPI config
      */
@@ -273,6 +278,16 @@ open class Value<T : Any>(
         doNotInclude = condition
     }
 
+    fun visibleWhen(condition: () -> Boolean) = apply {
+        uiVisibility = condition
+    }
+
+    fun hiddenWhen(condition: () -> Boolean) = apply {
+        uiVisibility = { !condition() }
+    }
+
+    fun isVisibleInUi(): Boolean = uiVisibility()
+
     fun notAnOption() = apply {
         notAnOption = true
     }
@@ -328,6 +343,7 @@ class RangedValue<T : Any>(
     defaultValue: T,
     @Exclude val range: ClosedRange<*>,
     @Exclude val suffix: String,
+    @Exclude val step: Number? = null,
     valueType: ValueType
 ) : Value<T>(name, aliases, defaultValue, valueType) {
 
@@ -374,11 +390,25 @@ class BindValue(
     }
 }
 
+class ActionValue(
+    name: String,
+    aliases: Array<String> = emptyArray(),
+    @Exclude @ProtocolExclude val action: () -> Unit,
+) : Value<Unit>(name, aliases, Unit, ValueType.ACTION) {
+
+    fun execute() = action()
+
+    override fun deserializeFrom(gson: Gson, element: JsonElement) = Unit
+
+    override fun setByString(string: String) = Unit
+}
+
 class ChooseListValue<T : NamedChoice>(
     name: String,
     aliases: Array<String> = emptyArray(),
     defaultValue: T,
-    @Exclude val choices: Array<T>
+    @Exclude val choices: Array<T>,
+    @Exclude private val legacyChoiceMapper: (String) -> T? = { null }
 ) : Value<T>(name, aliases, defaultValue, ValueType.CHOOSE) {
 
     override fun deserializeFrom(gson: Gson, element: JsonElement) {
@@ -388,7 +418,8 @@ class ChooseListValue<T : NamedChoice>(
     }
 
     override fun setByString(string: String) {
-        val newValue = choices.firstOrNull { it.choiceName == string || string in it.choiceAliases }
+        val newValue = legacyChoiceMapper(string)
+            ?: choices.firstOrNull { it.choiceName == string || string in it.choiceAliases }
 
         if (newValue == null) {
             throw IllegalArgumentException(
@@ -451,6 +482,7 @@ enum class ValueType(
     FRIEND,
     PROXY,
     ACCOUNT,
+    ACTION,
 
     // Invalid type
     INVALID;

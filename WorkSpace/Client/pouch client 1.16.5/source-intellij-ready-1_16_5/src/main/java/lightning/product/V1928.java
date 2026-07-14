@@ -1,0 +1,41 @@
+﻿/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  com.mojang.datafixers.DSL
+ *  com.mojang.datafixers.schemas.Schema
+ *  com.mojang.datafixers.types.templates.TypeTemplate
+ */
+package lightning.product;
+
+import com.mojang.datafixers.DSL;
+import com.mojang.datafixers.schemas.Schema;
+import com.mojang.datafixers.types.templates.TypeTemplate;
+import java.util.Map;
+import java.util.function.Supplier;
+import lightning.product.NamespacedSchema;
+import lightning.product.References;
+
+public class V1928
+extends NamespacedSchema {
+    public V1928(int p_i50413_1_, Schema p_i50413_2_) {
+        super(p_i50413_1_, p_i50413_2_);
+    }
+
+    protected static TypeTemplate n_1700_B(Schema p_219884_0_) {
+        return DSL.optionalFields((String)"ArmorItems", (TypeTemplate)DSL.list((TypeTemplate)References.M_588_G.in(p_219884_0_)), (String)"HandItems", (TypeTemplate)DSL.list((TypeTemplate)References.M_588_G.in(p_219884_0_)));
+    }
+
+    protected static void n_1700_B(Schema p_219883_0_, Map<String, Supplier<TypeTemplate>> p_219883_1_, String p_219883_2_) {
+        p_219883_0_.register(p_219883_1_, p_219883_2_, () -> V1928.n_1700_B(p_219883_0_));
+    }
+
+    public Map<String, Supplier<TypeTemplate>> registerEntities(Schema p_registerEntities_1_) {
+        Map map = super.registerEntities(p_registerEntities_1_);
+        map.remove("minecraft:illager_beast");
+        V1928.n_1700_B(p_registerEntities_1_, map, "minecraft:ravager");
+        return map;
+    }
+}
+
+
