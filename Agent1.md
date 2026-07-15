@@ -6667,3 +6667,227 @@ Push status: succeeded to `origin/main` (`200503444..26b11d9e3`) before this Age
 
 Supersedes the 2026-07-15 `HitSound vanilla critical-signal fix` entry. This build restores the decompiled Klack
 behavior exactly and intentionally removes the unproven vanilla-critical event hook.
+
+## Removed HitSound and replaced SmoothCamera with AlphaDLC behavior (2026-07-15, Codex)
+
+### Request
+
+Remove the failed standalone `HitSound` module completely, without restoring `ClientSound.CritSound`, and replace the
+existing Wraith `SmoothCamera` module with a strict behavior port of AlphaDLC `SmoothCamera` from
+`WorkSpace/Client/AlphaSRC/AlphaSRC`.
+
+### Current files inspected
+
+- `Skill/README.md`
+- `Skill/Agen.md`
+- `Skill/CLAUDE_PORT_SKID_MODULE_GUIDE.md`
+- `Skill/PORT_EVIDENCE_TEMPLATE.md`
+- `Skill/PORT_REVIEW_CHECKLIST.md`
+- `Skill/CODEBASE_RULES.md`
+- `Skill/AGENT1_USAGE.md`
+- `Skill/RENDER_PORTING_GUIDE.md`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/misc/ModuleClientSound.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleSmoothCamera.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/render/MixinCamera.java`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`
+- `src/main/resources/resources/liquidbounce/lang/en_us.json`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleFreeLook.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleFreeCam.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/RotationManager.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ClientModule.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/EventManager.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/config/ConfigSystem.kt`
+- Minecraft 26.1.2 `net/minecraft/client/Camera.java` from the Loom sources JAR.
+
+### AlphaDLC files inspected
+
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/features/impl/render/SmoothCamera.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/mixins/CameraMixin.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/events/render/CameraEvent.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/events/render/CameraPositionEvent.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/utils/features/aura/warp/Turns.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/features/impl/player/FreeLook.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/features/impl/misc/FreeCam.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/features/impl/render/CameraSettings.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/features/module/Module.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/features/module/ModuleRepository.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/utils/client/managers/event/EventManager.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/utils/client/managers/event/EventHandler.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/utils/client/managers/event/types/Priority.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/utils/client/managers/event/events/callables/EventCancellable.java`
+- `WorkSpace/Client/AlphaSRC/AlphaSRC/src/main/java/code/alphadlc/utils/client/managers/event/events/EventStoppable.java`
+
+### HitSound removal
+
+- Deleted `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.kt`.
+- Removed `ModuleHitSound` from `ModuleManager.registerInbuilt()`.
+- Removed `liquidbounce.module.hitSound.description` from `en_us.json`.
+- Source search confirmed no live `HitSound`, `ModuleHitSound`, `HitSoundKlackDiag`, `CriticalAttackEvent`,
+  `attackVisualEffects`, `Player;crit`, `playWitherCritSound`, or `WITHER_AMBIENT` remains under `src/`.
+- `ModuleClientSound` was not edited and still owns only module enable/disable sounds.
+- No config migration was added. Wraith `ConfigSystem` deserializes only known current values from ordinary
+  configurables, so old removed module/settings entries are ignored and dropped on normal store.
+
+### AlphaDLC SmoothCamera behavior
+
+- Setting:
+  - `Smooth`, default `0.08f`, range `0.01f..0.30f`.
+  - One factor is used for both rotation and all three position axes.
+- State:
+  - `smoothYaw = 0.0f`
+  - `smoothPitch = 0.0f`
+  - `smoothPos = null`
+  - `initialized = false`
+- Activation/deactivation reset:
+  - `initialized = false`
+  - `smoothPos = null`
+- Rotation:
+  - First camera-angle update initializes `smoothYaw/smoothPitch` to target and does not interpolate.
+  - Later yaw uses `wrapDegrees(targetYaw - smoothYaw)`.
+  - Later pitch uses direct `(targetPitch - smoothPitch)`.
+  - Updates are `smooth += delta * Smooth`.
+- Position:
+  - First camera-position update initializes nullable `smoothPos` to target.
+  - Later position uses `smooth += (target - smooth) * Smooth` on X, Y, and Z.
+
+### Old Wraith SmoothCamera behavior removed
+
+- Removed settings `EnableFirstPOV`, `ResetOnPerspectiveChange`, `HorizontalFactor`, and `VerticalFactor`.
+- Removed `Vec3.ZERO` as an uninitialized position sentinel.
+- Removed `lastPerspective`, perspective-change reset behavior, and first-person exclusion.
+- Removed old position-only `cameraUpdate(...)`/`shouldApplyChanges()` integration.
+- Removed the `Vec3.add(Vec3)` redirect that added a non-AlphaDLC `+1 Y` vehicle/cart camera offset.
+- Removed the old `ModifyArgs` position smoothing pass so SmoothCamera no longer stacks an early position smoothing
+  pass before the final camera position is known.
+
+### Camera integration design
+
+- Did not create generic Wraith camera events. Used direct module helpers:
+  - `updateRotation(targetYaw, targetPitch)`
+  - `updatePosition(targetPosition)`
+  - `resetState()`
+- `MixinCamera` now smooths the selected camera target rotation after vanilla has chosen the base yaw/pitch but before
+  vanilla front-third-person inverse handling applies. This keeps the AlphaDLC-style "smooth base angle, then inverse"
+  behavior.
+- `RotationManager` `MovementCorrection.CHANGE_LOOK` remains visual-only in the camera mixin. SmoothCamera smooths the
+  interpolated `CHANGE_LOOK` camera target and does not modify server rotations, player packet rotations, or
+  `RotationManager` state.
+- Final camera position is smoothed once at `alignWithEntity` TAIL from the current camera position after vanilla
+  third-person movement/clipping/sleeping/vehicle positioning has run.
+- Wraith lifecycle adaptation:
+  - reset on enable;
+  - reset on disable;
+  - reset on `WorldChangeEvent`;
+  - reset on `DisconnectEvent`;
+  - reset if the local player reference changes.
+
+### FreeLook / FreeCam / ownership adaptations
+
+- AlphaDLC shares `CameraEvent` and `CameraPositionEvent`; cancellation does not stop later same-priority handlers, and
+  same-priority order depends on handler registration/activation order.
+- Wraith already has explicit exclusive camera ownership in `MixinCamera`:
+  - `ModuleFreeLook` owns yaw/pitch and cancels `alignWithEntity` while active.
+  - `ModuleFreeCam` writes the camera position directly.
+- Wraith adaptation:
+  - while FreeLook owns the camera, SmoothCamera state is reset and FreeLook is not smoothed/fought;
+  - while FreeCam owns camera position, SmoothCamera state is reset and FreeCam's explicit position is not pulled back
+    toward the player;
+  - sleeping camera also resets SmoothCamera state so vanilla sleep rotation stays authoritative.
+
+### Files changed / deleted
+
+- Deleted: `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.kt`
+- Changed: `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleSmoothCamera.kt`
+- Changed: `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/render/MixinCamera.java`
+- Changed: `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`
+- Changed: `src/main/resources/resources/liquidbounce/lang/en_us.json`
+- Changed: `Agent1.md`
+
+### Config compatibility
+
+- Old `HitSound` module config entries are not migrated or redirected.
+- Old SmoothCamera setting keys (`EnableFirstPOV`, `ResetOnPerspectiveChange`, `HorizontalFactor`, `VerticalFactor`) are
+  not migrated into `Smooth`; the AlphaDLC default `0.08f` is used.
+- No user config files were edited manually.
+
+### Static verification
+
+- `git diff --check` passed before and after this Agent1 append.
+- Bounded source searches showed:
+  - no live HitSound source/resource references under `src/`;
+  - no live `WITHER_AMBIENT` use under `src/`;
+  - no `CriticalAttackEvent` under `src/`;
+  - no old SmoothCamera setting names under current SmoothCamera/mixin/localization;
+  - no old `cameraUpdate`, `shouldApplyChanges`, `modifySmoothCameraVehiclePosition`,
+    or `modifySmoothCameraPosition` hook remains.
+
+### Build / JAR inspection
+
+Java:
+
+```text
+openjdk version "25.0.3" 2026-04-21
+OpenJDK Runtime Environment (build 25.0.3)
+OpenJDK 64-Bit Server VM (build 25.0.3, mixed mode)
+```
+
+Build command:
+
+```sh
+env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk \
+  PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin \
+  sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt
+```
+
+Build result: **BUILD SUCCESSFUL** in `3m 2s`.
+
+Built JAR:
+
+```text
+build/libs/liquidbounce-0.31.2.jar
+sha256=86f490a085712547e0f97661177d4210f98995dfaee3b12dff726f90ec177cf1
+```
+
+JAR inspection:
+
+- `net/ccbluex/liquidbounce/features/module/modules/render/ModuleSmoothCamera.class` present.
+- `net/ccbluex/liquidbounce/features/module/modules/render/SmoothedCameraRotation.class` present.
+- `net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.class` absent.
+- `ModuleManager` bytecode references `ModuleSmoothCamera.INSTANCE`.
+- `ModuleManager` bytecode has no `ModuleHitSound` reference.
+- Packaged `en_us.json` contains the updated SmoothCamera description and no `hitSound` key.
+
+### Runtime status
+
+FCL runtime testing was **not performed** by Codex in this shell. Build success proves compilation and packaging only.
+
+Required FCL checklist:
+
+- Confirm `HitSound` is absent from ClickGUI/module config surfaces.
+- Confirm `ClientSound` remains present and module toggle sounds still work.
+- Confirm critical/manual attacks no longer produce custom Wither sounds and no `[HitSoundKlackDiag]` log entries exist.
+- Test `SmoothCamera` disabled/enabled with `Smooth=0.08`, `0.01`, and `0.30`.
+- Test yaw crossing `179 -> -179`, pitch changes, first person, third-person back, third-person front, vehicles, Elytra,
+  swimming/crawling/falling/knockback.
+- Test FreeLook, FreeCam, and `RotationManager` `CHANGE_LOOK`/KillAura rotations for no fighting, no duplicate
+  interpolation, and no packet/server rotation changes.
+
+### Commit / push
+
+Commit hash: pending at entry creation; final hash is reported in the assistant response because the commit cannot
+self-record its own final hash inside this file.
+
+Branch: `main`
+
+Remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`
+
+Push result: pending at entry creation; final push status is reported in the assistant response.
+
+### Supersedes / reverts
+
+Supersedes all previous HitSound attempts, including `Split CritSound from ClientSound into HitSound`,
+`HitSound vanilla critical-signal fix`, and `HitSound strict Klack behavior re-port`.
+
+Supersedes the previous non-Alpha SmoothCamera ports from 2026-06-19 and 2026-07-02 that used first-person gates,
+perspective resets, horizontal/vertical position factors, and the vehicle `+1 Y` offset.

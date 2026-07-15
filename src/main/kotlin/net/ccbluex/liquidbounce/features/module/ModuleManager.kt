@@ -180,7 +180,6 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleAutoBuff,
             ModuleFakeLag,
             ModuleCriticals,
-            ModuleHitSound,
             ModuleKillAura,
             ModuleTargetStrafe,
             ModuleVelocity,

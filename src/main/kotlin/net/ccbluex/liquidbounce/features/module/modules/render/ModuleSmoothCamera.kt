@@ -18,37 +18,32 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.render
 
+import net.ccbluex.liquidbounce.event.events.DisconnectEvent
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
+import net.minecraft.util.Mth
 import net.minecraft.world.phys.Vec3
-import kotlin.math.abs
 
-/**
- * SmoothCamera module.
- *
- * Makes camera movement smoother by interpolating the camera position before
- * Minecraft applies it to the render camera.
- *
- * #Edit By Codex 2026-06-19: ported from `AnotherProject/WorkSpace/LiquidBounce`
- * and adapted to this fork's Category/render camera hook.
- */
+data class SmoothedCameraRotation(
+    val yaw: Float,
+    val pitch: Float
+)
+
 object ModuleSmoothCamera : ClientModule("SmoothCamera", Category.RENDER) {
 
-    private val enableFirstPOV by boolean("EnableFirstPOV", false)
-    private val resetOnPerspectiveChange by boolean("ResetOnPerspectiveChange", true)
+    private val smooth by float("Smooth", 0.08f, 0.01f..0.30f, 0.01f)
 
-    private val factorH by float("HorizontalFactor", 0.9f, 0f..1f)
-    private val factorV by float("VerticalFactor", 0.93f, 0f..1f)
+    private var smoothYaw = 0.0f
+    private var smoothPitch = 0.0f
+    private var smoothPos: Vec3? = null
+    private var initialized = false
+    private var lastPlayer: Any? = null
 
-    var smoothPos: Vec3 = Vec3.ZERO
-        private set
-
-    private val perspective
-        get() = mc.options.cameraType
-
-    private var lastPerspective = perspective
+    override fun enable() {
+        resetState()
+    }
 
     override fun disable() {
         resetState()
@@ -59,46 +54,72 @@ object ModuleSmoothCamera : ClientModule("SmoothCamera", Category.RENDER) {
         resetState()
     }
 
-    private fun resetState() {
-        smoothPos = Vec3.ZERO
-        lastPerspective = perspective
+    @Suppress("unused")
+    private val disconnectHandler = handler<DisconnectEvent> {
+        resetState()
     }
 
     @JvmStatic
-    fun cameraUpdate(pos: Vec3) {
+    fun resetState() {
+        smoothYaw = 0.0f
+        smoothPitch = 0.0f
+        smoothPos = null
+        initialized = false
+        lastPlayer = mc.player
+    }
+
+    @JvmStatic
+    fun updateRotation(targetYaw: Float, targetPitch: Float): SmoothedCameraRotation {
+        ensureCurrentPlayer()
+
         if (!running) {
-            lastPerspective = perspective
-            return
+            return SmoothedCameraRotation(targetYaw, targetPitch)
         }
 
-        // This provides better responsiveness when switching perspectives.
-        if (resetOnPerspectiveChange && lastPerspective != perspective) {
-            smoothPos = pos
-            lastPerspective = perspective
-            return
-        }
-        lastPerspective = perspective
-
-        // Don't smooth for first person since it looks weird.
-        if (!enableFirstPOV && perspective.isFirstPerson) {
-            smoothPos = pos
-            return
+        if (!initialized) {
+            smoothYaw = targetYaw
+            smoothPitch = targetPitch
+            initialized = true
+            return SmoothedCameraRotation(smoothYaw, smoothPitch)
         }
 
-        if (smoothPos.isLikelyZero()) {
-            smoothPos = pos
-        }
+        val deltaYaw = Mth.wrapDegrees(targetYaw - smoothYaw)
+        smoothYaw += deltaYaw * smooth
+        smoothPitch += (targetPitch - smoothPitch) * smooth
 
-        smoothPos = Vec3(
-            smoothPos.x * factorH + pos.x * (1 - factorH),
-            smoothPos.y * factorV + pos.y * (1 - factorV),
-            smoothPos.z * factorH + pos.z * (1 - factorH)
-        )
+        return SmoothedCameraRotation(smoothYaw, smoothPitch)
     }
 
     @JvmStatic
-    fun shouldApplyChanges(): Boolean = running
+    fun updatePosition(target: Vec3): Vec3 {
+        ensureCurrentPlayer()
 
-    private fun Vec3.isLikelyZero(): Boolean =
-        abs(x) < 1.0E-7 && abs(y) < 1.0E-7 && abs(z) < 1.0E-7
+        if (!running) {
+            return target
+        }
+
+        val previous = smoothPos
+        if (previous == null) {
+            smoothPos = target
+            return target
+        }
+
+        val factor = smooth.toDouble()
+        val smoothed = Vec3(
+            previous.x + (target.x - previous.x) * factor,
+            previous.y + (target.y - previous.y) * factor,
+            previous.z + (target.z - previous.z) * factor
+        )
+
+        smoothPos = smoothed
+        return smoothed
+    }
+
+    private fun ensureCurrentPlayer() {
+        val currentPlayer = mc.player
+        if (lastPlayer !== currentPlayer) {
+            resetState()
+        }
+    }
+
 }

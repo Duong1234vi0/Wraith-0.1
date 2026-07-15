@@ -21,6 +21,7 @@ package net.ccbluex.liquidbounce.injection.mixins.minecraft.render;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleFreeCam;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleFreeLook;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleSmoothCamera;
+import net.ccbluex.liquidbounce.features.module.modules.render.SmoothedCameraRotation;
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager;
 import net.ccbluex.liquidbounce.utils.aiming.features.MovementCorrection;
 import net.minecraft.client.Camera;
@@ -33,10 +34,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyArgs;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 
 @Mixin(Camera.class)
 public abstract class MixinCamera {
@@ -45,6 +43,12 @@ public abstract class MixinCamera {
     private boolean detached;
     @Shadow
     private @Nullable Entity entity;
+    @Shadow
+    private Vec3 position;
+    @Shadow
+    private float xRot;
+    @Shadow
+    private float yRot;
 
     @Shadow
     protected abstract void setRotation(float yRot, float xRot);
@@ -64,17 +68,37 @@ public abstract class MixinCamera {
     }
 
     @Inject(method = "alignWithEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;setPosition(DDD)V", shift = At.Shift.AFTER), cancellable = true)
+    private void modifyCameraOrientationAfterPosition(float partialTicks, CallbackInfo ci) {
+        modifyCameraOrientation(partialTicks, ci);
+    }
+
+    @Inject(method = "alignWithEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;setPosition(Lnet/minecraft/world/phys/Vec3;)V", shift = At.Shift.AFTER), cancellable = true)
+    private void modifyCameraOrientationAfterVectorPosition(float partialTicks, CallbackInfo ci) {
+        modifyCameraOrientation(partialTicks, ci);
+    }
+
     private void modifyCameraOrientation(float partialTicks, CallbackInfo ci) {
+        if (this.entity instanceof LivingEntity livingEntity && livingEntity.isSleeping()) {
+            ModuleSmoothCamera.resetState();
+            return;
+        }
+
+        if (ModuleFreeCam.INSTANCE.getRunning()) {
+            ModuleSmoothCamera.resetState();
+            return;
+        }
+
         var freeLook = ModuleFreeLook.INSTANCE.getRunning();
-        var freeLockInvertedView = ModuleFreeLook.INSTANCE.isInvertedView();
+        var freeLookInvertedView = ModuleFreeLook.INSTANCE.isInvertedView();
 
         if (freeLook) {
+            ModuleSmoothCamera.resetState();
             this.detached = true;
 
             var cameraYaw = ModuleFreeLook.INSTANCE.getCameraYaw();
             var cameraPitch = ModuleFreeLook.INSTANCE.getCameraPitch();
 
-            if (freeLockInvertedView) {
+            if (freeLookInvertedView) {
                 setRotation(cameraYaw + 180, -cameraPitch);
             } else {
                 setRotation(cameraYaw, cameraPitch);
@@ -95,44 +119,32 @@ public abstract class MixinCamera {
                 rotationTarget.getMovementCorrection() == MovementCorrection.CHANGE_LOOK;
         if (currentRotation == null || previousRotation == null || !changeLook ||
                 !RotationManager.INSTANCE.isRotatingAllowed(rotationTarget)) {
+            if (ModuleSmoothCamera.INSTANCE.getRunning()) {
+                SmoothedCameraRotation smoothedRotation = ModuleSmoothCamera.updateRotation(this.yRot, this.xRot);
+                setRotation(smoothedRotation.getYaw(), smoothedRotation.getPitch());
+            }
             return;
         }
 
-        setRotation(
-                Mth.lerp(partialTicks, previousRotation.getYaw(), currentRotation.getYaw()),
-                Mth.lerp(partialTicks, previousRotation.getPitch(), currentRotation.getPitch())
-        );
+        float targetYaw = Mth.lerp(partialTicks, previousRotation.getYaw(), currentRotation.getYaw());
+        float targetPitch = Mth.lerp(partialTicks, previousRotation.getPitch(), currentRotation.getPitch());
+        SmoothedCameraRotation smoothedRotation = ModuleSmoothCamera.INSTANCE.getRunning()
+                ? ModuleSmoothCamera.updateRotation(targetYaw, targetPitch)
+                : new SmoothedCameraRotation(targetYaw, targetPitch);
+
+        setRotation(smoothedRotation.getYaw(), smoothedRotation.getPitch());
     }
 
     @Inject(method = "alignWithEntity", at = @At("TAIL"))
     private void applyFreeCamPlayerSelfRendering(float partialTicks, CallbackInfo ci) {
         if (ModuleFreeCam.INSTANCE.getRunning()) {
+            ModuleSmoothCamera.resetState();
             this.detached = true;
-        }
-    }
-
-    @Redirect(method = "alignWithEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/phys/Vec3;add(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;"))
-    private Vec3 modifySmoothCameraVehiclePosition(Vec3 instance, Vec3 vec) {
-        if (ModuleFreeLook.INSTANCE.getRunning()) {
-            return vec;
-        }
-
-        return ModuleSmoothCamera.shouldApplyChanges() ? vec.add(0.0, 1.0, 0.0) : vec;
-    }
-
-    @ModifyArgs(method = "alignWithEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;setPosition(DDD)V"))
-    private void modifySmoothCameraPosition(Args args) {
-        if (ModuleFreeLook.INSTANCE.getRunning()) {
             return;
         }
 
-        Vec3 original = new Vec3(args.get(0), args.get(1), args.get(2));
-        ModuleSmoothCamera.cameraUpdate(original);
-        if (ModuleSmoothCamera.shouldApplyChanges()) {
-            Vec3 smoothPos = ModuleSmoothCamera.INSTANCE.getSmoothPos();
-            args.set(0, smoothPos.x);
-            args.set(1, smoothPos.y);
-            args.set(2, smoothPos.z);
+        if (ModuleSmoothCamera.INSTANCE.getRunning()) {
+            setPosition(ModuleSmoothCamera.updatePosition(this.position));
         }
     }
 
