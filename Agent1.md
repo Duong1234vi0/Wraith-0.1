@@ -7378,5 +7378,9 @@ Changed files are limited to HMI runtime/cache/holder/loader, early bootstrap an
 renderer, LivingEntity/accessor swing path, JavaMethod timing, and this entry. References, logs, extracted workspaces,
 and the backup JAR remain unstaged. Commit/push status is recorded after final staging.
 
+The diagnostic/fix commit is `86d6e9cc0` (`fix(render): restore HandMyItems animation runtime`), on branch `main`,
+remote `origin`, and was pushed successfully. This Agent1 status addendum is the documentation follow-up after that
+push; neither result is a claim of visual parity before the user test.
+
 This entry corrects prior “full/source-complete” descriptions: compile/class/resource counts are not behavioral proof,
 and visual parity will not be claimed until the user confirms working MainHand and Offhand animation.
