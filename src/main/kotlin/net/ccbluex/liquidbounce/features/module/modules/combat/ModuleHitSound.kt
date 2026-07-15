@@ -18,14 +18,12 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.combat
 
-import net.ccbluex.liquidbounce.event.events.AttackEntityEvent
+import net.ccbluex.liquidbounce.event.events.CriticalAttackEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
-import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
-import net.minecraft.world.entity.LivingEntity
 
 object ModuleHitSound : ClientModule(
     "HitSound",
@@ -36,33 +34,23 @@ object ModuleHitSound : ClientModule(
     private val pitch by float("Pitch", 1.0f, 0.5f..2.0f, 0.05f)
 
     @Suppress("unused")
-    private val attackHandler = handler<AttackEntityEvent>(priority = READ_FINAL_STATE) { event ->
-        if (event.isCancelled) {
-            return@handler
-        }
-
+    private val criticalAttackHandler = handler<CriticalAttackEvent> { event ->
         val player = mc.player ?: return@handler
         val level = mc.level ?: return@handler
-        val target = event.entity as? LivingEntity ?: return@handler
 
-        if (!target.isAlive) {
+        if (event.attacker != player || !event.target.isAlive) {
             return@handler
         }
 
-        val isCrit = player.fallDistance > 0.0f && !player.onGround()
-        if (!isCrit) {
-            return@handler
-        }
-
-        level.playSound(
-            player,
+        level.playLocalSound(
             player.x,
             player.y,
             player.z,
             SoundEvents.WITHER_AMBIENT,
             SoundSource.PLAYERS,
             volume,
-            pitch
+            pitch,
+            false
         )
     }
 

@@ -58,6 +58,7 @@ val ALL_EVENT_CLASSES: Array<KClass<out Event>> = arrayOf(
     KeybindChangeEvent::class,
     KeybindIsPressedEvent::class,
     AttackEntityEvent::class,
+    CriticalAttackEvent::class,
     SwingHandEvent::class,
     TotemPopEvent::class,
     SessionEvent::class,

@@ -6216,3 +6216,244 @@ Explicitly not performed:
 - no module enable/disable;
 - no sound setting edit;
 - no runtime file deletion or move.
+
+## HitSound vanilla critical-signal fix (2026-07-15, Codex)
+
+### Request
+
+User confirmed the 2026-07-15 installation/config/audio audit was not enough: `HitSound` was installed, enabled, loaded
+from the active isolated FCL JAR, and audio settings were valid, but both Criticals `Jump` and a manually performed
+falling critical attack still produced no Wither sound.
+
+Task: stop using `AttackEntityEvent` plus the early `fallDistance > 0.0f && !onGround()` heuristic. Fire a client-only
+critical signal from the actual local Minecraft critical branch and make `HitSound` play `WITHER_AMBIENT` from that
+signal only.
+
+### Current files checked
+
+- `Skill/README.md`
+- `Skill/Agen.md`
+- `Skill/CODEBASE_RULES.md`
+- `Skill/AGENT1_USAGE.md`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/Event.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/EventManager.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/EventListener.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/events/EntityEvents.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/entity/MixinPlayerEntity.java`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/network/MixinClientPlayerInteractionManager.java`
+- `src/main/resources/liquidbounce.mixins.json`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/combat/CombatExtensions.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/criticals/ModuleCriticals.kt`
+- `net/minecraft/world/entity/player/Player.java`
+- `net/minecraft/client/player/LocalPlayer.java`
+- `net/minecraft/client/multiplayer/MultiPlayerGameMode.java`
+- `net/minecraft/client/multiplayer/ClientLevel.java`
+- Deobf bytecode jar:
+  `.gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-merged-7f56e53844/26.1.2/minecraft-merged-7f56e53844-26.1.2.jar`
+
+### Source / bytecode findings
+
+`MultiPlayerGameMode.attack(Player, Entity)` in 26.1.2 sends `ServerboundAttackPacket`, calls `player.attack(entity)`,
+then resets attack strength. The existing `MixinClientPlayerInteractionManager` dispatches cancellable
+`AttackEntityEvent` at `MultiPlayerGameMode.attack` HEAD, so a cancelled attack naturally does not reach
+`Player.attack`.
+
+Mapped `Player.attack(Entity)` source computes:
+
+```text
+fullStrengthAttack = attackStrengthScale > 0.9F
+criticalAttack = fullStrengthAttack && this.canCriticalAttack(entity)
+```
+
+When damage is accepted, it calls:
+
+```text
+attackVisualEffects(entity, criticalAttack, sweepAttack, fullStrengthAttack, false, magicBoost)
+```
+
+Mapped `Player.attackVisualEffects(Entity, boolean, boolean, boolean, boolean, float)` contains the confirmed critical
+feedback branch:
+
+```text
+if (criticalAttack) {
+    playServerSideSound(SoundEvents.PLAYER_ATTACK_CRIT)
+    crit(entity)
+}
+```
+
+`javap` verified descriptors:
+
+```text
+Player.attack(Entity): (Lnet/minecraft/world/entity/Entity;)V
+Player.attackVisualEffects(Entity, boolean, boolean, boolean, boolean, float):
+  (Lnet/minecraft/world/entity/Entity;ZZZZF)V
+Player.crit(Entity): (Lnet/minecraft/world/entity/Entity;)V
+```
+
+`javap -c` verified there is one `crit(Entity)` invocation inside `attackVisualEffects`, immediately after
+`PLAYER_ATTACK_CRIT` sound playback, and `magicCrit(Entity)` is a separate branch.
+
+`LocalPlayer.crit(Entity)` only creates the vanilla CRIT tracking emitter. Hooking before `Player.crit(Entity)` gives a
+local client branch signal before the vanilla visual feedback call.
+
+### Root cause
+
+The old `ModuleHitSound` decided critical state too early from `AttackEntityEvent` using only:
+
+```text
+player.fallDistance > 0.0f && !player.onGround()
+```
+
+That did not prove the attack entered the vanilla critical branch. It could miss legitimate cases where local state at
+the attack event did not match the later actual branch, and it did not include vanilla's full critical gates or the
+damage-accepted path.
+
+The old sound call used `ClientLevel.playSound(player, ...)`. Source inspection showed that overload can route locally
+when `except == minecraft.player`, but the implementation was changed to explicit `playLocalSound(...)` anyway because
+the user had already proved the previous runtime path was silent.
+
+### Changed
+
+- Added `CriticalAttackEvent(attacker: Player, target: LivingEntity)` in `EntityEvents.kt`.
+- Registered `CriticalAttackEvent` in `ALL_EVENT_CLASSES`.
+- Added one dispatch site in the existing `MixinPlayerEntity`:
+  - method selector:
+    `attackVisualEffects(Lnet/minecraft/world/entity/Entity;ZZZZF)V`
+  - injection point:
+    before `Lnet/minecraft/world/entity/player/Player;crit(Lnet/minecraft/world/entity/Entity;)V`
+  - gates:
+    local player only (`this == Minecraft.getInstance().player`);
+    target must be `LivingEntity`;
+    target must be alive.
+- Replaced `ModuleHitSound`'s `AttackEntityEvent` handler with a `CriticalAttackEvent` handler.
+- Removed the old `fallDistance/onGround` critical predicate from `ModuleHitSound`.
+- Replaced `level.playSound(player, ...)` with:
+
+```kotlin
+level.playLocalSound(
+    player.x,
+    player.y,
+    player.z,
+    SoundEvents.WITHER_AMBIENT,
+    SoundSource.PLAYERS,
+    volume,
+    pitch,
+    false
+)
+```
+
+### Preserved
+
+- `HitSound` remains a standalone Combat module.
+- `HitSound` does not depend on `ModuleCriticals`.
+- `CriticalsJump` was not edited.
+- `ClientSound` remains separate and still owns only module toggle sounds.
+- `Volume`: default `1.0f`, range `0.1f..2.0f`, step `0.05f`.
+- `Pitch`: default `1.0f`, range `0.5f..2.0f`, step `0.05f`.
+- Sound remains `SoundEvents.WITHER_AMBIENT`.
+- Sound source remains `SoundSource.PLAYERS`.
+- No setting, mode, fallback sound, custom asset, packet, damage, cooldown, or particle behavior was added.
+
+### Static verification
+
+- `git diff --check`: passed.
+- Source search confirmed:
+  - `ModuleHitSound` no longer imports or handles `AttackEntityEvent`;
+  - `ModuleHitSound` no longer contains `fallDistance` or `onGround`;
+  - `ModuleHitSound` calls `ClientLevel.playLocalSound(..., false)`;
+  - `CriticalAttackEvent` has exactly one dispatch site;
+  - dispatch is local-player gated;
+  - no direct `ModuleCriticals` dependency was added.
+- Build bytecode inspection confirmed:
+  - `ModuleHitSound` calls
+    `ClientLevel.playLocalSound(DDDLnet/minecraft/sounds/SoundEvent;Lnet/minecraft/sounds/SoundSource;FFZ)V`;
+  - `CriticalAttackEvent` stores `Player attacker` and `LivingEntity target`;
+  - `MixinPlayerEntity.hookCriticalAttack(...)` gates local player and live `LivingEntity`, then dispatches the event.
+- JAR inspection confirmed the built JAR contains:
+  - `CriticalAttackEvent.class`;
+  - `ModuleHitSound.class`;
+  - `MixinPlayerEntity.class`;
+  - no `ModuleClientSound$CritSound.class` match in the checked output.
+
+### Build / install
+
+Java:
+
+```text
+openjdk version "25.0.3" 2026-04-21
+OpenJDK Runtime Environment (build 25.0.3)
+OpenJDK 64-Bit Server VM (build 25.0.3, mixed mode)
+```
+
+Build command:
+
+```sh
+env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk \
+  PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin \
+  sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt
+```
+
+Build result: **BUILD SUCCESSFUL** in `2m 7s`.
+
+Output JAR:
+
+```text
+build/libs/liquidbounce-0.31.2.jar
+sha256=052fd835700270e3e3f1ab28ee0dc69583dd79b0017ac36b278b9208d74cd173
+```
+
+Installed FCL path:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar
+sha256=052fd835700270e3e3f1ab28ee0dc69583dd79b0017ac36b278b9208d74cd173
+```
+
+Previous installed JAR backup:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar.bak-20260715-142236
+sha256=5018f90255d998f264fa1520a9d043c4ee0360402bd68fa4404f9ec96d7ef48d
+```
+
+### Runtime status
+
+FCL runtime attack tests were **not executed by Codex** in this shell because there is no interactive Minecraft/FCL
+gameplay control here. The final JAR was installed for user-side FCL testing.
+
+Required FCL checks still pending:
+
+- Manual falling critical with `Criticals` disabled: expected one critical event and one Wither ambient sound.
+- Standing attack and rising non-critical attack: expected no event and no Wither sound.
+- Criticals `Jump`: expected sound only when the attack reaches the real vanilla critical branch.
+- KillAura attack under conditions that reach the vanilla critical branch: expected one sound per branch entry.
+- Cancelled attack: expected no `Player.attack` critical branch and no sound.
+- Reconnect/world change: expected no stale signal or duplicate event.
+
+### Limitation
+
+Packet-only Criticals modes are still outside this fix. If a packet mode produces a server-side critical without entering
+the local vanilla `Player.attack -> attackVisualEffects -> crit(Entity)` branch, this new signal will not fire for it.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/events/EntityEvents.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/EventManager.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/entity/MixinPlayerEntity.java`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.kt`
+- `Agent1.md`
+
+### Commit / push
+
+Commit hash: pending until commit creation; final hash is reported in the assistant response.
+
+Branch: `main`
+
+Remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`
+
+Push status: pending at entry time.
+
+### Supersedes / reverts
+
+Supersedes the unresolved timing diagnosis in `HitSound FCL installation/runtime audit (2026-07-15, Codex)`.
