@@ -5151,3 +5151,156 @@ Push status: pending at entry time.
 ### Supersedes / reverts
 
 Supersedes any older Hold My Item / Hold My Items / `New` mode attempt that used shared `newPrimarySlash/newWasSwinging` state or derived offhand animation from main-hand progress. No specific older HMI entry was found in `Agent1.md`.
+
+## Removed VCore Elytra modules and Track/Grim rotations (2026-07-15, Codex)
+
+### Request
+
+Completely remove the previously ported VCore Elytra combat features and VCore-derived Track/Grim KillAura rotation modes from Wraith. Do not replace them with new modules, modes, settings, or compatibility behavior.
+
+### Current files inspected
+
+- `Skill/README.md`
+- `Skill/Agen.md`
+- `Skill/CODEBASE_RULES.md`
+- `Skill/AGENT1_USAGE.md`
+- `Agent1.md` sections for ElytraTarget, ElytraMotion, ElytraRange, ElytraAimRange, firework rotation integration, Track, Grim, `VCoreAuraRotationController`, and `VCoreRotationResult`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleElytraTarget.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/KillAuraClicker.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/KillAuraRotationsConfigurable.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/VCoreAuraRotationController.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/VCoreAuraRotationsConfigurable.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/RotationsConfigurable.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/TrackAngleSmooth.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/GrimAngleSmooth.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/HumanizedTrackAngleSmooth.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/config/ConfigSystem.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/config/types/nesting/ChoiceConfigurable.kt`
+- `src/main/resources/resources/liquidbounce/lang/en_us.json`
+
+### Deleted
+
+- Deleted `ModuleElytraTarget.kt`.
+- Deleted `ModuleElytraMotion.kt`.
+- Deleted `TrackAngleSmooth.kt`.
+- Deleted `GrimAngleSmooth.kt`.
+- Deleted `HumanizedTrackAngleSmooth.kt` because it was a direct Track-derived rotation choice and exposed `Track` in ClickGUI.
+- Deleted the already-unreferenced VCore rotation bridge files:
+  - `VCoreAuraRotationController.kt`
+  - `VCoreAuraRotationsConfigurable.kt`
+- Removed `ModuleElytraTarget` and `ModuleElytraMotion` from `ModuleManager.registerInbuilt()`.
+- Removed KillAura `ElytraRange` and `ElytraAimRange`.
+- Removed KillAura Elytra-specific attack/scan range, predicted target-point, gliding target sort, special facing, and firework packet-rotation accessor behavior.
+- Removed Track/Grim/HumanizedTrack choice registration and VCore-only rotation helpers from `RotationsConfigurable`.
+- Removed English module descriptions for ElytraTarget and ElytraMotion.
+
+### Preserved
+
+- Ordinary KillAura `Range`, `WallRange`, `ScanExtraRange`, target tracker, point tracker, raycast, target sorting, facing check, and rotation target flow remain.
+- Gliding players remain ordinary valid entities under standard KillAura targeting rules.
+- Remaining rotation modes remain registered in their prior relative order: Linear, Sigmoid, Interpolation, Acceleration, and Minarai for combat-specific configs.
+- Focused Full movement correction and `visibleWhen` remain because they are used by live non-Elytra code.
+- Shared firework, inventory, packet, OffHandSlot, SilentHotbar, and NetworkUtils helpers remain because other live modules use them.
+- Unrelated Grim anti-cheat modes/checks remain, including NoSlow Grim, Speed Grim, Fly Grim, Criticals Grim, ServerObserver text, and Grim-related documentation/usernames.
+- No attached ZIP, JAR, decompiled cache, or VCore reference source was edited.
+
+### Config compatibility
+
+- Old configs with removed scalar values such as `ElytraRange` and `ElytraAimRange` are ignored by the ordinary config loader because it only deserializes values that still exist in the live configurable tree.
+- Old configs selecting removed `Track`, `Grim`, or `HumanizedTrack` AngleSmooth choices log an active-choice deserialization error and keep the current default choice, because `ConfigSystem.deserializeValue` catches `ChoiceConfigurable.setByString(...)` failures.
+- No explicit migration was added and no replacement mode was introduced.
+
+### Files changed / deleted
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleElytraTarget.kt` (deleted)
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt` (deleted)
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/KillAuraClicker.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/KillAuraRotationsConfigurable.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/VCoreAuraRotationController.kt` (deleted)
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/VCoreAuraRotationsConfigurable.kt` (deleted)
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/RotationsConfigurable.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/TrackAngleSmooth.kt` (deleted)
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/GrimAngleSmooth.kt` (deleted)
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/HumanizedTrackAngleSmooth.kt` (deleted)
+- `src/main/resources/resources/liquidbounce/lang/en_us.json`
+- `Agent1.md`
+
+### Static verification
+
+- `git diff --check`: passed before and after cleanup.
+- Required symbol search under `src/main/kotlin`, `src/main/java`, and `src/main/resources` found no remaining:
+  - `ElytraTarget`
+  - `ElytraMotion`
+  - `ElytraRange`
+  - `ElytraAimRange`
+  - `getPredictedVec`
+  - `canAttackElytraTarget`
+  - `squaredDistanceToPredicted`
+  - `isInAimRange`
+  - `activeAttackRange`
+  - `activeScanRange`
+  - `shouldBlockAuraAttack`
+  - `useItemRotationOverride`
+  - `rotationForPacketUse`
+  - `VCoreAuraRotationController`
+  - `VCoreRotationResult`
+  - `TrackAngleSmooth`
+  - `GrimAngleSmooth`
+  - `HumanizedTrackAngleSmooth`
+- Remaining `Track`/`Grim` matches are unrelated input-tracking comments, ServerObserver text, usernames, Grim anti-cheat mode names, and Grim movement/combat module modes.
+
+### Build and JAR inspection
+
+- Build command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:$PATH sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Build result: **BUILD SUCCESSFUL** in 2m 3s.
+- JAR path: `build/libs/liquidbounce-0.31.2.jar`
+- JAR inspection found zero class/resource matches for:
+  - `ModuleElytraTarget`
+  - `ModuleElytraMotion`
+  - `TrackAngleSmooth`
+  - `GrimAngleSmooth`
+  - `HumanizedTrackAngleSmooth`
+  - `VCoreAuraRotationController`
+  - `VCoreRotationResult`
+  - `VCoreAuraRotationsConfigurable`
+- JAR still contains `ModuleKillAura`, `KillAuraRotationsConfigurable`, and `RotationsConfigurable`.
+
+### Runtime status
+
+Runtime status: not tested in FCL/in-game. Build success only proves compilation and packaging.
+
+FCL checklist:
+
+- Start with a clean/default config.
+- Start with an old config that previously selected Track.
+- Start with an old config that previously selected Grim.
+- Start with an old config containing ElytraRange/ElytraAimRange.
+- Open ClickGUI and confirm ElytraTarget, ElytraMotion, Track, Grim, HumanizedTrack, and Elytra KillAura settings are absent.
+- Enable KillAura while grounded.
+- Enable KillAura while gliding.
+- Attack a gliding player under ordinary KillAura rules.
+- Switch through every remaining rotation mode.
+- Use fireworks normally outside ElytraMotion.
+- Confirm no startup crash from unknown config choices.
+- Confirm no missing-choice exception.
+- Confirm no stale module state or translation key appears.
+
+### Commit / push
+
+Commit hash: pending at entry time; final hash reported after commit creation because a commit cannot contain its own final hash.
+
+Branch: `main`
+
+Remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`
+
+Push status: pending at entry time; final push result reported after push.
+
+### Supersedes / reverts
+
+Supersedes and removes the 2026-06-30 `VCore ElytraTarget + ElytraMotion port`, all 2026-06-30 to 2026-07-01 ElytraTarget/ElytraMotion correction plans, and the 2026-07-11 `KillAura V-Core Track/Grim + Focused Full architectural re-port` portions that introduced Track/Grim/VCore rotation adapters. Focused Full itself remains because it is shared by live non-Elytra code.

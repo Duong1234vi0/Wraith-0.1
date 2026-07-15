@@ -549,8 +549,6 @@
   "liquidbounce.module.easyPearl.messages.noInReachWarning": "You are aiming more than the ender pearl can reach, and this has helped you cancel the throw",
   "liquidbounce.module.elytraRecast.description": "Recasts elytra while holding jump key.",
   "liquidbounce.module.elytraFly.description": "Makes controlling an elytra easier.",
-  "liquidbounce.module.elytraMotion.description": "Stabilizes elytra movement while KillAura is lining up predictive hits.",
-  "liquidbounce.module.elytraTarget.description": "Predicts elytra target movement for KillAura.",
   "liquidbounce.module.targets.description": "Allows you to manage which entities are considered to be your target.",
   "liquidbounce.module.extendedFirework.description": "Extends the velocity of firework rocket boost.",
   "liquidbounce.module.esp.description": "Highlights all targets allowing you to see them through walls.",

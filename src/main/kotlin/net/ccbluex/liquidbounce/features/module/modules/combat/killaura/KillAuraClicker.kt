@@ -122,8 +122,7 @@ object KillAuraClicker : Clicker<ModuleKillAura>(
                 return true
             }
 
-            if (!KillAuraRotationsConfigurable.isVCoreMode &&
-                rotationTiming == KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK && rotation != null) {
+            if (rotationTiming == KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK && rotation != null) {
                 network.sendPacket(
                     Full(
                         player.x, player.y, player.z, rotation.yaw, rotation.pitch, player.onGround(),
@@ -135,8 +134,7 @@ object KillAuraClicker : Clicker<ModuleKillAura>(
         }
 
         fun unprepare() {
-            if (!KillAuraRotationsConfigurable.isVCoreMode &&
-                rotationTiming == KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK && rotation != null) {
+            if (rotationTiming == KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK && rotation != null) {
                 network.sendPacket(
                     Full(
                         player.x, player.y, player.z, player.withFixedYaw(rotation), player.pitch, player.onGround(),

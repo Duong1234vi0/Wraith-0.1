@@ -178,7 +178,6 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleAutoLeave,
             ModuleAutoWeapon,
             ModuleAutoBuff,
-            ModuleElytraTarget,
             ModuleFakeLag,
             ModuleCriticals,
             ModuleKillAura,
@@ -214,7 +213,6 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
 
             // Movement
             ModuleAutoDodge,
-            ModuleElytraMotion,
             ModuleElytraRecast,
             ModuleElytraFly,
             ModuleFly,

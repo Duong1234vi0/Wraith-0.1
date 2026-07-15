@@ -25,9 +25,7 @@ import net.ccbluex.liquidbounce.utils.aiming.RotationsConfigurable
 object KillAuraRotationsConfigurable : RotationsConfigurable(ModuleKillAura, combatSpecific = true) {
 
     val rotationTiming by enumChoice("RotationTiming", KillAuraRotationTiming.NORMAL)
-        .visibleWhen { !isVCoreMode }
     val aimThroughWalls by boolean("ThroughWalls", false)
-        .visibleWhen { !isVCoreMode }
 
     enum class KillAuraRotationTiming(override val choiceName: String) : NamedChoice {
         NORMAL("Normal"),
