@@ -5304,3 +5304,185 @@ Push status: pushed to `origin/main` successfully (`29e800b96..d24a1eb87`).
 ### Supersedes / reverts
 
 Supersedes and removes the 2026-06-30 `VCore ElytraTarget + ElytraMotion port`, all 2026-06-30 to 2026-07-01 ElytraTarget/ElytraMotion correction plans, and the 2026-07-11 `KillAura V-Core Track/Grim + Focused Full architectural re-port` portions that introduced Track/Grim/VCore rotation adapters. Focused Full itself remains because it is shared by live non-Elytra code.
+
+## HitEffect Xyeta batching/cache and render-parity fix (2026-07-15, Codex)
+
+### Request
+
+Fix Wraith's existing Xyeta/WildClient `HitEffect` port because FCL/MobileGlues FPS drops when the module renders up to 400 affected blocks per wave. Preserve the current Xyeta wave timing, expansion, fade, local alpha, scan order, block cap, attack-trigger behavior, and multiple simultaneous waves. Replace only the per-block immediate render submission path with a batched/cached renderer modeled on Xyeta `RenderUtil3D`.
+
+### Current Wraith files checked
+
+- `Skill/README.md`
+- `Skill/Agen.md`
+- `Skill/CLAUDE_PORT_SKID_MODULE_GUIDE.md`
+- `Skill/PORT_EVIDENCE_TEMPLATE.md`
+- `Skill/PORT_REVIEW_CHECKLIST.md`
+- `Skill/RENDER_PORTING_GUIDE.md`
+- `Skill/CODEBASE_RULES.md`
+- `Skill/AGENT1_USAGE.md`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleHitEffect.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/alphadlc/AlphaDlcWorldRenderer.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/alphadlc/AlphaDlcRenderPipelines.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/render/compat/RenderCompat.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/render/MixinGameRenderer.java`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/events/DrawEvents.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/block/BlockCompatExtensions.kt`
+- `net/minecraft/world/level/Level.java`
+- `src/main/resources/resources/liquidbounce/lang/en_us.json`
+- Current mapped 26.1.2 classes inspected with `javap`: `BlendFunction`, `SourceFactor`, `DestFactor`, `ColorTargetState`, `RenderPass`, `BufferBuilder`, `Tesselator`, `ByteBufferBuilder`, and `BlockPos.MutableBlockPos`.
+
+### Xyeta files checked
+
+- `WorkSpace/Client/Xyeta/src/main/java/dev/client/modules/impl/render/HitEffect.java`
+- `WorkSpace/Client/Xyeta/src/main/java/dev/client/util/render/RenderUtil3D.java`
+- `WorkSpace/Client/Xyeta/src/main/java/dev/client/mixins/hooks/MixinGameRenderer.java`
+- `WorkSpace/Client/Xyeta/src/main/java/dev/client/event/classes/WorldRenderEvent.java`
+- `WorkSpace/Client/Xyeta/src/main/java/dev/client/managers/EventManager.java`
+- `WorkSpace/Client/Xyeta/src/main/java/dev/client/mixins/hooks/ClientPlayerInteractionManagerMixin.java`
+- `WorkSpace/Client/Xyeta/src/main/java/dev/client/mixins/other/IWorldRendererMixin.java`
+- `WorkSpace/Client/Xyeta/src/main/java/dev/client/util/color/ColorUtil.java`
+
+### Root cause
+
+`ModuleHitEffect.renderWave()` called `AlphaDlcWorldRenderer.drawShapeAlternative(...)` once for every rendered affected block. That helper immediately built and submitted a fill mesh and then immediately built and submitted an outline mesh. With Xyeta's 400-block cap, the old Wraith path could reach about 400 fill submissions + 400 outline submissions per wave per frame. Several overlapping waves multiplied that cost and caused FCL/MobileGlues frame spikes.
+
+### Xyeta source behavior
+
+- `HitEffect` queues waves on attack at the attacked entity block position.
+- `WaveEffect.render()` scans `x/z` from `-8..8`, caps at 400 rendered blocks, searches downward before upward for 10 blocks, and calls `RenderUtil3D.drawShapeAlternative(renderPos, shape, color, lineWidth, true, true)`.
+- `RenderUtil3D.drawShapeAlternative` does not submit immediately. It caches `VoxelShape` local bounding boxes and local edge lines, translates them by the block position, queues fill quads in `QUAD_DEPTH`, and queues lines in `LINE_DEPTH`.
+- `RenderUtil3D.onRender3D()` flushes queued geometry once per frame using batched `BufferBuilder`s. It uses `RenderSystem.blendFunc(SRC_ALPHA, ONE_MINUS_CONSTANT_ALPHA)`, disables cull, enables depth for depth queues, sets `depthMask(false)` for depth lines, and clears the frame queues after drawing.
+- Xyeta buckets line drawing by exact line width because old GL line width was global state.
+
+### Changed
+
+- Added `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/hiteffect/HitEffectBatchRenderer.kt`.
+- `ModuleHitEffect` now begins one HitEffect frame batch per `WorldRenderEvent`, appends all active-wave block shapes, flushes one fill mesh and one outline mesh, and clears builders in `finally`.
+- Removed the per-block immediate `AlphaDlcWorldRenderer.drawShapeAlternative(...)` path from HitEffect.
+- Removed per-block `runCatching`; the module now catches only `Exception` once around the frame batch, logs the first batch failure, and does not catch `Throwable`.
+- Added full block-read validation through `Level.isInWorldBounds(pos)` plus `level.worldBorder.isWithinBounds(pos)` before `getBlockState`.
+- Added `liquidbounce.module.hitEffect.description` to `en_us.json`.
+
+### Renderer architecture
+
+- HitEffect keeps the source wave/scanning/alpha logic.
+- `HitEffectBatchRenderer.beginFrame(camera)` resets frame builders and stores the current camera position.
+- Each accepted block calls `appendShape(origin, shape, color, lineWidth)`.
+- `appendShape` frustum-culls the unit block through `AlphaProjection.canSee`, looks up cached local geometry, appends fill quads with per-vertex color and source `0.1 * alpha` fill opacity, and appends outline lines with per-vertex color and exact per-block line width.
+- `flush(modelViewMatrix)` builds at most one fill `MeshData` and one line `MeshData`, uploads them through renderer-owned streaming buffers, opens at most one fill render pass and one line render pass, then clears the frame builders.
+- The renderer is HitEffect-only and does not change generic `AlphaDlcWorldRenderer`, `AlphaDlcRenderPipelines`, or `RenderCompat` behavior.
+
+### Geometry cache design
+
+- Cache key: deterministic local geometry signature from all local bounding boxes and all local edges, encoded as normalized `Double.doubleToLongBits` values.
+- Cache value: local-space boxes and local-space edges only.
+- Fast path: a `WeakHashMap<VoxelShape, CachedShape>` avoids re-decoding stable shape instances.
+- Bounded fallback: a 256-entry access-order signature LRU deduplicates equivalent shape geometry if shape instances churn.
+- The cache stores no world positions, colors, alpha, camera-relative positions, matrices, block states, levels, or uploaded GPU buffers.
+- The geometry is independent of world lifecycle and may safely survive world changes; frame-local builders are still cleared after every render event and exception.
+
+### Fill batching
+
+- Fill boxes use the same `0.001` expansion and six-face solid box topology as Xyeta `drawBox`.
+- Fill color preserves per-block RGB and uses `color.a * 0.1`.
+- Fill pipeline uses `POSITION_COLOR` quads, cull off, depth test enabled, and Xyeta's blend factors.
+- Fill is uploaded/submitted once per frame when any fill vertices exist.
+
+### Outline batching and line width
+
+- Outline edges come from `VoxelShape.forAllEdges`, matching Xyeta.
+- Wraith's current `POSITION_COLOR_NORMAL_LINE_WIDTH` vertex format supports `setLineWidth(width)` per vertex, so exact source widths (`1 + localAlpha * 2.5`) are preserved inside one line mesh.
+- This intentionally avoids Xyeta's old GL width-bucket submissions while preserving the same width values.
+- Outline pipeline uses the current `LINES_SNIPPET`, cull off, depth test enabled, depth write disabled, and Xyeta's blend factors.
+
+### Blend behavior
+
+- Added a HitEffect-only blend function: `BlendFunction(SourceFactor.SRC_ALPHA, DestFactor.ONE_MINUS_CONSTANT_ALPHA)`.
+- The current 26.1.2 API exposes both factors directly.
+- `RenderPass` exposes no blend-constant setter, but Xyeta did not set a blend constant before `blendFunc(SRC_ALPHA, ONE_MINUS_CONSTANT_ALPHA)` either.
+- No additive bloom, shaderpack brightness, texture, or generic AlphaDLC pipeline change was added.
+
+### Preserved wave behavior
+
+- Duration remains `2000 ms`.
+- Maximum radius remains `8`.
+- Ring thickness remains `0.8`.
+- Maximum rendered blocks per wave/frame remains `400`.
+- Vertical search distance remains `10`.
+- Search order remains downward before upward.
+- Fill and outline remain enabled.
+- Depth remains enabled.
+- Wave center remains the attacked entity block position.
+- Multiple waves can exist simultaneously.
+- Expansion remains `radius = (1 - (1 - progress)^3) * 8`.
+- Fade-in remains `fadeInProgress^2 * (3 - 2 * fadeInProgress)`.
+- Fade-out remains `(1 - progress)^4.8`.
+- Local alpha, cutoff, color alpha, and line-width formulas are unchanged.
+- Attack event adaptation remains current Wraith behavior: no wave when the attack event is cancelled.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleHitEffect.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/hiteffect/HitEffectBatchRenderer.kt`
+- `src/main/resources/resources/liquidbounce/lang/en_us.json`
+- `Agent1.md`
+
+### Static verification
+
+- `git diff --check`: passed.
+- HitEffect source search found no remaining `drawShapeAlternative`, `AlphaDlcWorldRenderer`, `runCatching`, or `Throwable` references in `ModuleHitEffect.kt` or `HitEffectBatchRenderer.kt`.
+- `MAX_BLOCKS_PER_WAVE_FRAME`, `MAX_RADIUS`, `RING_THICKNESS`, `DURATION_MS`, `SEARCH_HEIGHT`, expansion/fade formulas, alpha cutoff, alpha scale, and line-width formula were preserved.
+- New renderer issues at most one fill draw and one outline draw per frame when both batches are non-empty.
+- No Xyeta ZIP, extracted reference source, or other reference folder was edited.
+
+### Build / JAR inspection
+
+- Build command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:$PATH sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Java used: `/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk`; default shell `java -version` also reported OpenJDK 21.0.11, so the build command explicitly pinned Java 25.
+- Result: **BUILD SUCCESSFUL** in 2m 11s.
+- JAR path: `build/libs/liquidbounce-0.31.2.jar`
+- JAR inspection confirmed:
+  - `ModuleHitEffect.class` present.
+  - `features/module/modules/render/hiteffect/HitEffectBatchRenderer*.class` present.
+  - `resources/liquidbounce/lang/en_us.json` present with `liquidbounce.module.hitEffect.description`.
+
+### Runtime / performance status
+
+Runtime status: not tested in FCL/in-game. Build success only proves compilation and packaging.
+
+Expected submission change:
+
+- Previous path: up to about 400 fill + 400 outline submissions per wave per frame.
+- New path: at most 1 fill + 1 outline submission per `WorldRenderEvent` frame for all active HitEffect waves sharing the same compatible render state.
+
+FCL checklist:
+
+- Manual attack and repeated manual attacks.
+- KillAura repeated attacks.
+- One active wave and several overlapping waves.
+- Full blocks, slabs, stairs, fences, and other irregular voxel shapes.
+- Air above terrain, terrain above/below the attacked entity, and positions near min/max build height and world border.
+- Confirm timing, radius, ring thickness, downward-before-upward search, fill, outline, depth behavior, outline width, and no stale wave after world change.
+- Compare FPS/frame-time before and after under the same graphics settings, area, attack frequency, active-wave count, and shader state.
+
+### Deviations
+
+- Xyeta groups line submits by exact width because old GL line width is global. Wraith uses the current 26.1.2 line vertex format's per-vertex `setLineWidth(width)`, preserving exact source widths in one outline batch.
+- Wraith keeps its current cancelled-attack guard; Xyeta fires its attack event at `HEAD` without cancellation handling in `HitEffect`, but the user explicitly requested preserving Wraith's current cancelled-attack behavior.
+
+### Commit / push
+
+Implementation commit hash: `f6574dbd867e6092406200ca254e0dd9fedca073`
+
+Branch: `main`
+
+Remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`
+
+Push status: implementation commit pushed to `origin/main` successfully (`5cbfcae69..f6574dbd8`).
+
+### Supersedes / reverts
+
+Supersedes the incomplete current Wraith HitEffect port path that preserved Xyeta wave behavior but rendered each affected block through immediate AlphaDLC mesh submission instead of Xyeta-style frame batching/cache.
