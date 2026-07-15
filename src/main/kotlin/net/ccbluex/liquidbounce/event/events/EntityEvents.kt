@@ -30,7 +30,6 @@ import net.ccbluex.liquidbounce.utils.combat.EntityTargetingInfo
 import net.ccbluex.liquidbounce.utils.kotlin.Priority
 import net.ccbluex.liquidbounce.utils.kotlin.PriorityField
 import net.minecraft.world.entity.Entity
-import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.player.Player
 import net.minecraft.world.InteractionHand
 
@@ -39,9 +38,6 @@ class AttackEntityEvent(
     val entity: Entity,
     val caller: () -> Unit
 ) : CancellableEvent()
-
-@Nameable("criticalAttack")
-class CriticalAttackEvent(val attacker: Player, val target: LivingEntity) : Event()
 
 @Nameable("swingHand")
 class SwingHandEvent(val hand: InteractionHand) : CancellableEvent()

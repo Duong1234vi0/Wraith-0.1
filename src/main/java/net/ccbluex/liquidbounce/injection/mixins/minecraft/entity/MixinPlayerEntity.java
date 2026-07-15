@@ -23,7 +23,6 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
 import net.ccbluex.liquidbounce.event.EventManager;
-import net.ccbluex.liquidbounce.event.events.CriticalAttackEvent;
 import net.ccbluex.liquidbounce.event.events.PlayerSafeWalkEvent;
 import net.ccbluex.liquidbounce.event.events.PlayerStrideEvent;
 import net.ccbluex.liquidbounce.features.command.commands.ingame.fakeplayer.FakePlayer;
@@ -37,7 +36,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -178,27 +176,6 @@ public abstract class MixinPlayerEntity extends MixinLivingEntity {
         }
 
         return original;
-    }
-
-    @Inject(
-            method = "attackVisualEffects(Lnet/minecraft/world/entity/Entity;ZZZZF)V",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/world/entity/player/Player;crit(Lnet/minecraft/world/entity/Entity;)V",
-                    shift = At.Shift.BEFORE
-            )
-    )
-    private void hookCriticalAttack(Entity target, boolean criticalAttack, boolean sweepAttack, boolean fullStrengthAttack,
-            boolean stabAttack, float magicBoost, CallbackInfo ci) {
-        if ((Object) this != Minecraft.getInstance().player) {
-            return;
-        }
-
-        if (!(target instanceof LivingEntity livingTarget) || !livingTarget.isAlive()) {
-            return;
-        }
-
-        EventManager.INSTANCE.callEvent(new CriticalAttackEvent(Player.class.cast(this), livingTarget));
     }
 
     @ModifyReturnValue(method = "entityInteractionRange", at = @At("RETURN"))

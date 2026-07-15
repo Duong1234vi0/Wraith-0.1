@@ -6457,3 +6457,213 @@ Push status: pending at entry time.
 ### Supersedes / reverts
 
 Supersedes the unresolved timing diagnosis in `HitSound FCL installation/runtime audit (2026-07-15, Codex)`.
+
+## HitSound strict Klack behavior re-port (2026-07-15, Codex)
+
+### Request
+
+User requested a strict source-faithful re-port of standalone `HitSound` from `WorkSpace/Client/klack-obfuscated.jar`.
+The previous Wraith experiment added a custom `CriticalAttackEvent`, a `Player.attackVisualEffects(...) -> Player.crit(...)`
+mixin hook, vanilla-critical branch detection, `playLocalSound(...)`, final-state attack priority, and cancellation
+filtering. This pass intentionally removes that unproven hook and restores the decompiled Klack behavior exactly.
+
+### Klack source / bytecode checked
+
+- `WorkSpace/Client/klack-obfuscated.jar`
+- `net.bean.klack.features.module.modules.combat.ModuleClientSound`
+- `net.bean.klack.event.events.AttackEntityEvent`
+- `net.bean.klack.injection.mixins.minecraft.network.MixinMultiPlayerGameMode`
+- Klack event handler bytecode registration showed priority `0`.
+
+Klack `ModuleClientSound` bytecode behavior:
+
+- Module name decrypts to the standalone combat sound module behavior; target Wraith module remains `HitSound`.
+- Settings:
+  - `Volume`, default `1.0`, range `0.1..2.0`.
+  - `Pitch`, default `1.0`, range `0.5..2.0`.
+- Registers `handler<AttackEntityEvent>` with default priority `0`.
+- Does not inspect event cancellation.
+- Requires local player.
+- Requires `event.entity is LivingEntity && event.entity.isAlive`.
+- Critical predicate is exactly `player.fallDistance > 0.0 && !player.onGround()`.
+- Calls:
+  `ClientLevel.playSound(Entity, DDD, SoundEvents.WITHER_AMBIENT, SoundSource.PLAYERS, volume, pitch)`.
+
+Klack `MixinMultiPlayerGameMode` dispatches `AttackEntityEvent` at `MultiPlayerGameMode.attack` HEAD, then cancels
+the method only after `EventManager.callEvent(...)` returns if the event was cancelled. Therefore a default-priority
+listener can run before later lower-priority cancellation decisions.
+
+### Current Wraith files checked
+
+- `Skill/README.md`
+- `Skill/Agen.md`
+- `Skill/CLAUDE_PORT_SKID_MODULE_GUIDE.md`
+- `Skill/PORT_EVIDENCE_TEMPLATE.md`
+- `Skill/PORT_REVIEW_CHECKLIST.md`
+- `Skill/CODEBASE_RULES.md`
+- `Skill/AGENT1_USAGE.md`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/events/EntityEvents.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/EventManager.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/EventListener.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/entity/MixinPlayerEntity.java`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/network/MixinClientPlayerInteractionManager.java`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/combat/CombatExtensions.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`
+- `src/main/resources/liquidbounce.mixins.json`
+- `net/minecraft/world/level/Level.java`
+- `net/minecraft/client/multiplayer/ClientLevel.java`
+- `src/main/resources/resources/liquidbounce/lang/en_us.json`
+
+### Previous implementation removed
+
+- Removed `CriticalAttackEvent` from `EntityEvents.kt`.
+- Removed `CriticalAttackEvent::class` from `ALL_EVENT_CLASSES`.
+- Removed the `MixinPlayerEntity` injection into
+  `attackVisualEffects(Lnet/minecraft/world/entity/Entity;ZZZZF)V` before
+  `Player.crit(Lnet/minecraft/world/entity/Entity;)V`.
+- Removed `CriticalAttackEvent` imports and construction.
+- Replaced the `CriticalAttackEvent` handler in `ModuleHitSound`.
+- Removed the `playLocalSound(...)` HitSound playback path.
+
+No separate mixin file existed exclusively for HitSound, so `liquidbounce.mixins.json` did not need a registration
+change. `MixinPlayerEntity` was retained for its other live hooks.
+
+### Restored behavior
+
+- `ModuleHitSound` listens directly to `AttackEntityEvent`.
+- Handler priority is default `0`, matching Klack bytecode.
+- The handler intentionally does not return on `event.isCancelled`.
+- Target gate is `target is LivingEntity && target.isAlive`.
+- Predicate is `player.fallDistance > 0.0f && !player.onGround()`.
+- Sound call is:
+  `level.playSound(player, player.x, player.y, player.z, SoundEvents.WITHER_AMBIENT, SoundSource.PLAYERS, volume, pitch)`.
+- `ModuleCriticals`, `CriticalsJump`, KillAura critical settings, movement events, and packet critical modes were not
+  modified.
+- `ModuleClientSound` remains separate and no nested `CritSound` configurable was restored.
+
+### Diagnostics retained
+
+Temporary bounded diagnostics are intentionally kept in the installed test build.
+
+Prefix:
+
+```text
+[HitSoundKlackDiag]
+```
+
+The first 10 handled attack events per game session log:
+
+- `AttackEntityEvent reached`
+- target type
+- target alive
+- `fallDistance`
+- `onGround`
+- event cancellation state for observation only
+- module running state
+
+Additional bounded logs:
+
+- `Klack predicate failed; no sound`
+- `Klack predicate passed; calling playSound`
+- `playSound returned`
+
+If `playSound` throws an ordinary `Exception`, the full exception is logged once. `Throwable` is not caught.
+
+### Static verification
+
+- `git diff --check`: passed.
+- Source search found no `CriticalAttackEvent` references under live source/resources.
+- Source search found no remaining HitSound `attackVisualEffects -> Player.crit` injection.
+- `ModuleHitSound` uses `AttackEntityEvent`.
+- `ModuleHitSound` does not import/use `READ_FINAL_STATE`.
+- `ModuleHitSound` does not branch on cancellation; cancellation is logged only for diagnostics.
+- `ModuleHitSound` no longer uses `playLocalSound`.
+- `ModuleHitSound` contains the Klack predicate and the Klack-shaped `playSound` call.
+- `ModuleHitSound` remains registered exactly once in `ModuleManager`.
+- `liquidbounce.module.hitSound.description` remains present.
+- Active FCL config check: `HitSound` exists and is enabled; existing config values were not modified.
+
+### Build / install
+
+Build command:
+
+```sh
+env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk \
+  PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin \
+  sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt
+```
+
+Build result: **BUILD SUCCESSFUL** in `1m 54s`.
+
+Built JAR:
+
+```text
+build/libs/liquidbounce-0.31.2.jar
+sha256=86d0f388cc07ff936686108ba2f86711284aefdb55e56f59c2da35b7a064f17e
+```
+
+Installed FCL JAR:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar
+sha256=86d0f388cc07ff936686108ba2f86711284aefdb55e56f59c2da35b7a064f17e
+```
+
+Previous installed JAR backup:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar.bak-20260715-150236
+sha256=052fd835700270e3e3f1ab28ee0dc69583dd79b0017ac36b278b9208d74cd173
+```
+
+Bytecode verification:
+
+- Built `ModuleHitSound.class` registers `AttackEntityEvent` with priority `0`.
+- Built `ModuleHitSound.class` calls
+  `ClientLevel.playSound(Lnet/minecraft/world/entity/Entity;DDDLnet/minecraft/sounds/SoundEvent;Lnet/minecraft/sounds/SoundSource;FF)V`.
+- Built JAR contains `ModuleHitSound.class`.
+- Built JAR does not contain `CriticalAttackEvent.class`.
+- Built `MixinPlayerEntity.class` has no `attackVisualEffects` / `CriticalAttackEvent` hook.
+
+### Runtime status
+
+Runtime status: awaiting user FCL test. Build success only proves compilation/packaging.
+
+User should fully restart FCL and return every log line containing:
+
+```text
+[HitSoundKlackDiag]
+```
+
+Test expectations:
+
+- Standing living-entity attack: entry log, predicate failed log, no sound.
+- Manual falling attack with Criticals disabled: entry log, `fallDistance > 0`, `onGround=false`, predicate passed,
+  playSound called/returned, Wither sound should be audible.
+- Criticals `Jump`: sound only if the attack event happens during the falling phase.
+- Cancelled/FakePlayer attack if practical: Klack-faithful behavior may still play if the predicate passed before a
+  later cancellation.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/events/EntityEvents.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/EventManager.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/entity/MixinPlayerEntity.java`
+- `Agent1.md`
+
+### Commit / push
+
+Commit hash: pending until commit creation; final hash is reported in the assistant response.
+
+Branch: `main`
+
+Remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`
+
+Push status: pending at entry time.
+
+### Supersedes / reverts
+
+Supersedes the 2026-07-15 `HitSound vanilla critical-signal fix` entry. This build restores the decompiled Klack
+behavior exactly and intentionally removes the unproven vanilla-critical event hook.
