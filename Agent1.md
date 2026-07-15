@@ -7282,7 +7282,7 @@ Runtime status: Compile verified; Mixin bootstrap verified **no**; disabled path
 **no**; behavior parity verified **no**. HandMyItems must not be called runtime-verified until both module-disabled and
 module-enabled FCL launches succeed.
 
-Commit hash: pending until the feature commit is created; push result: pending.
+Feature commit hash: `6a1042bd61d36f92f0a3da5f1af1d66d8a7e9018`; push result: pending until remote push.
 
 This corrects the prior “source-complete” claim: compilation and static review did not validate constructor-injection
 rules, target bytecode call graphs, or FCL runtime bootstrap.
