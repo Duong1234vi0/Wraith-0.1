@@ -196,7 +196,7 @@ dependencies {
     runtimeOnly("com.viaversion:viafabricplus:${viafabricplus_version}") {
         exclude(group = "de.florianmichael", module = "Classic4J")
     }
-    runtimeOnly("de.florianmichael:Classic4J:2.1.0")
+    runtimeOnly("de.florianmichael:Classic4J:2.2.2")
 
     // Minecraft Authlib
     includeDependency("net.ccbluex:mc-authlib:${project.property("mc_authlib_version")}")
