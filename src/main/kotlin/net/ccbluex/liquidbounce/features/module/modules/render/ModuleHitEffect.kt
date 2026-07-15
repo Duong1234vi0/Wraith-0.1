@@ -25,8 +25,8 @@ import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
-import net.ccbluex.liquidbounce.features.module.modules.render.alphadlc.AlphaDlcWorldRenderer
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.ClientTheme
+import net.ccbluex.liquidbounce.features.module.modules.render.hiteffect.HitEffectBatchRenderer
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
 import net.ccbluex.liquidbounce.utils.block.getOutlineShape
 import net.ccbluex.liquidbounce.utils.block.isAir
@@ -42,8 +42,8 @@ import kotlin.math.sqrt
  * Xyeta/Wild HitEffect port.
  *
  * The source effect is a terrain block-outline wave that starts at the attacked entity block,
- * not a target particle burst. Only the empty decompiler catch was adapted: invalid shape draws
- * are contained and the first unexpected render failure is logged.
+ * not a target particle burst. Geometry is queued into one frame batch, matching Xyeta's
+ * RenderUtil3D behavior instead of submitting a mesh for every affected block.
  */
 object ModuleHitEffect : ClientModule("HitEffect", Category.RENDER) {
 
@@ -77,18 +77,34 @@ object ModuleHitEffect : ClientModule("HitEffect", Category.RENDER) {
         }
 
         val now = System.currentTimeMillis()
-        val iterator = waves.iterator()
-        while (iterator.hasNext()) {
-            val wave = iterator.next()
-            val elapsed = now - wave.startTime
-            val progress = elapsed.toFloat() / DURATION_MS.toFloat()
+        val modelViewMatrix = event.matrixStack.last().pose()
+        val cameraPos = event.camera.position()
 
-            if (progress > 1.0f) {
-                iterator.remove()
-                continue
+        try {
+            HitEffectBatchRenderer.beginFrame(cameraPos)
+
+            val iterator = waves.iterator()
+            while (iterator.hasNext()) {
+                val wave = iterator.next()
+                val elapsed = now - wave.startTime
+                val progress = elapsed.toFloat() / DURATION_MS.toFloat()
+
+                if (progress > 1.0f) {
+                    iterator.remove()
+                    continue
+                }
+
+                renderWave(level, wave, progress)
             }
 
-            renderWave(level, event, wave, progress)
+            HitEffectBatchRenderer.flush(modelViewMatrix)
+        } catch (exception: Exception) {
+            if (!renderFailureLogged) {
+                renderFailureLogged = true
+                logger.error("HitEffect failed to render a block wave batch.", exception)
+            }
+        } finally {
+            HitEffectBatchRenderer.clearFrame()
         }
     }
 
@@ -102,15 +118,14 @@ object ModuleHitEffect : ClientModule("HitEffect", Category.RENDER) {
         clearWaves()
     }
 
-    private fun renderWave(level: Level, event: WorldRenderEvent, wave: WaveEffect, progress: Float) {
+    private fun renderWave(level: Level, wave: WaveEffect, progress: Float) {
         val globalAlpha = smoothAlpha(progress)
         if (globalAlpha <= 0.01f) {
             return
         }
 
         val currentRadius = easeOutCubic(progress) * MAX_RADIUS
-        val modelViewMatrix = event.matrixStack.last().pose()
-        val cameraPos = event.camera.position()
+        val scratchPos = BlockPos.MutableBlockPos()
         var rendered = 0
 
         for (x in -MAX_RADIUS..MAX_RADIUS) {
@@ -125,13 +140,16 @@ object ModuleHitEffect : ClientModule("HitEffect", Category.RENDER) {
                     continue
                 }
 
-                val renderPos = findBlock(level, wave.centerPos.offset(x, 0, z)) ?: continue
-                val state = level.getBlockState(renderPos)
+                if (!findBlock(level, wave.centerPos, x, z, scratchPos)) {
+                    continue
+                }
+
+                val state = level.getBlockState(scratchPos)
                 if (state.isAir) {
                     continue
                 }
 
-                val shape = state.getOutlineShape(level, renderPos)
+                val shape = state.getOutlineShape(level, scratchPos)
                 if (shape.isEmpty) {
                     continue
                 }
@@ -148,51 +166,44 @@ object ModuleHitEffect : ClientModule("HitEffect", Category.RENDER) {
                 val color = Color4b(ClientTheme.accentA).with(a = alpha)
                 val lineWidth = 1.0f + localAlpha * 2.5f
 
-                runCatching {
-                    AlphaDlcWorldRenderer.drawShapeAlternative(
-                        modelViewMatrix,
-                        cameraPos,
-                        renderPos,
-                        shape,
-                        color,
-                        lineWidth,
-                        fill = true,
-                        lines = true,
-                        depth = true
-                    )
-                }.onFailure { throwable ->
-                    if (!renderFailureLogged) {
-                        renderFailureLogged = true
-                        logger.error("HitEffect failed to render a block wave shape.", throwable)
-                    }
-                }
+                HitEffectBatchRenderer.appendShape(scratchPos, shape, color, lineWidth)
             }
         }
     }
 
-    private fun findBlock(level: Level, start: BlockPos): BlockPos? {
-        if (level.isOutsideBuildHeight(start)) {
-            return null
+    private fun findBlock(
+        level: Level,
+        center: BlockPos,
+        offsetX: Int,
+        offsetZ: Int,
+        mutablePos: BlockPos.MutableBlockPos
+    ): Boolean {
+        mutablePos.set(center.x + offsetX, center.y, center.z + offsetZ)
+        if (!canReadBlock(level, mutablePos)) {
+            return false
         }
 
-        if (!level.getBlockState(start).isAir) {
-            return start
+        if (!level.getBlockState(mutablePos).isAir) {
+            return true
         }
 
         for (y in 1..SEARCH_HEIGHT) {
-            val down = start.below(y)
-            if (!level.isOutsideBuildHeight(down) && !level.getBlockState(down).isAir) {
-                return down
+            mutablePos.set(center.x + offsetX, center.y - y, center.z + offsetZ)
+            if (canReadBlock(level, mutablePos) && !level.getBlockState(mutablePos).isAir) {
+                return true
             }
 
-            val up = start.above(y)
-            if (!level.isOutsideBuildHeight(up) && !level.getBlockState(up).isAir) {
-                return up
+            mutablePos.set(center.x + offsetX, center.y + y, center.z + offsetZ)
+            if (canReadBlock(level, mutablePos) && !level.getBlockState(mutablePos).isAir) {
+                return true
             }
         }
 
-        return null
+        return false
     }
+
+    private fun canReadBlock(level: Level, pos: BlockPos): Boolean =
+        level.isInWorldBounds(pos) && level.worldBorder.isWithinBounds(pos)
 
     private fun clearWaves() {
         waves.clear()

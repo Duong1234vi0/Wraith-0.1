@@ -17,6 +17,7 @@
   "liquidbounce.module.inventoryAnimation.description": "Adds open and close animations to container screens.",
   "liquidbounce.module.itemPhysics.description": "Gives dropped items realistic physics and orientation on the ground.",
   "liquidbounce.module.jumpCircle.description": "Spawns a fading expanding circle on the ground whenever a player jumps.",
+  "liquidbounce.module.hitEffect.description": "Renders an expanding block wave around an entity when you attack it.",
   "liquidbounce.module.killAnimation.description": "Plays a 3D effect and HUD pop when you land a killing blow.",
   "liquidbounce.module.legitHelper.description": "Bundles legit combat hotkeys for anchors, crystals, minecarts, and more.",
   "liquidbounce.module.maceSwap.description": "Swaps to a mace before attacking, with an optional axe-stun combo.",
