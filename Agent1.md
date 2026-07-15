@@ -5486,3 +5486,329 @@ Push status: implementation commit pushed to `origin/main` successfully (`5cbfca
 ### Supersedes / reverts
 
 Supersedes the incomplete current Wraith HitEffect port path that preserved Xyeta wave behavior but rendered each affected block through immediate AlphaDLC mesh submission instead of Xyeta-style frame batching/cache.
+
+## Split CritSound from ClientSound into HitSound (2026-07-15, Codex)
+
+### Request
+
+Separate the critical-hit sound behavior from `ClientSound`.
+
+- `ClientSound` must own only module toggle sounds: Wav mode, Button mode, toggle-sound volume, `ModuleClickGui` exclusion, loading/in-game gates, and `ClientModule` integration.
+- Remove the nested `CritSound` configurable/mode, its attack listener, critical-hit settings, `WITHER_AMBIENT` playback, and debug logging from `ClientSound`.
+- Port the supplied standalone `WorkSpace/Mods/ModuleClientSound.kt` behavior into a new standalone Combat module named `HitSound`.
+- Do not edit the supplied source file or `src.zip`.
+
+### Current files inspected
+
+- `Skill/README.md`
+- `Skill/Agen.md`
+- `Skill/CLAUDE_PORT_SKID_MODULE_GUIDE.md`
+- `Skill/PORT_EVIDENCE_TEMPLATE.md`
+- `Skill/PORT_REVIEW_CHECKLIST.md`
+- `Skill/CODEBASE_RULES.md`
+- `Skill/AGENT1_USAGE.md`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/misc/ModuleClientSound.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ClientModule.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/events/EntityEvents.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/network/MixinClientPlayerInteractionManager.java`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/combat/CombatExtensions.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/entity/MojangCompatExtensions.kt`
+- `net/minecraft/world/level/Level.java`
+- `net/minecraft/client/multiplayer/ClientLevel.java`
+- `src/main/kotlin/net/ccbluex/liquidbounce/config/ConfigSystem.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/config/AutoConfig.kt`
+- `src/main/resources/resources/liquidbounce/lang/en_us.json`
+
+### Supplied reference inspected
+
+- `WorkSpace/Mods/ModuleClientSound.kt`
+
+Reference behavior:
+
+- Object name in source: `ModuleClientSound`
+- Source category: combat
+- Settings:
+  - `Volume`: default `1.0f`, range `0.1f..2.0f`
+  - `Pitch`: default `1.0f`, range `0.5f..2.0f`
+- Event: `AttackEntityEvent`
+- Target gate: target must be `LivingEntity` and `isAlive`
+- Critical condition: `player.fallDistance > 0.0f && !player.onGround()`
+- Playback: `SoundEvents.WITHER_AMBIENT`, `SoundSource.PLAYERS`, local player coordinates, configured volume/pitch.
+
+### Agent1 history checked
+
+Searched `Agent1.md` for:
+
+- `ClientSound`
+- `CritSound`
+- `WITHER_AMBIENT`
+- `critical-hit sound`
+- `critical hit sound`
+- `Klack`
+- `no-sound`
+- `no sound`
+- `playLocalSound`
+- `ModuleClientSound`
+
+No matching historical entries were found. Current live source and the supplied reference controlled the implementation.
+
+### Old ClientSound structure
+
+Current `ModuleClientSound.kt` contained:
+
+- `SoundMode` choices with `Wav` and `Button`.
+- Global `Volume` for module toggle sounds.
+- `playToggleSound(sourceModule, enabled)` called from `ClientModule`.
+- Nested `private object CritSound : ToggleableConfigurable(ModuleClientSound, "CritSound", false)`.
+- Nested CritSound settings `Volume` and `Pitch`.
+- Nested `AttackEntityEvent` handler at `READ_FINAL_STATE`.
+- Critical check using fall distance and on-ground state.
+- `playWitherCritSound()` using `level.playLocalSound(..., SoundEvents.WITHER_AMBIENT, SoundSource.PLAYERS, ...)`.
+- One-time success/failure debug logging flags.
+
+### CritSound code removed
+
+Removed from `ModuleClientSound.kt`:
+
+- `tree(CritSound)` registration.
+- Nested `CritSound` configurable.
+- CritSound `Volume` and `Pitch`.
+- CritSound `AttackEntityEvent` handler.
+- `LivingEntity` attack-target checks.
+- Critical-state calculation.
+- `playWitherCritSound()`.
+- `successLogged` / `failureLogged`.
+- CritSound-specific logging.
+- CritSound-specific imports, including `ToggleableConfigurable`, `AttackEntityEvent`, `handler`, `READ_FINAL_STATE`, `SoundSource`, and `LivingEntity`.
+
+Preserved in `ModuleClientSound.kt`:
+
+- `SoundMode`
+- `Wav`
+- `Button`
+- global toggle-sound `Volume`
+- `playToggleSound(...)`
+- `ModuleClickGui` exclusion
+- loading/in-game checks
+- existing native sound manager playback for toggle sounds
+- `ClientModule.kt` call to `ModuleClientSound.playToggleSound(this, new)`
+
+### New HitSound module
+
+Added `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.kt`:
+
+```kotlin
+object ModuleHitSound : ClientModule(
+    "HitSound",
+    Category.COMBAT
+)
+```
+
+Settings:
+
+- `Volume`: default `1.0f`, range `0.1f..2.0f`, current Wraith float step `0.05f`
+- `Pitch`: default `1.0f`, range `0.5f..2.0f`, current Wraith float step `0.05f`
+
+Handler:
+
+- `AttackEntityEvent` at `READ_FINAL_STATE`
+- skips cancelled attacks
+- gets `mc.player` and `mc.level`
+- requires attacked entity to be `LivingEntity`
+- requires target to still be alive
+- uses exact reference critical condition:
+  `player.fallDistance > 0.0f && !player.onGround()`
+- plays `SoundEvents.WITHER_AMBIENT`
+- uses `SoundSource.PLAYERS`
+- uses exact configured volume and pitch
+
+No modes, sound choices, cooldowns, random pitch, target filters, KillAura-only logic, damage confirmation, custom assets, fallback sounds, or debug logging were added.
+
+### Event API adaptation
+
+Current Wraith `AttackEntityEvent` is cancellable:
+
+- dispatched from `MixinClientPlayerInteractionManager.hookAttack(...)` at `MultiPlayerGameMode.attack` HEAD;
+- dispatched from `utils/combat/CombatExtensions.kt` before the client attack packet path;
+- existing final-state readers such as `ModuleHitEffect` and `ModuleParticles` use `READ_FINAL_STATE` and check `event.isCancelled`.
+
+Adaptation:
+
+- HitSound uses `READ_FINAL_STATE`.
+- HitSound returns without playing when `event.isCancelled`.
+
+Reason:
+
+- The supplied reference has no cancellation check, but current Wraith attack events may be cancelled before execution. Reading final state preserves Wraith event semantics and prevents a sound for an attack that will not execute.
+
+### Sound API adaptation
+
+The supplied reference uses:
+
+```kotlin
+world.playSound(player, player.x, player.y, player.z, SoundEvents.WITHER_AMBIENT, SoundSource.PLAYERS, volume, pitch)
+```
+
+Current 26.1.2 source inspection:
+
+- `ClientLevel.playSeededSound(except, x, y, z, ...)` plays locally when `except == minecraft.player`.
+- `ClientLevel.playLocalSound(...)` reaches the same client sound manager path.
+- The previous nested Wraith CritSound used `playLocalSound(...)`.
+
+Implementation:
+
+- HitSound uses `level.playSound(player, player.x, player.y, player.z, SoundEvents.WITHER_AMBIENT, SoundSource.PLAYERS, volume, pitch)`.
+
+Reason:
+
+- This preserves the supplied reference call shape and remains local/client-side in the current `ClientLevel` implementation. It sends no packets and does not simulate a server sound.
+
+### Config compatibility
+
+Old configs may contain:
+
+- `ClientSound.CritSound`
+- `ClientSound.CritSound.Volume`
+- `ClientSound.CritSound.Pitch`
+
+Current config loader evidence:
+
+- `ConfigSystem.deserializeConfigurable(...)` builds a map of serialized values but, for ordinary configurables, iterates only the current `configurable.inner` values.
+- Values that no longer exist in the current configurable are skipped.
+
+Decision:
+
+- No migration code was added.
+- Old nested CritSound config values are removed from the live configurable surface and ignored by the loader.
+- New config path is the normal module path for `HitSound`.
+
+### Files changed
+
+Implementation commit:
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/misc/ModuleClientSound.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`
+- `src/main/resources/resources/liquidbounce/lang/en_us.json`
+
+This Agent1 entry was added after the implementation commit so it could record the actual implementation commit hash and push status.
+
+### Registration and localization
+
+- Registered `ModuleHitSound` once in `ModuleManager.registerInbuilt()` in the Combat section, after `ModuleCriticals`.
+- Kept `ModuleClientSound` registered under Misc.
+- `ClientModule.kt` still calls `ModuleClientSound.playToggleSound(this, new)`.
+- Added fallback localization:
+  `liquidbounce.module.hitSound.description`: `Plays a configurable sound when you perform a critical attack.`
+- Existing `liquidbounce.module.clientSound.description` was unchanged because it already described only module enable/disable sounds.
+- No CritSound-specific localization key existed in live resources.
+- Only `en_us.json` was required for fallback description coverage; newer custom module descriptions in this repo are also added there only.
+
+### Static verification
+
+- `git diff --check`: passed.
+- JSON parse for `src/main/resources/resources/liquidbounce/lang/en_us.json`: passed.
+- Symbol search after implementation:
+  - no live `CritSound` configurable remained;
+  - no `playWitherCritSound`;
+  - no CritSound `successLogged`;
+  - no CritSound `failureLogged`;
+  - `WITHER_AMBIENT` referenced by `ModuleHitSound`;
+  - `ModuleHitSound` registered exactly once;
+  - `ClientModule.kt` still calls `ModuleClientSound.playToggleSound(this, new)`.
+- Broad `failureLogged` search only found unrelated TargetESP pipeline state.
+
+### Build / JAR inspection
+
+Direct requested wrapper command:
+
+```sh
+env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin ./gradlew --no-daemon --no-build-cache clean assemble -x detekt
+```
+
+Result:
+
+- Failed before Gradle execution because `./gradlew` is not executable in this checkout: `env: './gradlew': Permission denied`.
+
+Canonical Termux equivalent used:
+
+```sh
+env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt
+```
+
+Java:
+
+- Default shell `java -version`: OpenJDK `21.0.11`
+- Build command pinned Java: OpenJDK `25.0.3`
+
+Result:
+
+- **BUILD SUCCESSFUL** in `1m 58s`
+- JAR path: `build/libs/liquidbounce-0.31.2.jar`
+
+JAR inspection:
+
+- `net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.class` present.
+- `net/ccbluex/liquidbounce/features/module/modules/misc/ModuleClientSound.class` present.
+- `ModuleClientSound$Wav.class` present.
+- `ModuleClientSound$Button.class` present.
+- No `ModuleClientSound$CritSound.class` present.
+- `resources/liquidbounce/lang/en_us.json` present with `liquidbounce.module.hitSound.description`.
+- `javap` of `ModuleManager` showed both `ModuleHitSound.INSTANCE` and `ModuleClientSound.INSTANCE`.
+- `javap` of `ModuleHitSound` showed `AttackEntityEvent`, cancelled check, `LivingEntity`, `isAlive`, fall distance/on-ground critical condition, `SoundEvents.WITHER_AMBIENT`, `SoundSource.PLAYERS`, and `ClientLevel.playSound(...)`.
+- `javap` of `ModuleClientSound` showed `playToggleSound(...)` and no `AttackEntityEvent`, `WITHER_AMBIENT`, `playWitherCritSound`, or `CritSound`.
+
+### Runtime status
+
+Runtime status: not tested in FCL/in-game. Build success only proves compilation and packaging.
+
+FCL checklist:
+
+ClientSound:
+
+- ClientSound disabled: no module toggle sounds.
+- ClientSound enabled with Wav: enable/disable sounds still work.
+- ClientSound enabled with Button: enable/disable sounds still work.
+- ClientSound GUI contains no CritSound section.
+- Attacking entities with only ClientSound enabled does not play `WITHER_AMBIENT`.
+
+HitSound:
+
+- HitSound disabled: no critical sound.
+- HitSound enabled.
+- Attack non-living entity: no sound.
+- Attack dead `LivingEntity`: no sound.
+- Attack while on ground: no sound.
+- Attack while `fallDistance == 0`: no sound.
+- Attack while airborne with positive fall distance: `WITHER_AMBIENT` plays.
+- Cancelled attack event: no sound.
+- Manual attack.
+- KillAura-triggered attack.
+- Volume minimum/default/maximum.
+- Pitch minimum/default/maximum.
+- Repeated critical attacks.
+- Module disable/enable.
+- World change and reconnect.
+
+Confirm:
+
+- only one sound plays per qualifying attack event;
+- no duplicate sound from old ClientSound handler;
+- the local user can hear it;
+- no sound is broadcast or duplicated through a server path;
+- no logs spam on every attack.
+
+### Commit / push
+
+Implementation commit hash: `c052d711e0bb844ae1aed04eabf3ddd0c0defd27`
+
+Branch: `main`
+
+Remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`
+
+Push status: implementation commit pushed to `origin/main` successfully (`16ee336d0..c052d711e`).
+
+### Supersedes / reverts
+
+Supersedes the live nested `ClientSound.CritSound` implementation. No earlier `Agent1.md` ClientSound/CritSound/HitSound historical entry was found to supersede.
