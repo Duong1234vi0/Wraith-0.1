@@ -115,6 +115,36 @@ public abstract class MixinHandMyItemsLivingEntity implements LivingEntityAccess
     }
 
     @Override
+    public float hMI5_0$getMainHandSwingProgressCurrent() {
+        return this.hmi$mainHandSwingProgress;
+    }
+
+    @Override
+    public float hMI5_0$getMainHandSwingProgressPrevious() {
+        return this.hmi$lastMainHandSwingProgress;
+    }
+
+    @Override
+    public float hMI5_0$getOffHandSwingProgressCurrent() {
+        return this.hmi$offHandSwingProgress;
+    }
+
+    @Override
+    public float hMI5_0$getOffHandSwingProgressPrevious() {
+        return this.hmi$lastOffHandSwingProgress;
+    }
+
+    @Override
+    public boolean hMI5_0$isMainHandSwinging() {
+        return this.hmi$mainHandSwinging;
+    }
+
+    @Override
+    public boolean hMI5_0$isOffHandSwinging() {
+        return this.hmi$offHandSwinging;
+    }
+
+    @Override
     public boolean hMI5_0$getMInteract() {
         return this.hmi$interactMainHand;
     }

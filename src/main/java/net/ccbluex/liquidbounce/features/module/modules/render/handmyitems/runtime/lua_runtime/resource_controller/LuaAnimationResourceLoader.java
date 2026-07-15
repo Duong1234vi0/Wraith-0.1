@@ -29,7 +29,7 @@ public final class LuaAnimationResourceLoader extends SimpleReloadListener<LuaAn
 
     @Override
     protected LoadResult prepare(PreparableReloadListener.SharedState state) {
-        if (!HandMyItemsRuntime.isActive()) {
+        if (!HandMyItemsRuntime.isEnabled() || HandMyItemsRuntime.state() == HandMyItemsRuntime.State.FAILED) {
             return LoadResult.skipped();
         }
 
@@ -42,12 +42,12 @@ public final class LuaAnimationResourceLoader extends SimpleReloadListener<LuaAn
 
     @Override
     protected void apply(LoadResult result, PreparableReloadListener.SharedState state) {
-        if (!HandMyItemsRuntime.isActive() || result.skipped) {
+        if (!HandMyItemsRuntime.isEnabled() || HandMyItemsRuntime.state() == HandMyItemsRuntime.State.FAILED || result.skipped) {
             return;
         }
 
         if (result.failure != null) {
-            HandMyItemsRuntime.onReloadFailure(result.failure);
+            HandMyItemsRuntime.onReloadFailure(result.failure, result.failure.getMessage());
             return;
         }
 
@@ -55,7 +55,7 @@ public final class LuaAnimationResourceLoader extends SimpleReloadListener<LuaAn
     }
 
     public synchronized boolean reloadNow(ResourceManager manager) {
-        if (!HandMyItemsRuntime.isActive()) {
+        if (!HandMyItemsRuntime.isEnabled() || HandMyItemsRuntime.state() == HandMyItemsRuntime.State.FAILED) {
             return false;
         }
 
@@ -63,31 +63,53 @@ public final class LuaAnimationResourceLoader extends SimpleReloadListener<LuaAn
             install(load(manager));
             return true;
         } catch (Exception exception) {
-            HandMyItemsRuntime.onReloadFailure(exception);
+            HandMyItemsRuntime.onReloadFailure(exception, exception.getMessage());
             return false;
         }
     }
 
     public boolean hasPrimaryScripts(ResourceManager manager) {
-        return manager.getResource(Identifier.fromNamespaceAndPath("minecraft", "holdmyitems/hand_pose.lua")).isPresent()
-            && manager.getResource(Identifier.fromNamespaceAndPath("minecraft", "holdmyitems/item_pose.lua")).isPresent()
-            && manager.getResource(Identifier.fromNamespaceAndPath("minecraft", "holdmyitems/hand_relative_pose.lua")).isPresent()
-            && manager.getResource(Identifier.fromNamespaceAndPath("minecraft", "holdmyitems/item_model.lua")).isPresent();
+        boolean found = true;
+        for (String path : new String[] {
+            "holdmyitems/hand_pose.lua",
+            "holdmyitems/hand_relative_pose.lua",
+            "holdmyitems/item_pose.lua",
+            "holdmyitems/item_model.lua"
+        }) {
+            Identifier id = Identifier.fromNamespaceAndPath("minecraft", path);
+            Resource resource = manager.getResource(id).orElse(null);
+            if (resource == null) {
+                found = false;
+                HandMyItemsRuntime.diagnostic("primary resource missing id=" + id);
+            } else {
+                HandMyItemsRuntime.diagnostic("primary resource found id=" + id + " pack=" + resource.sourcePackId());
+            }
+        }
+        return found;
     }
 
     private LoadResult load(ResourceManager manager) throws IOException {
-        LuaScriptCache hand = new LuaScriptCache(loadSingle(manager, "holdmyitems/hand_pose.lua"), "minecraft:holdmyitems/hand_pose.lua");
-        LuaScriptCache item = new LuaScriptCache(loadSingle(manager, "holdmyitems/item_pose.lua"), "minecraft:holdmyitems/item_pose.lua");
-        LuaScriptCache handRelative = new LuaScriptCache(loadSingle(manager, "holdmyitems/hand_relative_pose.lua"), "minecraft:holdmyitems/hand_relative_pose.lua");
-        ModelScriptCache itemModel = new ModelScriptCache(loadSingle(manager, "holdmyitems/item_model.lua"), "minecraft:holdmyitems/item_model.lua");
+        LuaScriptCache hand = compileScript(manager, "holdmyitems/hand_pose.lua");
+        LuaScriptCache handRelative = compileScript(manager, "holdmyitems/hand_relative_pose.lua");
+        LuaScriptCache item = compileScript(manager, "holdmyitems/item_pose.lua");
+        ModelScriptCache itemModel = compileModelScript(manager, "holdmyitems/item_model.lua");
         ArrayList<LuaScriptCache> handAddons = loadMultiple(manager, "holdmyitems/hand_addon.lua");
         ArrayList<LuaScriptCache> handRelativeAddons = loadMultiple(manager, "holdmyitems/hand_relative_addon.lua");
         ArrayList<LuaScriptCache> itemAddons = loadMultiple(manager, "holdmyitems/item_addon.lua");
         ArrayList<ModelScriptCache> itemModelAddons = loadMultipleModel(manager, "holdmyitems/item_model_addon.lua");
+        if (!hand.isOperational() || !handRelative.isOperational() || !item.isOperational() || !itemModel.isOperational()) {
+            throw new IOException("One or more primary HandMyItems scripts did not produce an operational cache");
+        }
         return new LoadResult(hand, handRelative, item, itemModel, handAddons, handRelativeAddons, itemAddons, itemModelAddons, null, false);
     }
 
     private void install(LoadResult result) {
+        if (result.hand == null || result.handRelative == null || result.item == null || result.itemModel == null
+            || !result.hand.isOperational() || !result.handRelative.isOperational()
+            || !result.item.isOperational() || !result.itemModel.isOperational()) {
+            HandMyItemsRuntime.onReloadFailure(new IllegalStateException("Refusing to install incomplete primary HandMyItems script state"));
+            return;
+        }
         // Commit as one unit so a failed preparation cannot combine old and new scripts.
         HandMyItemsRuntime.onScriptsReloaded();
         GlobalsStorage.renderAsBlock.clear();
@@ -108,6 +130,7 @@ public final class LuaAnimationResourceLoader extends SimpleReloadListener<LuaAn
             result.itemModelAddons
         );
         LuaTestHMI.LOGGER.info("Loaded embedded HandMyItems Lua scripts");
+        HandMyItemsRuntime.onScriptsReady();
     }
 
     private String preprocessScript(String script) {
@@ -155,10 +178,33 @@ public final class LuaAnimationResourceLoader extends SimpleReloadListener<LuaAn
         Identifier id = Identifier.fromNamespaceAndPath("minecraft", path);
         Resource resource = manager.getResource(id).orElse(null);
         if (resource == null) {
-            LuaTestHMI.LOGGER.warn("HandMyItems script {} is missing; using an empty script", id);
-            return "return";
+            throw new IOException("Required HandMyItems script is missing: " + id);
         }
         return read(resource, id);
+    }
+
+    private LuaScriptCache compileScript(ResourceManager manager, String path) throws IOException {
+        Identifier id = Identifier.fromNamespaceAndPath("minecraft", path);
+        String source = loadSingle(manager, path);
+        try {
+            LuaScriptCache cache = new LuaScriptCache(source, id.toString());
+            HandMyItemsRuntime.diagnostic("primary script compiled id=" + id);
+            return cache;
+        } catch (Exception exception) {
+            throw new IOException("Unable to compile HandMyItems script " + id, exception);
+        }
+    }
+
+    private ModelScriptCache compileModelScript(ResourceManager manager, String path) throws IOException {
+        Identifier id = Identifier.fromNamespaceAndPath("minecraft", path);
+        String source = loadSingle(manager, path);
+        try {
+            ModelScriptCache cache = new ModelScriptCache(source, id.toString());
+            HandMyItemsRuntime.diagnostic("primary script compiled id=" + id);
+            return cache;
+        } catch (Exception exception) {
+            throw new IOException("Unable to compile HandMyItems script " + id, exception);
+        }
     }
 
     private ArrayList<LuaScriptCache> loadMultiple(ResourceManager manager, String path) throws IOException {
@@ -181,7 +227,9 @@ public final class LuaAnimationResourceLoader extends SimpleReloadListener<LuaAn
 
     private String read(Resource resource, Identifier id) throws IOException {
         try (InputStream stream = resource.open()) {
-            return preprocessScript(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
+            byte[] bytes = stream.readAllBytes();
+            HandMyItemsRuntime.diagnostic("primary resource found id=" + id + " bytes=" + bytes.length + " pack=" + resource.sourcePackId());
+            return preprocessScript(new String(bytes, StandardCharsets.UTF_8));
         } catch (IOException exception) {
             throw new IOException("Failed to read HandMyItems script " + id + " from " + resource.sourcePackId(), exception);
         } catch (RuntimeException exception) {

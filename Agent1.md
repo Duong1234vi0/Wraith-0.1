@@ -7286,3 +7286,97 @@ Feature commit hash: `6a1042bd99ce319efdc95a954aa2596f9a9fe33f`; push result: su
 
 This corrects the prior “source-complete” claim: compilation and static review did not validate constructor-injection
 rules, target bytecode call graphs, or FCL runtime bootstrap.
+
+## HandMyItems static-pose Lua runtime diagnosis and readiness fix (2026-07-15, Codex)
+
+The user observed a resource reload followed by a rigid HMI dual-hand pose with no attack, interaction, item-switch,
+or item/model animation. Mixin bootstrap was already passing. Class/resource counts were not treated as runtime parity.
+
+### Existing log evidence
+
+Inspected `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/logs/latest.log`; the optional
+`latest_game.log` was absent. The relevant context was:
+
+```text
+[23:38:26] [Worker-Main-4/WARN]: HandMyItems script minecraft:holdmyitems/hand_pose.lua is missing; using an empty script
+[23:38:26] [Worker-Main-4/WARN]: HandMyItems script minecraft:holdmyitems/item_pose.lua is missing; using an empty script
+[23:38:26] [Worker-Main-4/WARN]: HandMyItems script minecraft:holdmyitems/hand_relative_pose.lua is missing; using an empty script
+[23:38:26] [Worker-Main-4/WARN]: HandMyItems script minecraft:holdmyitems/item_model.lua is missing; using an empty script
+[23:38:28] [Render thread/INFO]: Loaded embedded HandMyItems Lua scripts
+[23:38:28] [Render thread/ERROR]: HandMyItems built-in pack did not expose its primary Lua scripts after reload
+```
+
+An unrelated earlier startup error was also present: `ScriptManager was unable to load scripts` with
+`Cannot load scripts before the script engine is initialized.` The old JAR had no `[HMIDiag]` lines. Thus the old log
+proves primary resource lookup failure and fallback installation, but proves no Lua compile/runtime error, Java wrapper
+failure, missing mapped method, or zero swing progress. It also does not expose the built-in-pack API return value.
+
+### Confirmed root cause and repair
+
+`ScriptHolder.reset()` created non-null `new LuaScriptCache("return")` primary caches, while renderer readiness only
+checked object existence. Missing resources were converted to the same no-op source. The renderer therefore owned the
+hand path and applied fixed transforms while Lua did nothing. A runtime exception also permanently disabled a cache
+without propagating failure or relinquishing ownership.
+
+Implemented:
+
+- Explicit `DISABLED`, `INITIALIZING`, `LOADING`, `READY`, and `FAILED` states. HMI ownership and existing HMI
+  properties/particles/models are active only in `READY`; loading and failure delegate to ordinary rendering.
+- Source-aware primary/addon caches with source ID/length, compile status, fallback classification, runtime status,
+  failure, `isLoaded()`, and `isOperational()`. Fallback caches cannot satisfy readiness.
+- Transactional loader: all four required resources are located, read, compiled, and validated in temporary state;
+  only then are active holder caches/addons/model storage replaced. Failures discard the transaction and report the
+  exact resource-bearing exception.
+- Lua execution failures now disable the cache, notify the runtime with script/hand/item context, mark `FAILED`, clear
+  HMI state, and propagate to the outer renderer, which restores matrix balance and calls the original renderer.
+- Early registration through a Wraith-owned Fabric client entrypoint in the existing `liquidbounce` JAR/mod ID.
+  Registration/listener setup is idempotent and attempted once; `packRegistered` is true only for a successful API
+  return. A full repository reload is requested only when the current manager lacks the pack's primary resources.
+- JavaMethod safety timing restored from Wraith `HEAD` to the Neverlose `RETURN` injection, retaining `@Safe` and the
+  narrow `getOrDefault`/`put` allowance.
+- 26.1.2 bytecode confirms `startAttack` and `startUseItem` reach `LocalPlayer.swing(InteractionHand)`. The existing
+  reference independent main/offhand reset and `baseTick` state machine remains in place; diagnostics now distinguish
+  actual swinging flags, event flags, progress/interpolation, interaction, block breaking, switching, delta time,
+  active/rendered hand, and item.
+
+### Neverlose behavior matrix
+
+| Behavior | Reference condition/path | Wraith path and evidence | Status |
+|---|---|---|---|
+| Activation/disable | runtime owns renderer only when active | explicit state gates all HMI paths; old log proved ownership only | repaired; FCL pending |
+| Pack registration/reload | early pack/listener, no toggle loop | new client entrypoint; one-time registration; reload only if resources absent | corrected; new log pending |
+| Four primary scripts | all required chunks loaded | IDs read/compiled transactionally; old log showed all four missing | corrected; READY pending |
+| Script execution | hand/relative/item/model chunks execute per path | first execution and success are bounded diagnostics | pending runtime proof |
+| Main attack/offhand use | reset correct independent hand | 26.1.2 targets verified against bytecode; no old swing log | static parity; FCL pending |
+| Switch/use/block break | per-hand event/interaction state reaches scripts | existing state path retained and logged | FCL pending |
+| Independent swing progress | separate ticks, duration, prev/current interpolation | existing state machine retained; runtime samples added | FCL pending |
+| Dynamic/fixed rendering | dynamic scripts plus fixed transforms only when complete | fixed transforms now behind READY and real-cache validation | corrected; visual pending |
+| Failure fallback/world change | release custom ownership and clear transient state | FAILED clears state; DISABLED and world/player paths delegate/reset | forced/FCL tests pending |
+
+No material execution or visual row is marked equivalent without user-observed FCL evidence.
+
+### Diagnostics retained
+
+The installed test JAR retains bounded `[HMIDiag]` logs for pack registration result/thread, reload preparation,
+resource IDs/bytes, compilation, apply/READY, fallback/ownership, first execution of each primary script, execution
+failures with stack/cause/script/hand/item context, and swing-state samples. They remain until the first user log is
+returned.
+
+### Build/install and runtime status
+
+- `git diff --check`: passed before the clean build.
+- Required Java 25 `clean assemble -x detekt` command: **BUILD SUCCESSFUL**.
+- Built SHA-256: `e512e7568884f780077b21b9caa6f055c93bf0ce241fe45ab2e4b6f28166a153`.
+- Installed SHA-256: `e512e7568884f780077b21b9caa6f055c93bf0ce241fe45ab2e4b6f28166a153`.
+- Backup: `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar.bak-20260715-hmi-runtime`, SHA-256 `ed9b24f905819060fdf8cd9e9b0b6a525ce01d56cbdc109979b33286790a2ea6`.
+- Module-disabled/enabled launches, script READY/execution, main/offhand visual animation, failure fallback, and
+  reload/world smoke tests are not executable in this shell and remain pending.
+
+### Files, commit, and push
+
+Changed files are limited to HMI runtime/cache/holder/loader, early bootstrap and existing `fabric.mod.json`, held-item
+renderer, LivingEntity/accessor swing path, JavaMethod timing, and this entry. References, logs, extracted workspaces,
+and the backup JAR remain unstaged. Commit/push status is recorded after final staging.
+
+This entry corrects prior “full/source-complete” descriptions: compile/class/resource counts are not behavioral proof,
+and visual parity will not be claimed until the user confirms working MainHand and Offhand animation.

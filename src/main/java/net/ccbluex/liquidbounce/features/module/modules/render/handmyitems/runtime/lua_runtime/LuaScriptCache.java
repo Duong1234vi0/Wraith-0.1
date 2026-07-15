@@ -18,6 +18,7 @@
 package net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.lua_runtime;
 
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.LuaTestHMI;
+import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.HandMyItemsRuntime;
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.global.GlobalsStorage;
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.global.LuaContext;
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.lua_runtime.LuaScriptManager;
@@ -34,6 +35,7 @@ import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runti
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.scripting.script_wrappers.P;
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.scripting.script_wrappers.S;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -52,7 +54,12 @@ public class LuaScriptCache {
     private final Globals globals;
     private final LuaValue chunk;
     private final String sourceName;
-    private boolean canRun = true;
+    private final int sourceLength;
+    private final boolean fallback;
+    private boolean compiledSuccessfully;
+    private boolean runtimeEnabled;
+    private Throwable failure;
+    private boolean firstExecutionCompleted;
     private static final LuaContext context = new LuaContext();
     private final M mInstance = new M();
     private final I iInstance = new I();
@@ -67,11 +74,17 @@ public class LuaScriptCache {
     private final ParticleManager particleManagerInstance = new ParticleManager();
 
     public LuaScriptCache(String sourceCode) throws IOException {
-        this(sourceCode, "<embedded>");
+        this(sourceCode, "<fallback>", true);
     }
 
     public LuaScriptCache(String sourceCode, String sourceName) throws IOException {
+        this(sourceCode, sourceName, false);
+    }
+
+    private LuaScriptCache(String sourceCode, String sourceName, boolean fallback) throws IOException {
         this.sourceName = sourceName;
+        this.sourceLength = sourceCode.getBytes(StandardCharsets.UTF_8).length;
+        this.fallback = fallback;
         this.globals = LuaScriptManager.getInstance().sharedGlobals;
         this.globals.set("M", CoerceJavaToLua.coerce((Object)this.mInstance));
         this.globals.set("I", CoerceJavaToLua.coerce((Object)this.iInstance));
@@ -99,26 +112,83 @@ public class LuaScriptCache {
         this.globals.set("applyBlockRotation", CoerceJavaToLua.coerce(GlobalsStorage.applyBlockRotation));
         this.globals.set("context", CoerceJavaToLua.coerce((Object)context));
         this.chunk = this.globals.load(sourceCode, sourceName);
+        this.compiledSuccessfully = true;
+        this.runtimeEnabled = !fallback;
+    }
+
+    public static LuaScriptCache fallback() throws IOException {
+        return new LuaScriptCache("return", "<fallback>", true);
+    }
+
+    public boolean isLoaded() {
+        return this.compiledSuccessfully && !this.fallback;
+    }
+
+    public boolean isOperational() {
+        return this.isLoaded() && this.runtimeEnabled;
+    }
+
+    public String sourceId() {
+        return this.sourceName;
+    }
+
+    public int sourceLength() {
+        return this.sourceLength;
+    }
+
+    public Throwable getFailure() {
+        return this.failure;
+    }
+
+    public void disable(Throwable exception) {
+        this.runtimeEnabled = false;
+        this.failure = exception;
+    }
+
+    private String diagnosticName() {
+        if (this.sourceName.endsWith(".lua")) {
+            String name = this.sourceName.substring(this.sourceName.lastIndexOf('/') + 1);
+            return name.substring(0, name.length() - 4);
+        }
+        return this.sourceName;
     }
 
     public void execute(PoseStack matrices, boolean bl, HashMap<String, Object> registry, float swingProgress, ItemStack item, AbstractClientPlayer player, InteractionHand hand, boolean mainHand, float deltaTime, float equipProgress, float mainHandSwingProgress, float offHandSwingProgress, boolean mainHandSwitchEvent, boolean offHandSwitchEvent, boolean swingMHand, boolean swingOHand, boolean interact, boolean blockBreaking, List<Particle> particles) {
-        if (!this.canRun) {
+        if (!this.runtimeEnabled) {
             return;
         }
         try {
+            if (!this.firstExecutionCompleted) {
+                HandMyItemsRuntime.diagnostic("execute " + this.diagnosticName());
+            }
             context.update(matrices, bl, swingProgress, item, player, hand, mainHand, deltaTime, equipProgress, mainHandSwingProgress, offHandSwingProgress, mainHandSwitchEvent, offHandSwitchEvent, swingMHand, swingOHand, interact, blockBreaking, particles);
             this.chunk.invoke();
+            if (!this.firstExecutionCompleted) {
+                this.firstExecutionCompleted = true;
+                HandMyItemsRuntime.diagnostic("execute succeeded script=" + this.diagnosticName());
+            }
         }
         catch (Exception e) {
             String message = sourceName + ": " + e.getMessage();
-            LuaTestHMI.LOGGER.error("HandMyItems Lua runtime error in {}", sourceName, e);
-            SystemToast.add(
-                Minecraft.getInstance().getToastManager(),
-                SystemToast.SystemToastId.PACK_LOAD_FAILURE,
-                Component.literal("HMI Lua runtime error"),
-                Component.literal(message)
-            );
-            this.canRun = false;
+            this.disable(e);
+            HandMyItemsRuntime.onScriptFailure(sourceName, e, hand, item);
+            try {
+                SystemToast.add(
+                    Minecraft.getInstance().getToastManager(),
+                    SystemToast.SystemToastId.PACK_LOAD_FAILURE,
+                    Component.literal("HMI Lua runtime error"),
+                    Component.literal(message)
+                );
+            } catch (Exception ignored) {
+                // The runtime failure has already been recorded; toast display is optional.
+            }
+            throw new ExecutionException(sourceName, e);
+        }
+    }
+
+    public static class ExecutionException extends RuntimeException {
+        public ExecutionException(String sourceName, Throwable cause) {
+            super("HandMyItems script execution failed: " + sourceName, cause);
         }
     }
 }

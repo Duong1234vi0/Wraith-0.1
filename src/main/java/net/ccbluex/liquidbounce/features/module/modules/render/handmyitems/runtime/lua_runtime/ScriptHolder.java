@@ -41,10 +41,10 @@ public class ScriptHolder {
     public static synchronized void reset() {
         try {
             install(
-                new LuaScriptCache("return"),
-                new LuaScriptCache("return"),
-                new LuaScriptCache("return"),
-                new ModelScriptCache("return"),
+                LuaScriptCache.fallback(),
+                LuaScriptCache.fallback(),
+                LuaScriptCache.fallback(),
+                ModelScriptCache.fallback(),
                 new ArrayList<>(),
                 new ArrayList<>(),
                 new ArrayList<>(),
@@ -53,6 +53,13 @@ public class ScriptHolder {
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to create empty HandMyItems scripts", exception);
         }
+    }
+
+    public static synchronized boolean primaryScriptsOperational() {
+        return handScriptCache != null && handScriptCache.isOperational()
+            && handRelativeScriptCache != null && handRelativeScriptCache.isOperational()
+            && itemScriptCache != null && itemScriptCache.isOperational()
+            && itemModelCache != null && itemModelCache.isOperational();
     }
 
     static {

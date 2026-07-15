@@ -18,7 +18,7 @@ public abstract class MixinHandMyItemsJavaMethod {
     @Final
     private Method method;
 
-    @Inject(method = "invokeMethod", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "invokeMethod", at = @At("RETURN"), cancellable = true)
     private void hmi$rejectUnsafeInvocation(Object instance, Varargs arguments, CallbackInfoReturnable<LuaValue> cir) {
         String name = this.method.getName();
         if (!this.method.isAnnotationPresent(Safe.class) && !name.equals("getOrDefault") && !name.equals("put")) {

@@ -8,6 +8,18 @@ public interface LivingEntityAccessor {
 
     public float hMI5_0$getOffHandSwingProgress(float var1);
 
+    public float hMI5_0$getMainHandSwingProgressCurrent();
+
+    public float hMI5_0$getMainHandSwingProgressPrevious();
+
+    public float hMI5_0$getOffHandSwingProgressCurrent();
+
+    public float hMI5_0$getOffHandSwingProgressPrevious();
+
+    public boolean hMI5_0$isMainHandSwinging();
+
+    public boolean hMI5_0$isOffHandSwinging();
+
     public boolean hMI5_0$getMHandEvent();
 
     public boolean hMI5_0$getOHandEvent();

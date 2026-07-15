@@ -18,6 +18,7 @@
 package net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.lua_runtime;
 
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.LuaTestHMI;
+import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.HandMyItemsRuntime;
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.global.GlobalsStorage;
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.global.item_model.ItemModelContext;
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.lua_runtime.LuaScriptManager;
@@ -30,6 +31,7 @@ import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runti
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.scripting.script_wrappers.M;
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.scripting.script_wrappers.P;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.gui.components.toasts.SystemToast;
@@ -46,7 +48,12 @@ public class ModelScriptCache {
     private final Globals globals;
     private final LuaValue chunk;
     private final String sourceName;
-    private boolean canRun = true;
+    private final int sourceLength;
+    private final boolean fallback;
+    private boolean compiledSuccessfully;
+    private boolean runtimeEnabled;
+    private Throwable failure;
+    private boolean firstExecutionCompleted;
     private final M mInstance = new M();
     private final I iInstance = new I();
     private final JSItems jsItemsInstance = new JSItems();
@@ -56,11 +63,17 @@ public class ModelScriptCache {
     private final KeyBindManager keyBindManagerInstance = new KeyBindManager();
 
     public ModelScriptCache(String sourceCode) throws IOException {
-        this(sourceCode, "<embedded-model>");
+        this(sourceCode, "<fallback>", true);
     }
 
     public ModelScriptCache(String sourceCode, String sourceName) throws IOException {
+        this(sourceCode, sourceName, false);
+    }
+
+    private ModelScriptCache(String sourceCode, String sourceName, boolean fallback) throws IOException {
         this.sourceName = sourceName;
+        this.sourceLength = sourceCode.getBytes(StandardCharsets.UTF_8).length;
+        this.fallback = fallback;
         this.globals = LuaScriptManager.getInstance().sharedGlobals;
         this.globals.set("M", CoerceJavaToLua.coerce((Object)this.mInstance));
         this.globals.set("I", CoerceJavaToLua.coerce((Object)this.iInstance));
@@ -74,26 +87,77 @@ public class ModelScriptCache {
         this.globals.set("debugger", CoerceJavaToLua.coerce((Object)GlobalsStorage.debugTextRenderer));
         this.globals.set("data", CoerceJavaToLua.coerce((Object)data));
         this.chunk = this.globals.load(sourceCode, sourceName);
+        this.compiledSuccessfully = true;
+        this.runtimeEnabled = !fallback;
+    }
+
+    public static ModelScriptCache fallback() throws IOException {
+        return new ModelScriptCache("return", "<fallback>", true);
+    }
+
+    public boolean isLoaded() {
+        return this.compiledSuccessfully && !this.fallback;
+    }
+
+    public boolean isOperational() {
+        return this.isLoaded() && this.runtimeEnabled;
+    }
+
+    public String sourceId() {
+        return this.sourceName;
+    }
+
+    public int sourceLength() {
+        return this.sourceLength;
+    }
+
+    public Throwable getFailure() {
+        return this.failure;
+    }
+
+    public void disable(Throwable exception) {
+        this.runtimeEnabled = false;
+        this.failure = exception;
+    }
+
+    private String diagnosticName() {
+        if (this.sourceName.endsWith(".lua")) {
+            String name = this.sourceName.substring(this.sourceName.lastIndexOf('/') + 1);
+            return name.substring(0, name.length() - 4);
+        }
+        return this.sourceName;
     }
 
     public void executeModel(ItemModelContext data, ItemStack itemStack, AbstractClientPlayer player, ModelPartAnimator modelPartAnimator) {
-        if (!this.canRun) {
+        if (!this.runtimeEnabled) {
             return;
         }
         try {
+            if (!this.firstExecutionCompleted) {
+                HandMyItemsRuntime.diagnostic("execute " + this.diagnosticName());
+            }
             ModelScriptCache.data.set(data);
             this.chunk.call();
+            if (!this.firstExecutionCompleted) {
+                this.firstExecutionCompleted = true;
+                HandMyItemsRuntime.diagnostic("execute succeeded script=" + this.diagnosticName());
+            }
         }
         catch (Exception e) {
             String message = sourceName + ": " + e.getMessage();
-            LuaTestHMI.LOGGER.error("HandMyItems model Lua runtime error in {}", sourceName, e);
-            SystemToast.add(
-                Minecraft.getInstance().getToastManager(),
-                SystemToast.SystemToastId.PACK_LOAD_FAILURE,
-                Component.literal("HMI model Lua runtime error"),
-                Component.literal(message)
-            );
-            this.canRun = false;
+            this.disable(e);
+            HandMyItemsRuntime.onScriptFailure(sourceName, e, data.hand, itemStack);
+            try {
+                SystemToast.add(
+                    Minecraft.getInstance().getToastManager(),
+                    SystemToast.SystemToastId.PACK_LOAD_FAILURE,
+                    Component.literal("HMI model Lua runtime error"),
+                    Component.literal(message)
+                );
+            } catch (Exception ignored) {
+                // The runtime failure has already been recorded; toast display is optional.
+            }
+            throw new LuaScriptCache.ExecutionException(sourceName, e);
         }
     }
 }

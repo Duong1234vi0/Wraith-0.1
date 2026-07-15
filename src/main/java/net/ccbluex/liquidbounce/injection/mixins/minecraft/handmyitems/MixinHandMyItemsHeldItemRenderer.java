@@ -85,6 +85,8 @@ public abstract class MixinHandMyItemsHeldItemRenderer {
     private static float hmi$offHandSwingProgress;
     @Unique
     private static long hmi$observedStateGeneration = Long.MIN_VALUE;
+    @Unique
+    private static int hmi$swingDiagnosticCount;
 
     @Invoker("renderPlayerArm")
     protected abstract void hmi$renderPlayerArm(
@@ -103,21 +105,6 @@ public abstract class MixinHandMyItemsHeldItemRenderer {
         int lightCoords,
         ItemStack itemStack
     );
-
-    /** Clears renderer-local state without retaining a player, hand, or frame reference. */
-    @Unique
-    public static void resetState() {
-        hmi$mainHandSwitchEvent = false;
-        hmi$offHandSwitchEvent = false;
-        hmi$previousMainHand = Items.AIR;
-        hmi$previousOffHand = Items.AIR;
-        hmi$swingMainHand = false;
-        hmi$swingOffHand = false;
-        hmi$mainHandSwingProgress = 0.0F;
-        hmi$offHandSwingProgress = 0.0F;
-        hmi$observedStateGeneration = Long.MIN_VALUE;
-        GlobalsStorage.particles.clear();
-    }
 
     @WrapOperation(
         method = "renderHandsWithItems(FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/player/LocalPlayer;I)V",
@@ -140,7 +127,8 @@ public abstract class MixinHandMyItemsHeldItemRenderer {
         int light,
         Operation<Void> original
     ) {
-        if (!HandMyItemsRuntime.isActive() || !this.hmi$runtimeReady(player, renderedItem)) {
+        if (!HandMyItemsRuntime.isReady() || !this.hmi$runtimeReady(player, renderedItem)) {
+            HandMyItemsRuntime.recordRendererDecision();
             original.call(
                 instance,
                 player,
@@ -156,6 +144,7 @@ public abstract class MixinHandMyItemsHeldItemRenderer {
             );
             return;
         }
+        HandMyItemsRuntime.recordRendererDecision();
 
         this.hmi$resetForRuntimeStateChange();
 
@@ -184,6 +173,31 @@ public abstract class MixinHandMyItemsHeldItemRenderer {
         boolean blockBreaking = accessor.hMI5_0$getBlockBreak();
         HumanoidArm arm = mainHand ? player.getMainArm() : player.getMainArm().getOpposite();
         boolean rightArm = arm == HumanoidArm.RIGHT;
+
+        if (hmi$swingDiagnosticCount < 20
+            && (hmi$mainHandSwingProgress > 0.0F || hmi$offHandSwingProgress > 0.0F
+                || hmi$swingMainHand || hmi$swingOffHand || interact
+                || hmi$mainHandSwitchEvent || hmi$offHandSwitchEvent)) {
+            hmi$swingDiagnosticCount++;
+            HandMyItemsRuntime.diagnostic(
+                "swing state mainProgress=" + hmi$mainHandSwingProgress
+                    + " offProgress=" + hmi$offHandSwingProgress
+                    + " previousMainProgress=" + accessor.hMI5_0$getMainHandSwingProgressPrevious()
+                    + " previousOffProgress=" + accessor.hMI5_0$getOffHandSwingProgressPrevious()
+                    + " mainSwinging=" + accessor.hMI5_0$isMainHandSwinging()
+                    + " offSwinging=" + accessor.hMI5_0$isOffHandSwinging()
+                    + " mainEvent=" + hmi$swingMainHand
+                    + " offEvent=" + hmi$swingOffHand
+                    + " interact=" + interact
+                    + " blockBreaking=" + blockBreaking
+                    + " mainSwitch=" + hmi$mainHandSwitchEvent
+                    + " offSwitch=" + hmi$offHandSwitchEvent
+                    + " deltaTime=" + LuaTestHMI.deltaTime
+                    + " activeHand=" + hand
+                    + " renderedHand=" + (mainHand ? "MAIN_HAND" : "OFF_HAND")
+                    + " item=" + item.getItem()
+            );
+        }
 
         ArrayList<Particle> particles = this.hmi$particles();
         try {
@@ -218,6 +232,22 @@ public abstract class MixinHandMyItemsHeldItemRenderer {
                 poseStack.popPose();
             }
             LuaTestHMI.tickProgress = tickProgress;
+        } catch (LuaScriptCache.ExecutionException exception) {
+            // A failed script invalidates the runtime. The matrix was restored above, so the
+            // original renderer can safely render this hand without a rigid HMI placeholder.
+            original.call(
+                instance,
+                player,
+                tickProgress,
+                pitch,
+                hand,
+                vanillaSwingProgress,
+                renderedItem,
+                equipProgress,
+                poseStack,
+                submitNodeCollector,
+                light
+            );
         } finally {
             GlobalsStorage.offHandItem = Items.AIR.getDefaultInstance();
             GlobalsStorage.mainHandItem = Items.AIR.getDefaultInstance();
@@ -226,14 +256,12 @@ public abstract class MixinHandMyItemsHeldItemRenderer {
 
     @Unique
     private boolean hmi$runtimeReady(AbstractClientPlayer player, ItemStack item) {
-        if (!(player instanceof LivingEntityAccessor) || !((Object) item instanceof ItemStackAccessor)) {
+        if (!HandMyItemsRuntime.isReady()
+            || !(player instanceof LivingEntityAccessor) || !((Object) item instanceof ItemStackAccessor)) {
             return false;
         }
         if (this.minecraft.level == null
-            || ScriptHolder.handScriptCache == null
-            || ScriptHolder.handRelativeScriptCache == null
-            || ScriptHolder.itemScriptCache == null
-            || ScriptHolder.itemModelCache == null
+            || !ScriptHolder.primaryScriptsOperational()
             || ScriptHolder.handAddonsCache == null
             || ScriptHolder.handRelativeAddonsCache == null
             || ScriptHolder.itemAddonsCache == null
@@ -261,6 +289,7 @@ public abstract class MixinHandMyItemsHeldItemRenderer {
         hmi$swingOffHand = false;
         hmi$mainHandSwingProgress = 0.0F;
         hmi$offHandSwingProgress = 0.0F;
+        hmi$swingDiagnosticCount = 0;
         GlobalsStorage.particles.clear();
         hmi$observedStateGeneration = stateGeneration;
     }

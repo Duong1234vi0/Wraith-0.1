@@ -18,7 +18,10 @@
   "icon": "resources/liquidbounce/icon_64x64.png",
   "environment": "client",
   "entrypoints": {
-    "main": []
+    "main": [],
+    "client": [
+      "net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.HandMyItemsBootstrap"
+    ]
   },
   "custom": {
     "modmenu": {
