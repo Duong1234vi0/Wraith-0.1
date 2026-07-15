@@ -24,6 +24,7 @@
   "liquidbounce.module.macroChat.description": "Sends a chosen chat message or command, optionally on a repeating timer.",
   "liquidbounce.module.silentAim.description": "Redirects missed main-hand swings toward a valid player target.",
   "liquidbounce.module.animations.description": "Custom first-person hand swing animations.",
+  "liquidbounce.module.handMyItems.description": "Provides Hold My Items-style first-person hand, item and model animations.",
   "liquidbounce.module.handShader.description": "Applies configurable post-processing effects to the first-person hand and held item.",
   "liquidbounce.module.totemAngel.description": "Renders a rising, fading white ghost model when another player pops a totem.",
   "liquidbounce.module.santaHat.description": "Renders Pouch Client's Santa hat on your local player.",

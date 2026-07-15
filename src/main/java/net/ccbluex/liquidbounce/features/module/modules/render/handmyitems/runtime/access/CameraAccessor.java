@@ -1,0 +1,12 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.access;
+
+public interface CameraAccessor {
+    public void hMI5_0$applyRotation();
+
+    public void hMI5_0$setRotationValues(float var1, float var2, float var3);
+
+    public void hMI5_0$setPosValues(float var1, float var2, float var3);
+}

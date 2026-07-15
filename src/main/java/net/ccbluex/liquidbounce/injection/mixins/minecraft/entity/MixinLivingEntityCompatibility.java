@@ -25,8 +25,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(value = LivingEntity.class, priority = 999)
 public abstract class MixinLivingEntityCompatibility {
@@ -37,11 +35,6 @@ public abstract class MixinLivingEntityCompatibility {
     @ModifyReturnValue(method = "getCurrentSwingDuration", at = @At("RETURN"), require = 0)
     private int hookSwingSpeed(int original) {
         return ModuleAnimations.INSTANCE.visualSwingDuration(original, this, this.swingingArm);
-    }
-
-    @Inject(method = "swing(Lnet/minecraft/world/InteractionHand;Z)V", at = @At("HEAD"))
-    private void hookNewAnimationSwing(InteractionHand hand, boolean sendToSwingingEntity, CallbackInfo ci) {
-        ModuleAnimations.INSTANCE.recordNewSwing(this, hand);
     }
 
 }

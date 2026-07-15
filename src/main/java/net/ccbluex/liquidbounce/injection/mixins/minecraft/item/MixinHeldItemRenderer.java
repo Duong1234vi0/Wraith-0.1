@@ -35,7 +35,6 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemUseAnimation;
@@ -66,16 +65,6 @@ public abstract class MixinHeldItemRenderer {
     @Shadow
     private float offHandHeight;
 
-    @Shadow
-    public abstract void renderItem(net.minecraft.world.entity.LivingEntity mob, ItemStack itemStack,
-                                    ItemDisplayContext type, PoseStack poseStack,
-                                    SubmitNodeCollector submitNodeCollector, int lightCoords);
-
-    @Shadow
-    private void renderPlayerArm(PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords,
-                                 float inverseArmHeight, float attackValue, HumanoidArm arm) {
-    }
-
     @Inject(method = "renderArmWithItem", at = @At(value = "INVOKE",
             target = "Lcom/mojang/blaze3d/vertex/PoseStack;pushPose()V", shift = At.Shift.AFTER))
     private void hookViewModel(AbstractClientPlayer player, float tickDelta, float pitch, InteractionHand hand,
@@ -84,45 +73,6 @@ public abstract class MixinHeldItemRenderer {
         var mainArm = ModuleAnimations.INSTANCE.resolveMainArm(player);
         var arm = hand == InteractionHand.MAIN_HAND ? mainArm : mainArm.getOpposite();
         ModuleViewModel.INSTANCE.applyTransform(matrices, arm);
-    }
-
-    @Inject(method = "renderArmWithItem", at = @At("HEAD"), cancellable = true)
-    private void hookNewSwingAnimation(AbstractClientPlayer player, float tickDelta, float pitch, InteractionHand hand,
-                                       float swingProgress, ItemStack item, float equipProgress, PoseStack matrices,
-                                       SubmitNodeCollector submitNodeCollector, int light, CallbackInfo ci) {
-        if (minecraft.player == null || player.isScoping()
-                || !ModuleAnimations.INSTANCE.shouldRenderNewSpecial(player, hand, item)) {
-            return;
-        }
-
-        HumanoidArm arm = ModuleAnimations.INSTANCE.newSpecialArm(player, hand);
-        boolean isRight = arm == HumanoidArm.RIGHT;
-
-        matrices.pushPose();
-        ModuleViewModel.INSTANCE.applyTransform(matrices, arm);
-
-        ModuleAnimations.NewArmRender armRender = ModuleAnimations.INSTANCE.applyNewSpecialArmPose(
-                matrices, player, tickDelta, hand, arm, item, equipProgress, swingProgress
-        );
-        if (armRender == null) {
-            matrices.popPose();
-            return;
-        }
-
-        renderPlayerArm(matrices, submitNodeCollector, light,
-                armRender.getEquipProgress(), armRender.getSwingProgress(), arm);
-
-        if (!item.isEmpty()) {
-            ModuleAnimations.INSTANCE.applyNewSpecialItemPose(matrices, hand, arm, item, tickDelta);
-            renderItem(
-                    player, item,
-                    isRight ? ItemDisplayContext.FIRST_PERSON_RIGHT_HAND : ItemDisplayContext.FIRST_PERSON_LEFT_HAND,
-                    matrices, submitNodeCollector, light
-            );
-        }
-
-        matrices.popPose();
-        ci.cancel();
     }
 
     @Redirect(method = "renderArmWithItem", at = @At(
@@ -141,7 +91,7 @@ public abstract class MixinHeldItemRenderer {
                                Operation<Void> original, AbstractClientPlayer player, float tickDelta, float pitch,
                                InteractionHand hand, float swingProgress, ItemStack item, float equipProgress,
                                                PoseStack methodMatrices, SubmitNodeCollector submitNodeCollector, int light) {
-        float transformedEquipProgress = ModuleAnimations.INSTANCE.transformEquipProgress(inverseArmHeight, hand, item);
+        float transformedEquipProgress = ModuleAnimations.INSTANCE.transformEquipProgress(inverseArmHeight, hand);
 
         original.call(instance, matrices, arm, transformedEquipProgress);
     }
@@ -155,7 +105,7 @@ public abstract class MixinHeldItemRenderer {
                                     float tickDelta, float pitch, InteractionHand hand, float swingProgress,
                                     ItemStack item, float equipProgress, PoseStack methodMatrices,
                                     SubmitNodeCollector submitNodeCollector, int light) {
-        if (ModuleAnimations.INSTANCE.applySwingTransform(matrices, player, hand, arm, item, attack, tickDelta)) {
+        if (ModuleAnimations.INSTANCE.applySwingTransform(matrices, hand, arm, item, attack)) {
             return;
         }
 

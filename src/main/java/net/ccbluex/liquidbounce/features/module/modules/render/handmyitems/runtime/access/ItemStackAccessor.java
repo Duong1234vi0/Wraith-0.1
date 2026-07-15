@@ -1,0 +1,20 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.access;
+
+public interface ItemStackAccessor {
+    public void hMI5_0$setTransform(boolean var1);
+
+    public void hMI5_0$setTransform(int var1);
+
+    public int hMI5_0$getTransform();
+
+    public void hMI5_0$setSwingSpeed(int var1);
+
+    public int hMI5_0$getSwingSpeed();
+
+    public void hMI5_0$setRenderAsBlock(boolean var1);
+
+    public int hMI5_0$getRenderAsBlock();
+}

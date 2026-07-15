@@ -28,7 +28,6 @@ import net.ccbluex.liquidbounce.features.misc.HideAppearance;
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.features.KillAuraAutoBlock;
 import net.ccbluex.liquidbounce.features.module.modules.exploit.ModuleMultiActions;
 import net.ccbluex.liquidbounce.features.module.modules.misc.ModuleMiddleClickAction;
-import net.ccbluex.liquidbounce.features.module.modules.render.ModuleAnimations;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleXRay;
 import net.ccbluex.liquidbounce.render.engine.RenderingFlags;
 import net.ccbluex.liquidbounce.utils.client.vfp.VfpCompatibility;
@@ -49,7 +48,6 @@ import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.HitResult;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Final;
@@ -58,7 +56,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -322,23 +319,6 @@ public abstract class MixinMinecraftClient {
         if (CombatManager.INSTANCE.getShouldPauseCombat()) {
             cir.setReturnValue(false);
         }
-    }
-
-    @Inject(method = "startAttack", at = @At(
-            value = "INVOKE",
-            target = "Lnet/minecraft/client/player/LocalPlayer;swing(Lnet/minecraft/world/InteractionHand;)V"
-    ))
-    private void markNewAnimationAttackSwing(CallbackInfoReturnable<Boolean> cir) {
-        ModuleAnimations.INSTANCE.markNextNewSwing(InteractionHand.MAIN_HAND, false, true);
-    }
-
-    @Redirect(method = "startUseItem", at = @At(
-            value = "INVOKE",
-            target = "Lnet/minecraft/client/player/LocalPlayer;swing(Lnet/minecraft/world/InteractionHand;)V"
-    ))
-    private void markNewAnimationInteractionSwing(LocalPlayer instance, InteractionHand hand) {
-        ModuleAnimations.INSTANCE.markNextNewSwing(hand, true, true);
-        instance.swing(hand);
     }
 
     @Inject(method = "setLevel", at = @At("HEAD"))

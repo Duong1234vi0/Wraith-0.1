@@ -256,6 +256,7 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleFreeLook,
             ModuleFullBright,
             ModuleHandShader,
+            ModuleHandMyItems,
             ModuleHands,
             ModuleHats,
             ModuleSantaHat,

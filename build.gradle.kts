@@ -206,6 +206,7 @@ dependencies {
     includeDependency("org.graalvm.polyglot:polyglot:${project.property("polyglot_version")}")
     includeDependency("org.graalvm.polyglot:js-community:${project.property("polyglot_version")}")
     includeDependency("org.graalvm.polyglot:tools-community:${project.property("polyglot_version")}")
+    includeDependency("org.luaj:luaj-jse:3.0.1")
 //    includeDependency("org.graalvm.polyglot:python-community:${project.property("polyglot_version")}")
 //    includeDependency("org.graalvm.polyglot:wasm-community:${project.property("polyglot_version")}")
 //    includeDependency("org.graalvm.polyglot:java-community:${project.property("polyglot_version")}")

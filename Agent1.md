@@ -6891,3 +6891,310 @@ Supersedes all previous HitSound attempts, including `Split CritSound from Clien
 
 Supersedes the previous non-Alpha SmoothCamera ports from 2026-06-19 and 2026-07-02 that used first-person gates,
 perspective resets, horizontal/vertical position factors, and the vehicle `+1 Y` offset.
+
+## Removed SwingAnimation New and ported full Neverlose HandMyItems runtime (2026-07-15, Codex)
+
+### Request
+
+- Remove SwingAnimation mode `New`, `NewLeftHand`, its independent state machine, special dual-hand renderer, and all
+  New-only attack/use/render hooks. The old implementation must not be retained, renamed, aliased, or reused.
+- Port the active Neverlose `HandMyItems` wrapper and complete reachable Hold My Items runtime into Wraith as a
+  standalone Render module named `HandMyItems` with no settings beyond the module toggle.
+- Preserve the embedded Lua runtime, independent hand state, item property/model hooks, particles, camera offsets,
+  resource reload behavior, Lua safety policy, and the complete built-in resource pack.
+- Neverlose source is authoritative for HMI behavior; current Wraith source and official 26.1.2 mappings are
+  authoritative for integration. `Agent1.md` was used as history only.
+
+The hardcoded New implementation was removed because it was a separate, incomplete Wraith animation path and was not
+the reference Hold My Items runtime requested by the user.
+
+### Required process checked before editing
+
+Read completely before source edits:
+
+- `Skill/README.md`
+- `Skill/Agen.md`
+- `Skill/CLAUDE_PORT_SKID_MODULE_GUIDE.md`
+- `Skill/PORT_EVIDENCE_TEMPLATE.md`
+- `Skill/PORT_REVIEW_CHECKLIST.md`
+- `Skill/RENDER_PORTING_GUIDE.md`
+- `Skill/CODEBASE_RULES.md`
+- `Skill/AGENT1_USAGE.md`
+
+Read all `Agent1.md` history and all later entries involving SwingAnimation, New, NewLeftHand, Hold My Items,
+HandMyItems, first-person/offhand rendering, item models/resource packs, and LuaJ. Historical New/HMI experiments were
+not used as source behavior.
+
+### Current Wraith files and integration inspected
+
+- `build.gradle.kts`, `gradle.properties`, `fabric.mod.json`, `liquidbounce.mixins.json`, and the current access widener.
+- `ModuleAnimations.kt`, `ModuleManager.kt`, module/configurable lifecycle, `ConfigSystem.kt`, `Value.kt`, and
+  `ChooseListValue` fallback behavior.
+- `MixinHeldItemRenderer.java`, `MixinMinecraftClient.java`, `MixinLivingEntityCompatibility.java`, current
+  `MixinCamera.java`, game/item/block/model/feature render classes and their 26.1.2 bytecode descriptors.
+- Existing ViewModel, HandShader, Iris hand framebuffer, SilentHotbar, KillAura block visual, FreeLook, FreeCam,
+  SmoothCamera, and RotationManager `CHANGE_LOOK` ownership paths.
+- Fabric Resource Loader v1 APIs and Wraith's established `includeDependency` nested-JAR packaging path.
+
+Old config behavior was verified: an unavailable `SwingAnimation.Mode = New` fails only that value's deserialization,
+is caught by `ConfigSystem`, and leaves the initialized `Mode1` default. Unknown `NewLeftHand` is ignored. No alias or
+custom migration was added.
+
+### Neverlose reference inspected
+
+Entrypoints and active integration:
+
+- `neverlose/modules/impl/render/HandMyItems.java`
+- `neverlose/util/hmi/HandMyItemsRuntime.java`
+- Active reference mixins: `GameRendererMixin`, `MinecraftClientMixin`, `ItemStackMixin`, `CameraMixin`,
+  `LivingEntityMixin`, `BlockRenderManagerMixin`, `HandRenderTypeMixin`, `HeldItemRendererMixin`, `ItemRendererMixin`,
+  `JavaMethodMixin`, `UseDurationMixin`, `UsingItemMixin`, `HangingSignMixin`, and `ItemRenderStateMixin`.
+- Reachable debug output path in the reference in-game HUD mixin.
+
+All 52 files under `com/holdmylua/source` were read and classified:
+
+- Core: `LuaTestHMI`, `SwordAttacks`.
+- Access: `AlternateBlockRenderer`, `CameraAccessor`, `ItemStackAccessor`, `LivingEntityAccessor`,
+  `ModelElementAccess`, `PipelinesAccessor`.
+- Runtime/global/model storage: `DispatcherStorage`, `GlobalsStorage`, `LuaContext`, `ItemModelContext`,
+  `ItemModelStorage`.
+- Lua: `LuaScriptCache`, `LuaScriptManager`, `ModelScriptCache`, `ScriptHolder`,
+  `LuaAnimationResourceLoader`.
+- Poses: `ModelPartAnimator`, `PoseX`, `PoseY`, `PoseZ`, `RotationX`, `RotationY`, `RotationZ`, `ScalePose`,
+  `Poses`, `AbstractPose`.
+- Particles: `LuaConsumer`, `Particle`, `ParticleManager`, `ParticleRenderManager`, `ParticleLifecycleType`,
+  `ParticleRenderType`, `RenderSpace`, `ParticleRenderLayers`, `Texture`.
+- Script API: `DebugTextRenderer`, `KeyBindManager`, `Sound`, `C`, `ComponentWrapper`, `Easings`, `I`, `JSItems`,
+  `JSTags`, `M`, `P`, `S`, `Safe`, `SpearData`, `IrisCompat`.
+
+The full `resourcepacks/handmyitems` tree was inspected: 206 files comprising 101 JSON, one JSON5, four Lua, two RPO,
+79 PNG, 17 mcmeta, one OGG, and one properties file.
+
+### Dependency / evidence matrix
+
+| Feature | Reference entrypoint/dependency | Wraith conflict or 26.1.2 adaptation | Status |
+|---|---|---|---|
+| Module enable/disable | wrapper plus `HandMyItemsRuntime` | singleton module lifecycle, full clear on disable | Ported |
+| Reload listener | `LuaAnimationResourceLoader` | Fabric Resource Loader v1 listener, registered once | Ported |
+| Built-in pack | reference runtime registration | `liquidbounce:handmyitems`, default enabled, registered before pack repository construction | Ported |
+| Hand pose | `hand_pose.lua`, `LuaScriptCache` | `PoseStack` and official mappings | Ported |
+| Hand-relative pose | `hand_relative_pose.lua` | target arm invoker and physical arm mapping | Ported |
+| Item pose | `item_pose.lua` | target `SubmitNodeCollector` item submission | Ported |
+| Item model | `item_model.lua`, model cache/storage | target `ItemFeatureRenderer` quad pipeline | Ported |
+| Main-hand swing | `LivingEntityMixin` | independent Wraith-owned accessor state | Ported |
+| Offhand swing | `LivingEntityMixin` | separate ticks/progress/flags, no removed New state | Ported |
+| Attack reset | `MinecraftClientMixin.startAttack` | exact target swing callsite, no packet change | Ported |
+| Interact reset | `startUseItem` redirect | hand-specific reset then original swing | Ported |
+| Switch events | held renderer previous-item fields | renderer generation invalidation on lifecycle clear | Ported |
+| Block breaking | living accessor plus game mode | official `isDestroying` mapping | Ported |
+| Use duration | `UseDurationMixin` | active-and-item-identity gated property override | Ported |
+| Using item | `UsingItemMixin` | active-and-item-identity gated condition override | Ported |
+| Map | held renderer map branch | target private `renderMap` invoker | Ported |
+| Bow/crossbow | opposite-hand suppression | target `ItemUseAnimation`/charged API | Ported |
+| Shield/block | direct model and property paths | target BLOCK animation | Ported |
+| Spear/trident | direct model path and `SpearData` | target adds `SPEAR`; `KineticWeapon` replaces old trident-only API | Ported |
+| Brush | direct model path | target BRUSH animation | Ported |
+| Spyglass | reference render suppression | target `isScoping()` equivalent | Ported |
+| Throwable items | Lua item script | no hardcoded Wraith fallback | Ported |
+| Render as block | alternate block renderer | `BlockModelResolver`/`BlockModelRenderState`, tint and emission APIs | Ported |
+| Item model dispatch | dispatcher and model FIFOs | target feature-render boundary cleanup | Ported |
+| Particles | particle manager/render layers | custom geometry through `SubmitNodeCollector` | Ported |
+| Camera offsets | `CameraAccessor`, `C` wrapper | target vectors/quaternion/dirty flags; composes once after current camera owner | Ported |
+| Debug text | runtime debug API plus HUD callsite | target `GuiGraphicsExtractor`, active gated and cleared | Ported |
+| Lua safety | `JavaMethodMixin`, `Safe` | exact LuaJ 3.0.1 target/descriptor; permits only `@Safe`, `getOrDefault`, `put` | Ported |
+| Iris compatibility | `IrisCompat` and existing hand path | reflection retained; existing outer Wraith Iris/HandShader pass remains | Ported |
+| Disabled fallback | all active mixins | inactive renderer calls original and dynamic hand forcing returns vanilla value | Ported |
+
+### Removed from SwingAnimation
+
+- Removed enum entry `NEW("New")` and setting `NewLeftHand`.
+- Removed per-hand `NewHandState`, player tracking, tick/world/disconnect lifecycle, switch/equip/swing state, attack and
+  interaction observation, all New item-category/use transforms, constants, data classes, imports, and comments.
+- Removed the complete `hookNewSwingAnimation` interception and its New-only arm/item renderer shadows.
+- Retained ordinary Mode1-Mode7, 360, Slant, Fade, and SpinSlash behavior and unrelated ViewModel, SilentHotbar,
+  KillAura block visual, equip, and vanilla swing hooks.
+
+### Added module and runtime
+
+- Added `ModuleHandMyItems` in Render and registered it exactly once in `ModuleManager`.
+- The module has no settings, modes, offsets, hand toggles, sliders, reload button, fallback, or compatibility option.
+- Added all 52 reference runtime classes plus Wraith-owned `HandMyItemsRuntime` under
+  `net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime`.
+- `LuaTestHMI` is frame context only and is not a Fabric initializer. Wraith remains mod ID `liquidbounce`.
+- No target class imports `neverlose.*` or uses the collision-prone `com.holdmylua` namespace.
+
+Lifecycle:
+
+- Constructor-time idempotent initialization registers the pack and listener before the client pack repository is
+  built. Module initialization may call it again safely.
+- Enable marks active first and loads current resources. A missing early pack requests one repository reload without a
+  frame/tick reload loop.
+- Reload preparation builds complete new caches before atomically installing them. Parse/read failures identify the
+  resource path and clear to safe `return` caches without leaving mixed old/new data.
+- Disable clears primary/addon scripts, global property maps/registry, dispatcher/model FIFOs, model animator,
+  particles, debug text, replacement/current items, Iris reflection state, matrices/delta context, independent living
+  state, and camera offsets.
+- World change, disconnect, local-player replacement, script reload, and reload failure invalidate renderer state.
+  Reconnect reactivates the runtime only when the module toggle remains enabled.
+
+### Mixins ported
+
+Registered 16 strict mixins in the existing `liquidbounce.mixins.json`:
+
+- Behavioral graph: `MixinHandMyItemsGameRenderer`, `Minecraft`, `ItemStack`, `Camera`, `LivingEntity`,
+  `BlockModelResolver`, `HandSelection`, `HeldItemRenderer`, `ItemFeatureRenderer`, `JavaMethod`, `UseDuration`,
+  `IsUsingItem`, `HangingSignRenderer`, `FeatureRenderDispatcher`, and `Gui`.
+- Target access helper: `MixinHandMyItemsMinecraftAccessor`.
+
+No `require = 0`, duplicate mixin config, or access-widener entry was added. Private target behavior is reached through
+strict accessors/invokers whose 26.1.2 descriptors were checked with `javap`.
+
+The HMI renderer wraps the two vanilla per-hand calls. Inactive or unready state invokes the original exactly. Active
+state owns the first-person replacement, so ordinary SwingAnimation and ViewModel transforms do not execute a second
+time. Existing HandShader/Iris outer hand-pass capture remains outside this ownership boundary. Matrix pushes/pops are
+balanced with `finally`, and model/dispatcher queues are cleared at the target render boundary.
+
+### LuaJ and safety
+
+- Added `org.luaj:luaj-jse:3.0.1` through Wraith's established `includeDependency` mechanism.
+- Added LuaJ's MIT license at `META-INF/licenses/luaj.txt`.
+- The distributable contains `META-INF/jars/luaj-jse-3.0.1.jar`; the nested JAR contains 354 `org/luaj` entries,
+  including the exact `JavaMethod` target.
+- Loom adds generated nested dependency metadata with ID `org_luaj_luaj-jse`; it has no initializer or entrypoint and
+  does not duplicate Wraith's top-level mod ID. The outer JAR has exactly one top-level `fabric.mod.json`.
+- The JavaMethod restriction is necessarily class-target global inside the bundled LuaJ library. Source search found no
+  other Wraith LuaJ user, so the current observable scope is the embedded HMI environment.
+
+### Resource pack and asset adaptations
+
+- Copied all 206 files to `src/main/resources/resourcepacks/handmyitems`.
+- Preserved exact lookup paths:
+  `minecraft:holdmyitems/hand_pose.lua`, `item_pose.lua`, `hand_relative_pose.lua`, and `item_model.lua`, plus the four
+  addon stack paths used by external packs.
+- Updated only `pack.mcmeta` from the 1.21.11 metadata to target resource format `min_format: 84`, `max_format: 84`.
+- The other 205 files retain reference content. Of those, 195 are byte-identical; ten reference text files were
+  normalized from CRLF to LF and existing trailing line whitespace was removed so `git diff --check` remains clean.
+  No model, texture, sound, RPO, script, or item definition was discarded or redesigned, and the text formatting has
+  no runtime semantics.
+- All JSON/mcmeta parses. Static 26.1.2 inspection confirmed the used item-model selectors/properties remain available;
+  no individual asset/schema rewrite was required. FCL resource loading still requires runtime validation.
+
+### Target adaptations and reasons
+
+- Yarn names were translated to official 26.1.2 mappings and exact target descriptors.
+- Old ordered-render APIs became `SubmitNodeCollector`, feature submission, custom geometry, and target render types.
+- Old block-render manager hooks became `BlockModelResolver`/`BlockModelRenderState` with target tint/light emission.
+- Item model animation moved to target `ItemFeatureRenderer` quad submission while retaining per-quad animator order,
+  glint, tint, outline, and cleanup.
+- Static reference hand-selection mutation was replaced with active-only dynamic field-result modification. Disabled
+  state therefore preserves vanilla selection as required.
+- Camera offsets use target quaternion/vector fields and do not recursively call intercepted setters. They are cleared
+  on lifecycle reset and skipped for `do_a_barrel_roll`, matching reference compatibility behavior.
+- Wraith ViewModel is intentionally skipped while HMI owns rendering because composing it would apply a second
+  transform absent from the reference. It works normally when HMI is inactive.
+- Target `SPEAR` use animation was added beside reference TRIDENT because 26.1.2 exposes the split target action.
+- Transactional cache installation, active-only gating, reconnect reset, and lifecycle-safe dynamic hand selection are
+  required Wraith singleton/disable-state adaptations requested by the task.
+- Package relocation prevents collision with an independently installed Hold My Items mod.
+
+### Excluded reference code
+
+- `FishingBobberMixin` and `PrevLivingMixin` were excluded because they are absent from the active reference mixin
+  configuration and no registered runtime, Lua wrapper, reflection, or reachable class calls them.
+- Unrelated Neverlose camera events/modules, HUD, FOV/post-processing, ClickGUI, GlassHands, sound systems, media player,
+  voice chat, and client render core were excluded. HMI-specific methods were extracted from mixed Neverlose mixins.
+- The small Neverlose wrapper class itself was not copied under a Neverlose package; its enable/disable contract is
+  represented by `ModuleHandMyItems` and `HandMyItemsRuntime`.
+- No unrelated Neverlose dependency, Lombok, second Fabric initializer, or dead duplicate HMI mixin was ported.
+
+### Files changed / added
+
+- Changed: `build.gradle.kts`.
+- Changed: SwingAnimation and its three former New integration files:
+  `ModuleAnimations.kt`, `MixinHeldItemRenderer.java`, `MixinMinecraftClient.java`,
+  `MixinLivingEntityCompatibility.java`.
+- Changed: `ModuleManager.kt`, `liquidbounce.mixins.json`, and `en_us.json`.
+- Added: `ModuleHandMyItems.kt`.
+- Added: 53 runtime Java files under the Wraith-owned HandMyItems runtime package.
+- Added: 16 narrowly scoped HMI mixins.
+- Added: all 206 built-in pack files and `META-INF/licenses/luaj.txt`.
+- Changed: `Agent1.md`.
+- Reference ZIP/source tree, uploaded archives, build cache, and unrelated dirty worktree files were not edited/staged.
+
+### Static verification
+
+- `git diff --check` passed before this entry.
+- SwingAnimation-scoped search has no `Mode.NEW`, `NewLeftHand`, `NewHandState`, New state/helper/renderer symbol, or
+  New localization/config surface. The unrelated NameTags enum value `NEW("New")` remains.
+- No `neverlose.*` or `com.holdmylua` reference remains in target source.
+- Module registration count: one. HMI mixin registration count: 16. Runtime source count: 53. Pack file count: 206.
+- Reference/target `@Safe` annotation count matches `135/135`.
+- All four preprocessed primary scripts compile through packaged LuaJ 3.0.1.
+- All 101 JSON and 17 mcmeta files parse with `jq`.
+
+### Build / JAR inspection
+
+Java:
+
+```text
+openjdk version "25.0.3" 2026-04-21
+OpenJDK Runtime Environment (build 25.0.3)
+OpenJDK 64-Bit Server VM (build 25.0.3, mixed mode)
+```
+
+Command:
+
+```sh
+env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk \
+  PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:$PATH \
+  sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt
+```
+
+Result: **BUILD SUCCESSFUL** in `2m 3s`.
+
+Artifact:
+
+```text
+build/libs/liquidbounce-0.31.2.jar
+sha256=eb3ccf091bb623f3adcc1180cfd91a277830eb43671e01f514d6139e9f2ce44e
+```
+
+JAR inspection confirmed:
+
+- `ModuleHandMyItems.class`, 54 runtime class entries (53 source classes plus loader inner class), and all 16 HMI mixin
+  classes are present.
+- Nested LuaJ, license metadata, all 206 resource files, four primary Lua scripts, item definitions/models/textures,
+  particles, pack metadata, localization, and the existing mixin config are present.
+- No New-specific SwingAnimation class/state, Neverlose class, `com/holdmylua` class, second top-level
+  `fabric.mod.json`, HMI initializer, or stale duplicate HMI mixin is present.
+
+### Runtime status
+
+FCL/MobileGlues runtime testing was **not performed** by Codex in this shell. Build, bytecode, script compilation, and
+packaging checks are not runtime proof.
+
+Status pending FCL validation:
+
+- Main hand and independent offhand animation: source/build complete, runtime unverified.
+- Item use, map, bow/crossbow, shield, spear/trident, brush, spyglass, throwables: runtime unverified.
+- Item models, custom quads/glint, block models, animated textures, and particles: runtime unverified.
+- Resource reload, repeated toggle, reconnect/world change, and enabled-at-restart lifecycle: runtime unverified.
+- Iris/shaders, HandShader, ViewModel, SwingAnimation remaining modes, camera modules, KillAura, and FCL/MobileGlues:
+  runtime unverified.
+- Disable fallback and no-double-render guarantees were statically reviewed but require runtime observation.
+
+### Commit / push
+
+Commit hash: pending at entry creation; final hash is reported in the assistant response because the commit cannot
+self-record its own final hash inside this file.
+
+Branch: `main`
+
+Remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`
+
+Push result: pending at entry creation; final push status is reported in the assistant response.
+
+### Supersedes / reverts
+
+This entry supersedes all previous SwingAnimation New, Hold My Item, Hold My Items, and HandMyItems attempts. The old
+hardcoded New implementation is removed and is not a fallback for this runtime.
