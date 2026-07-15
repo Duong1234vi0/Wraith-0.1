@@ -5812,3 +5812,407 @@ Push status: implementation commit pushed to `origin/main` successfully (`16ee33
 ### Supersedes / reverts
 
 Supersedes the live nested `ClientSound.CritSound` implementation. No earlier `Agent1.md` ClientSound/CritSound/HitSound historical entry was found to supersede.
+
+## HitSound FCL installation/runtime audit (2026-07-15, Codex)
+
+### User-reported symptom
+
+Wraith has a standalone Combat module named `HitSound`. Expected behavior is: on an attack against a living and alive entity, while `player.fallDistance > 0.0f && !player.onGround()`, play `SoundEvents.WITHER_AMBIENT` on `SoundSource.PLAYERS`. User is using `Criticals` mode `Jump`, but no Wither sound is audible when the critical attack occurs.
+
+Scope for this pass: read-only diagnosis of the actual FCL installation first. No Wraith source code, build output, runtime config, sound settings, JARs, or FCL files were modified during the investigation. Only this `Agent1.md` entry was appended afterward.
+
+### Requested FCL path
+
+Requested version directory:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/
+```
+
+Top-level contents observed included:
+
+- `.fabric/`
+- `26.1.2-Fabric.jar` (`38113927` bytes, modified `2026-06-20 16:15:11 +0700`)
+- `26.1.2-Fabric.json` (`124215` bytes, modified `2026-06-20 16:15:37 +0700`)
+- `LiquidBounce/`
+- `config/`
+- `crash-reports/`
+- `debug/`
+- `downloads/`
+- `fclversion.cfg`
+- `log4j2.xml`
+- `logs/`
+- `mods/`
+- `options.txt`
+- `resourcepacks/`
+- `saves/`
+- `screenshots/`
+- `shaderpacks/`
+
+No symlinks were observed in the shallow version-directory inspection.
+
+### Actual game/isolation directory
+
+Actual active game directory:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric
+```
+
+Evidence:
+
+- `fclversion.cfg` contains `"isolateGameDir": true`.
+- `/storage/emulated/0/FCL/log/latest_game.log` reports `Working directory: /storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric`.
+- The launch arguments in the same log include `--gameDir /storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric`.
+
+Conclusion: version isolation is enabled and this profile uses the version-local game directory, not a global `.minecraft` game directory.
+
+### Active mods directory
+
+Actual active mods directory:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods
+```
+
+How determined:
+
+- The active game directory is the isolated version directory.
+- That directory contains `mods/`.
+- `/storage/emulated/0/FCL/.minecraft/mods` does not exist.
+- `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/.minecraft/mods` does not exist.
+- Fabric loader in `latest.log` reports `Loading 118 mods`, and the active mods listed match the version-local `mods/` inventory.
+
+### Installed JAR inventory
+
+JARs in the active mods directory:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/fabric-api-0.151.0+26.1.2.jar
+size=2498064
+sha256=8dae604caafc4179617ee87f73bfb4a7885f7db21ed752b375c64e41924641d6
+
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/sodium-fabric-0.8.12+mc26.1.2.jar
+size=1844226
+sha256=e084c5c3c520dc0718dbaef1deafef0ba2c7c0d77c701ac34c07646f6ccb81df
+
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/iris-fabric-1.10.9+mc26.1.1.jar
+size=2803860
+sha256=aea0eefb174d19ad97a812b6de2e304f0d3abc50357b316908cf1035f1514b07
+
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/fabric-language-kotlin-1.13.12+kotlin.2.4.0.jar
+size=8076848
+sha256=36c5dd8b728e3470d2882ae63119b93a20500fc0ea6f5c945c12bf65b5ab1832
+
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar
+size=18901064
+modified=2026-07-15 13:20:43 +0700
+sha256=5018f90255d998f264fa1520a9d043c4ee0360402bd68fa4404f9ec96d7ef48d
+
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/appleskin-fabric-mc26.1.2-3.0.10.jar
+size=181584
+sha256=6a03ad4fcf0a2c831ebabd56fc1b5aca2463e35f289a927adfdbaaf0e944d41c
+
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/sodium-extra-fabric-0.8.7+mc26.1.1.jar
+size=401602
+sha256=ba7787879e9154a1d8aa2b9c1e64b718816bd133f80c11242f424d566815211c
+
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/reeses-sodium-options-fabric-2.1.0+mc26.1.2.jar
+size=139606
+sha256=c4d90f58363239b33d75ae654bc1a286b4513e6328be3de05e33b3dec3e915b9
+
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/ViaFabricPlus-4.5.5.jar
+size=27037935
+sha256=47318151754b535bb2defac802c3436c7cc61525a22f06bad85241b48febd237
+```
+
+### Wraith/LiquidBounce candidate JAR
+
+Candidate:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar
+```
+
+Evidence:
+
+- `fabric.mod.json`: id `liquidbounce`, name `LiquidBounce`, version `0.31.2`.
+- Contains `net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.class`: yes.
+- Contains `net/ccbluex/liquidbounce/features/module/modules/misc/ModuleClientSound.class`: yes.
+- Contains `net/ccbluex/liquidbounce/features/module/ModuleManager.class`: yes.
+- Contains obsolete `net/ccbluex/liquidbounce/features/module/modules/misc/ModuleClientSound$CritSound.class`: no.
+- Contains HitSound localization in `resources/liquidbounce/lang/en_us.json`: yes, including `liquidbounce.module.hitSound.description`.
+
+Conclusion: the active mods directory contains the current/new HitSound build. It is not missing `ModuleHitSound` bytecode and it does not still contain the obsolete nested `ClientSound.CritSound` class.
+
+### Repository build comparison
+
+Repository build inspected:
+
+```text
+build/libs/liquidbounce-0.31.2.jar
+size=18901064
+modified=2026-07-15 13:14:14 +0700
+sha256=5018f90255d998f264fa1520a9d043c4ee0360402bd68fa4404f9ec96d7ef48d
+```
+
+Installed FCL JAR:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar
+size=18901064
+modified=2026-07-15 13:20:43 +0700
+sha256=5018f90255d998f264fa1520a9d043c4ee0360402bd68fa4404f9ec96d7ef48d
+```
+
+Checksum match: yes.
+
+Both JARs contain `ModuleHitSound.class`, contain `ModuleClientSound.class`, contain HitSound localization, and do not contain `ModuleClientSound$CritSound.class`.
+
+Conclusion: this is not an outdated installed JAR and the built JAR was installed into the active version-local mods directory.
+
+### Version JSON and launch metadata
+
+Version JSON:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/26.1.2-Fabric.json
+```
+
+Findings:
+
+- `id`: `26.1.2-Fabric`
+- `type`: `release`
+- `mainClass`: `net.fabricmc.loader.impl.launch.knot.KnotClient`
+- no `inheritsFrom` value was present.
+- libraries include Fabric Loader `net.fabricmc:fabric-loader:0.18.6`.
+- Wraith/LiquidBounce is not referenced directly as a version JSON library/classpath entry.
+- The version JAR is referenced as the Minecraft client jar by FCL (`-Dminecraft.client.jar=/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/26.1.2-Fabric.jar`).
+
+Version JAR inspected:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/26.1.2-Fabric.jar
+size=38113927
+sha256=b1b3158572666445eff01e82fad8c7de2e4953db6d354f311730d77a8359d0b0
+```
+
+It does not contain `ModuleHitSound.class`, `ModuleClientSound.class`, `ModuleManager.class`, obsolete `ModuleClientSound$CritSound.class`, or `fabric.mod.json`.
+
+Conclusion: Wraith/LiquidBounce is loaded as a normal Fabric mod from the isolated profile's `mods/` directory, not from the main version JAR and not as a direct version JSON library.
+
+### Runtime log findings
+
+Logs inspected:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/logs/latest.log
+/storage/emulated/0/FCL/log/latest_game.log
+```
+
+Relevant evidence:
+
+- `latest.log:1`: `Loading Minecraft 26.1.2 with Fabric Loader 0.18.6`
+- `latest.log:3`: `Loading 118 mods`
+- `latest.log:70`: `- liquidbounce 0.31.2`
+- `latest.log:243`: resource manager includes `liquidbounce`
+- `latest.log:244`: `Launching LiquidBounce vunofficial by CCBlueX`
+- `latest.log:355`: `LiquidBounce has been successfully initialized.`
+- `latest.log:361`: `OpenAL initialized on device OpenSL`
+- `latest.log:362`: `Sound engine started`
+- `latest_game.log:19`: `liquidbounce-0.31.2 | liquidbounce | 0.31.2 | FABRIC`
+- `latest_game.log:104`: active working directory is `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric`
+
+The log confirms the mod id/version, not a full absolute source JAR path. The exact loaded JAR path is inferred from the active isolated game directory, the active version-local `mods/` directory, and the fact that there is only one LiquidBounce/Wraith JAR in that active mods directory.
+
+No `HitSound`, `ModuleHitSound`, `CritSound`, or `WITHER_AMBIENT` runtime lines were found. That is not proof that the attack handler did or did not run, because this module does not log every attack or every predicate failure.
+
+Relevant errors/warnings seen, none directly tied to HitSound audio playback:
+
+- Mapping load error: `Unable to load mappings`, `Unsupported format`.
+- ScriptAPI initialization failure due `ClassNotFoundException: org.graalvm.nativeimage.ImageInfo`.
+- ScriptManager cannot load scripts before the script engine initializes.
+- Iris/render pipeline missing program warnings.
+- One Netty read timeout.
+
+No OpenAL failure was found. Sound engine initialized and restarted successfully.
+
+### Module configuration state
+
+Active module config path:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/LiquidBounce/modules.json
+```
+
+Evidence:
+
+- `latest.log` reports `Successfully loaded config 'modules'.`
+- `latest.log` reports `Successfully saved config 'modules'.`
+- The isolated version-local `LiquidBounce/modules.json` timestamp matches the latest run (`2026-07-15 13:23:20 +0700`).
+- Global `/storage/emulated/0/FCL/.minecraft/LiquidBounce` does not exist.
+
+Values parsed from active modules config:
+
+```text
+HitSound entry exists: yes
+HitSound enabled: true
+HitSound Volume: 1.0
+HitSound Pitch: 1.0
+
+ClientSound entry exists: yes
+ClientSound enabled: true
+ClientSound SoundMode: Wav
+ClientSound Volume: 67
+
+Old ClientSound.CritSound values remain in active modules config: no
+
+Criticals enabled: true
+Criticals Mode: Jump
+Criticals Jump Height: 0.42
+Criticals Jump Range: 6.0
+Criticals Jump OptimizeForCooldown: true
+Criticals Jump CheckKillaura: true
+Criticals Jump CheckAutoClicker: true
+Criticals Jump CanBeSeen: true
+
+KillAura enabled: false
+KillAura Criticals selection: Smart
+```
+
+Conclusion: the missing sound is not explained by HitSound being absent or disabled in the active module config. The old nested `ClientSound.CritSound` state is absent from the active config and does not need to be migrated for this active runtime state.
+
+### Audio option state
+
+Active options file:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/options.txt
+modified=2026-07-15 13:25:06 +0700
+```
+
+Global `/storage/emulated/0/FCL/.minecraft/options.txt` does not exist.
+
+Relevant options:
+
+```text
+soundDevice:""
+soundCategory_master:1.0
+soundCategory_music:0.4941830590653367
+soundCategory_record:1.0
+soundCategory_weather:1.0
+soundCategory_block:1.0
+soundCategory_hostile:1.0
+soundCategory_neutral:1.0
+soundCategory_player:1.0
+soundCategory_ambient:1.0
+soundCategory_voice:1.0
+soundCategory_ui:1.0
+```
+
+Conclusion: `SoundSource.PLAYERS` should be audible according to active options. Master volume is `1.0`; Players category volume is `1.0`; Players category is not muted.
+
+Asset sanity:
+
+- `/storage/emulated/0/FCL/.minecraft/assets/indexes/30.json` contains `minecraft/sounds.json`.
+- Wither idle sound assets exist for `idle1.ogg`, `idle2.ogg`, `idle3.ogg`, and `idle4.ogg`.
+- No missing Wither sound-resource error was found in the runtime logs.
+
+### Duplicates and stale installations
+
+Search under `/storage/emulated/0/FCL/.minecraft` found one LiquidBounce/Wraith candidate:
+
+```text
+/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar
+sha256=5018f90255d998f264fa1520a9d043c4ee0360402bd68fa4404f9ec96d7ef48d
+contains ModuleHitSound.class: yes
+contains obsolete ModuleClientSound$CritSound.class: no
+```
+
+Other name matches were unrelated libraries or Minecraft/Fabric artifacts, including `httpclient`, `client-intermediary.jar`, and `fabric-client-tags-api`.
+
+Conclusion: no old/new LiquidBounce duplicate JAR risk was found in the searched FCL `.minecraft` tree. The new JAR is not in the wrong folder; it is installed in the active isolated mods directory.
+
+### Source and bytecode comparison
+
+Current repository source:
+
+```text
+src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleHitSound.kt
+```
+
+Observed behavior:
+
+- Event handler: `AttackEntityEvent`
+- Priority: `READ_FINAL_STATE`
+- Cancel check: returns when `event.isCancelled`
+- Target checks: target must be `LivingEntity` and `target.isAlive`
+- Critical predicate: `player.fallDistance > 0.0f && !player.onGround()`
+- Sound call: `level.playSound(player, player.x, player.y, player.z, SoundEvents.WITHER_AMBIENT, SoundSource.PLAYERS, volume, pitch)`
+- Volume setting: default `1.0f`, range `0.1f..2.0f`, step `0.05f`
+- Pitch setting: default `1.0f`, range `0.5f..2.0f`, step `0.05f`
+
+Installed JAR bytecode matches the repository source:
+
+- `ModuleHitSound.class` registers an `AttackEntityEvent` handler at priority `-1000` (`READ_FINAL_STATE`).
+- It checks `AttackEntityEvent.isCancelled()`.
+- It casts target to `LivingEntity`.
+- It checks `LivingEntity.isAlive()`.
+- It checks `LocalPlayer.fallDistance > 0.0f` and `!onGround()`.
+- It calls `ClientLevel.playSound(Entity, DDD, SoundEvent, SoundSource, FF)` with `SoundEvents.WITHER_AMBIENT` and `SoundSource.PLAYERS`.
+
+Runtime sound API check:
+
+- `Level.playSound(except, x, y, z, ...)` delegates to `playSeededSound(except, ...)`.
+- `ClientLevel.playSeededSound(except, x, y, z, ...)` plays locally when `except == this.minecraft.player`.
+- Therefore the current `level.playSound(player, ...)` call shape is not, by itself, proven to suppress the local sound in this mapped client.
+
+### Diagnosis table
+
+| Check | Result | Evidence | Likely impact |
+|---|---|---|---|
+| Active game directory | version-local `26.1.2-Fabric` | FCL log working directory and `--gameDir`; `isolateGameDir=true` | Correct isolated profile inspected |
+| Active mods directory | version-local `mods/` | global mods path missing; active game dir has `mods/` | Correct mod folder inspected |
+| Installed Wraith JAR path | `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar` | only LiquidBounce candidate in active mods dir | Correct installed candidate |
+| Installed JAR has `ModuleHitSound` | yes | JAR content inspection | HitSound bytecode installed |
+| Installed JAR lacks old `CritSound` class | yes | no `ModuleClientSound$CritSound.class` | Not stale nested implementation |
+| Installed checksum matches repository build | yes | both SHA-256 `5018f90255d998f264fa1520a9d043c4ee0360402bd68fa4404f9ec96d7ef48d` | Built JAR is installed |
+| Fabric log confirms client loaded | yes for mod id/version; exact path inferred | `latest.log` has `liquidbounce 0.31.2`; `latest_game.log` has `liquidbounce-0.31.2 | liquidbounce | 0.31.2 | FABRIC` | Loaded mod matches active candidate by isolation and uniqueness |
+| HitSound config entry exists | yes | active `LiquidBounce/modules.json` | Config has new standalone module |
+| HitSound enabled | true | active modules config | Not disabled |
+| Volume/Pitch | `1.0` / `1.0` | active modules config | Audible module settings |
+| Master volume | `1.0` | active `options.txt` | Not muted globally |
+| Players volume | `1.0` | `soundCategory_player:1.0` | `SoundSource.PLAYERS` not muted |
+| Sound engine | initialized | `OpenAL initialized on device OpenSL`; `Sound engine started` | Audio backend available |
+| Runtime errors | none tied to HitSound/sound assets | errors are mappings, ScriptAPI, Iris/render, ping/timeout | No concrete audio-blocking error found |
+| Duplicate/old JARs | none found for LiquidBounce/Wraith | duplicate search found only active LiquidBounce candidate | Wrong-JAR/stale-JAR cause unlikely |
+| Criticals mode | `Jump`, enabled | active modules config | User's stated mode confirmed |
+| KillAura Criticals selection | `Smart`; KillAura disabled | active modules config | Aura path likely inactive unless enabled later |
+
+### Likely root cause
+
+The installation side is clean: current JAR installed, correct isolated mods directory, loaded mod id/version present in logs, HitSound class present, config enabled, volume/pitch audible, Players category not muted, sound engine initialized, and no duplicate stale LiquidBounce JAR was found.
+
+The remaining likely cause is runtime predicate timing: `HitSound` only plays when the `AttackEntityEvent` handler sees `player.fallDistance > 0.0f && !player.onGround()` at `READ_FINAL_STATE`. With `Criticals` mode `Jump`, the user can observe a critical attack while the local player state at the exact attack event may not satisfy this predicate. The module currently logs neither event entry nor predicate values, so the latest logs cannot prove which of `event fired`, `target valid`, `fallDistance`, or `onGround` failed at runtime.
+
+No source-code patch is justified from installation evidence alone. The smallest next step is a runtime probe or debug build that logs one line for `HitSound` attack decisions: event cancelled, target class/alive, `fallDistance`, `onGround`, and whether the sound call is reached. After that, either keep the predicate as-is if it is not reached by design, or adjust the predicate/sound trigger with concrete runtime evidence.
+
+### Recommendation
+
+Do not replace JARs, configs, or audio settings for this issue. The installed FCL profile already has the current HitSound build enabled and audible by settings.
+
+Recommended next action, not performed in this audit:
+
+```text
+Add temporary HitSound attack-decision logging, build/install/test once in FCL, then remove or convert to proper debug logging after confirming whether the fallDistance/onGround predicate is false at the attack event.
+```
+
+Explicitly not performed:
+
+- no Wraith source patch;
+- no rebuild;
+- no JAR replacement;
+- no runtime config edit;
+- no module enable/disable;
+- no sound setting edit;
+- no runtime file deletion or move.
