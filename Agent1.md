@@ -7199,3 +7199,90 @@ hash.
 
 This entry supersedes all previous SwingAnimation New, Hold My Item, Hold My Items, and HandMyItems attempts. The old
 hardcoded New implementation is removed and is not a fallback for this runtime.
+
+## HandMyItems constructor-mixin crash and strict runtime audit (2026-07-15, Codex)
+
+### Crash evidence and correction
+
+The user-supplied FCL log reports:
+
+```text
+Mixin apply failed: liquidbounce.mixins.json:minecraft.handmyitems.MixinHandMyItemsMinecraft
+InvalidInjectionException: @At("HEAD") selector @Inject handler before super() invocation must be static
+Target: net.minecraft.client.Minecraft.<init>(GameConfig)
+Handler: hmi$initializeRuntime(CallbackInfo)
+```
+
+The invalid injector was the instance `@Inject(method = "<init>", at = @At("HEAD"))` in
+`MixinHandMyItemsMinecraft`. It was removed completely, rather than made static or moved to another constructor
+location. The Neverlose reference has no HMI Minecraft-constructor initializer; Wraith's normal client-start/module
+initialization now owns the idempotent built-in-pack and reload-listener registration.
+
+The previous `setLevel` runtime-restore injector and the disconnect handler that disabled HMI were also removed. The
+module is the source of truth: enable owns `Runtime.enable()`, disable owns `Runtime.disable()`, and world/player
+changes clear transient state while retaining active ownership when the module remains enabled.
+
+### Camera bytecode audit
+
+The merged Minecraft 26.1.2 bytecode shows `Camera.setPosition(DDD)` constructs a `Vec3` and invokes
+`Camera.setPosition(Vec3)`. The vector overload directly writes `position` and updates `blockPosition`. Calling the
+vector overload from the scalar injector therefore recursively re-entered the scalar injector. The port now injects
+both exact descriptors and directly updates those two fields through a unique helper; disabled and
+`do_a_barrel_roll` paths fall through to vanilla behavior. No recursion guard or intercepted-overload call remains.
+
+### Current 16-mixin audit
+
+| Wraith mixin | Reference responsibility | 26.1.2 target / descriptor | Result |
+|---|---|---|---|
+| BlockModelResolver | Block model rendering | `BlockModelResolver.update(BlockModelRenderState,BlockState,BlockDisplayContext)` | verified; Wraith API split |
+| Camera | camera rotation/position | `setRotation(FFF)V`, `setPosition(DDD)V`, `setPosition(Vec3)V` | verified; vector companion added |
+| FeatureRenderDispatcher | frame cleanup | `renderAllFeatures()V` | verified |
+| GameRenderer | frame/runtime hook | `render(...)V` | verified |
+| Gui | debug/render-state hook | `extractRenderState(GuiGraphicsExtractor,DeltaTracker)V` | verified Wraith adaptation |
+| HandSelection | hand selection | `ItemInHandRenderer.renderHandsWithItems(...)V` field expressions | verified active-only |
+| HangingSignRenderer | hanging-sign model | `submitSpecial(...)V` | verified |
+| HeldItemRenderer | hand/item rendering | `renderHandsWithItems(...)V`, `renderArmWithItem(...)V` | verified |
+| IsUsingItem | using-item predicate | `get(ItemStack,ClientLevel,LivingEntity,int,ItemDisplayContext)Z` | verified |
+| ItemFeatureRenderer | item model/quads | `renderItem(BufferSource,OutlineBufferSource,ItemSubmit)V` | verified |
+| ItemStack | replacement stack copy | `copy()ItemStack` | verified |
+| JavaMethod | script method invocation | `invokeMethod(Object,Varargs)LuaValue` | verified LuaJ 3.0.1 |
+| LivingEntity | swing/transient state | `baseTick()V`, `swing(InteractionHand,boolean)V` | verified |
+| Minecraft | swing reset | `startAttack()Z`, `startUseItem()V` invocations | verified; constructor/setLevel HMI hooks removed |
+| MinecraftAccessor | block-model resolver access | `Minecraft.blockModelResolver` | verified |
+| UseDuration | use-duration property | `get(ItemStack,ClientLevel,ItemOwner,int)F` | verified |
+
+The 16 entries are a target-version split/adaptation of the 14 active Neverlose responsibilities; no broken target,
+shadow, accessor, descriptor, constructor, or MixinExtras mapping was found, and no `require = 0` suppression was used.
+
+### Strict parity classification
+
+- Source-faithful: enable/disable ownership, script/model/item/hand paths, frame cleanup, active-only selection,
+  independent main/offhand state, and the embedded resource pack/scripts.
+- Required 26.1.2 adaptations: renamed/split renderer targets, `BlockModelResolver`, feature-dispatcher cleanup,
+  Wraith MixinExtras signatures, and direct `Camera` field updates for the target bytecode.
+- Required Wraith lifecycle adaptation: registration remains in normal `ModuleHandMyItems.init()` after Wraith client
+  start; it is idempotent and is not a second Fabric initializer.
+- Invented behavior removed: Minecraft constructor runtime initialization, `setLevel` re-enable/disable arbitration,
+  and disconnect-driven runtime deactivation.
+- Remaining deviations: FCL disabled/enabled launch and behavior smoke tests are still required; source parity alone is
+  not runtime proof.
+
+### Verification
+
+- `git diff --check`: passed.
+- Clean command: `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`.
+- Result: **BUILD SUCCESSFUL** (2m 22s).
+- Built SHA-256: `26571682961b93fd6327e4f835120c8fb872ffd4cfae9ce457f8342c2aa7bd1c`.
+- Installed SHA-256: same; previous JAR backed up as `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar.bak-20260715-232205`.
+- Module-disabled launch: not run in this shell; FCL result pending.
+- Module-enabled launch: not run in this shell; FCL result pending.
+- World load and main/offhand smoke matrix: not run; runtime unverified.
+
+Runtime status: Compile verified; Mixin bootstrap verified **no**; disabled path verified **no**; enabled path verified
+**no**; behavior parity verified **no**. HandMyItems must not be called runtime-verified until both module-disabled and
+module-enabled FCL launches succeed.
+
+Commit hash: pending until the feature commit is created; push result: pending.
+
+This corrects the prior “source-complete” claim: compilation and static review did not validate constructor-injection
+rules, target bytecode call graphs, or FCL runtime bootstrap.

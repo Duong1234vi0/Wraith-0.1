@@ -2,9 +2,7 @@ package net.ccbluex.liquidbounce.injection.mixins.minecraft.handmyitems;
 
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.HandMyItemsRuntime;
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.access.LivingEntityAccessor;
-import net.ccbluex.liquidbounce.features.module.modules.render.ModuleHandMyItems;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.InteractionHand;
 import org.jspecify.annotations.Nullable;
@@ -21,21 +19,6 @@ public abstract class MixinHandMyItemsMinecraft {
 
     @Shadow
     public @Nullable LocalPlayer player;
-
-    @Inject(method = "<init>", at = @At("HEAD"))
-    private void hmi$initializeRuntime(CallbackInfo ci) {
-        HandMyItemsRuntime.initialize();
-    }
-
-    @Inject(method = "setLevel", at = @At("TAIL"))
-    private void hmi$restoreRuntimeOnJoin(ClientLevel level, CallbackInfo ci) {
-        boolean enabled = ModuleHandMyItems.INSTANCE.getEnabled();
-        if (enabled && !HandMyItemsRuntime.isActive()) {
-            HandMyItemsRuntime.enable();
-        } else if (!enabled && HandMyItemsRuntime.isActive()) {
-            HandMyItemsRuntime.disable();
-        }
-    }
 
     @Inject(
         method = "startAttack",

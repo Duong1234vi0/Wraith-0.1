@@ -4,6 +4,7 @@ import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runti
 import net.ccbluex.liquidbounce.features.module.modules.render.handmyitems.runtime.access.CameraAccessor;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Camera;
+import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
@@ -39,7 +40,11 @@ public abstract class MixinHandMyItemsCamera implements CameraAccessor {
     private int matrixPropertiesDirty;
 
     @Shadow
-    public abstract void setPosition(Vec3 position);
+    private Vec3 position;
+
+    @Shadow
+    @Final
+    private BlockPos.MutableBlockPos blockPosition;
 
     @Unique
     private float hmi$pitchOffset;
@@ -105,8 +110,23 @@ public abstract class MixinHandMyItemsCamera implements CameraAccessor {
         if (!HandMyItemsRuntime.isActive() || FabricLoader.getInstance().isModLoaded("do_a_barrel_roll")) {
             return;
         }
-        this.setPosition(new Vec3(x + this.hmi$xOffset, y + this.hmi$yOffset, z + this.hmi$zOffset));
+        this.hmi$setPosition(new Vec3(x + this.hmi$xOffset, y + this.hmi$yOffset, z + this.hmi$zOffset));
         ci.cancel();
+    }
+
+    @Inject(method = "setPosition(Lnet/minecraft/world/phys/Vec3;)V", at = @At("HEAD"), cancellable = true)
+    private void hmi$applyVectorPositionOffsets(Vec3 position, CallbackInfo ci) {
+        if (!HandMyItemsRuntime.isActive() || FabricLoader.getInstance().isModLoaded("do_a_barrel_roll")) {
+            return;
+        }
+        this.hmi$setPosition(position.add(this.hmi$xOffset, this.hmi$yOffset, this.hmi$zOffset));
+        ci.cancel();
+    }
+
+    @Unique
+    private void hmi$setPosition(Vec3 position) {
+        this.position = position;
+        this.blockPosition.set(position.x, position.y, position.z);
     }
 
     @Unique

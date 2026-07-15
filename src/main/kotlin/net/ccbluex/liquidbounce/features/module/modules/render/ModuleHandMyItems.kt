@@ -18,7 +18,6 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.render
 
-import net.ccbluex.liquidbounce.event.events.DisconnectEvent
 import net.ccbluex.liquidbounce.event.events.GameTickEvent
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.handler
@@ -46,14 +45,9 @@ object ModuleHandMyItems : ClientModule("HandMyItems", Category.RENDER) {
 
     @Suppress("unused")
     private val worldChangeHandler = handler<WorldChangeEvent> { event ->
-        lastPlayer = mc.player
-        HandMyItemsRuntime.onWorldChanged(event.world != null)
-    }
-
-    @Suppress("unused")
-    private val disconnectHandler = handler<DisconnectEvent> {
+        // setLevel is the authoritative world boundary; keep runtime ownership while enabled.
         lastPlayer = null
-        HandMyItemsRuntime.disable()
+        HandMyItemsRuntime.onWorldChanged(event.world != null)
     }
 
     @Suppress("unused")
