@@ -29,7 +29,7 @@ import java.nio.file.spi.FileSystemProvider
 plugins {
     id("net.fabricmc.fabric-loom")
     kotlin("jvm")
-    id("io.gitlab.arturbosch.detekt") version "1.23.6"
+    id("io.gitlab.arturbosch.detekt") version "1.23.8"
     // Note: Node plugin removed - no longer needed without Svelte
     // id("com.github.node-gradle.node") version "7.1.0"
     id("org.jetbrains.dokka") version "1.9.10"
