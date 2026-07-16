@@ -7823,3 +7823,142 @@ with the Minecraft 1.21.4 behavior; no second Offhand module was added.
   Offhand history entry; staging this file as requested would also stage that unrelated work. To preserve the dirty
   worktree, the MacroAnchor source remains unstaged pending authorization to include the pre-existing Agent1 change
   or to commit the port without its history entry.
+
+## Argon KeyPearl and TriggerBot strict behavior ports (2026-07-16, Codex)
+
+### Request, authority, and evidence reviewed
+
+- Requested two separate strict observable-behavior ports from Argon b1.1 for Minecraft `1.21.11`, Yarn
+  `1.21.11+build.4`, and Fabric Loader `0.18.4`: Wraith `KeyPearl` in Misc and Wraith `TriggerBot` in Combat.
+  The requested compact Wraith names intentionally differ from Argon's visible `Key Pearl` and `Trigger Bot`.
+- Argon behavior authority was read completely from `KeyPearl.java`, `TriggerBot.java`, `InventoryUtils.java`,
+  `KeyUtils.java`, `TimerUtils.java`, `WorldUtils.java`, `MouseSimulation.java`, `AttackListener.java`,
+  `TickListener.java`, `MinecraftClientMixin.java`, `Friends.java`, `FriendManager.java`, `MinMaxSetting.java`, and
+  `ModuleManager.java`. `MouseSimulation` and its call paths were traced before adapting either synthetic-input
+  setting.
+- Live Wraith API/integration authority reviewed `ModuleManager`, game/entity events and event manager,
+  `MixinMinecraftClient`, `MixinClientPlayerInteractionManager`, `ModuleAutoPearl`, `ModuleClickAction`,
+  `ModuleMiddleClickAction`, `ModuleAutoWeapon`, `ModuleKillAura`, `ModuleTargets`, `FriendManager`, combat/entity/
+  item/inventory/input helpers, and the existing MacroAnchor click recorder. Later relevant Agent1 history was read
+  as append-only chronology.
+- Target `26.1.2` official bytecode was checked for `MultiPlayerGameMode.useItem`,
+  `ensureHasSentCarriedItem`, direct `attack`, and `LivingEntity.getLastHurtMob`. `useItem` performs its own
+  carried-slot synchronization; `getLastHurtMob` is the target mapping of the Yarn last-attacked value used by
+  Argon's `getAttacking()`.
+- Reviewed, but did not change, the possible conflicts: KeyPearl with ClickAction Pearl, MiddleClickAction Pearl,
+  and AutoPearl; TriggerBot with KillAura, AutoWeapon, Criticals, and any later click-simulation consumer. No
+  automatic mutual exclusion was added.
+
+### Added files, identities, registration, and localization
+
+- Added `features/module/modules/misc/ModuleKeyPearl.kt`: `KeyPearl`, category `MISC`, description
+  `Switches to an Ender Pearl and throws it while the activation bind is held.`
+- Added `features/module/modules/combat/ModuleTriggerBot.kt`: `TriggerBot`, category `COMBAT`, description
+  `Automatically attacks eligible entities under the crosshair.`
+- Added isolated `utils/input/TriggerBotClickSimulation.kt`; it is a bounded client-thread synthetic record only and
+  does not dispatch Wraith mouse events, alter GLFW state, feed module binds, use an item, or create an attack.
+- Registered each module exactly once in `ModuleManager` and added the requested English module descriptions plus
+  KeyPearl `SwitchDelay` description. No existing Pearl, combat, or input module was merged or modified.
+
+### KeyPearl parity
+
+- Custom setting order/defaults: held runtime `ActivateKey` bound to unknown/unbound; `Delay=0` ticks (`0..20`);
+  `SwitchBack=true`; `SwitchDelay=0` ticks (`0..20`), described as the post-throw return delay. Keyboard, mouse,
+  keysym, and scancode binds use current `InputBind`; unbound is explicitly inactive rather than AutoCrystal's
+  unbound-always-active convention.
+- Preserved `active`, `hasActivated`, `clock`, `previousSlot`, and `switchClock`, including enable reset and safe
+  reset on disable, disconnect, world replacement, and local-player replacement. An open screen returns before
+  activation, clock advancement, slot movement, or active-cycle reset.
+- Every eligible held tick sets `active=true` without an edge requirement. A completed cycle resets, so continuing to
+  hold the activation bind repeats the throw cycle; release after activation does not abort the already active cycle.
+- Captures the current selected slot once, visibly searches only Hotbar indexes `0..8` for the first Ender Pearl,
+  and selects that index. It does not search inventory/container/Offhand, rotate, refill, use SilentHotbar, or check
+  cooldowns. The missing-Pearl return value is deliberately ignored: if no Hotbar Pearl exists, the still-selected
+  MainHand item is used. This dangerous source quirk is intentionally retained.
+- Delay is an eligible-tick integer clock: while `clock < Delay`, increment and return. Then direct MainHand
+  `useItem` is called once; only an accepted result swings, while `hasActivated` advances even for a rejected result.
+  The `26.1.2` interaction method synchronizes a changed carried slot itself, avoiding a duplicate packet.
+- `SwitchBack=false` resets while leaving the selected throw slot. Otherwise SwitchDelay advances as an eligible-tick
+  clock, visibly restores the stored index, invokes the one required carried-slot synchronization, and resets.
+
+### TriggerBot parity
+
+- Exact custom setting order/defaults: `WorkInScreen=false`, `WhileUse=false`, `OnLeftClick=false`,
+  `AllItems=false`, `SwordDelay=540..550 ms`, `AxeDelay=780..800 ms`, `CheckShield=false`,
+  `WhileAscending=false`, `SamePlayer=false`, `OnlyCritSword=false`, `OnlyCritAxe=false`, `SwingHand=true`,
+  `ClickSimulation=false`, `StrayBypass=false`, `AllEntities=false`, `UseShield=false`, and `ShieldTime=350 ms`
+  (`100..1000`). Integer settings retain the source's unit/ranges and unit step.
+- Uses one monotonic `System.nanoTime()` timer. It samples delay ranges on enable without resetting the timer, and
+  uses explicit upper-exclusive sampling: Sword possible values are `540..549`, Axe values are `780..799`, and equal
+  endpoints return that exact value. A successful direct branch resamples only its matching delay then resets the
+  shared timer.
+- Tick order is screen gate, narrow friend gate, one MainHand stack read, physical raw-GLFW OnLeftClick gate,
+  physical RMB plus Offhand Food/Shield WhileUse gate, exact ascending/fall-distance gate, and current crosshair
+  `EntityHitResult` only. It does not scan, rotate, custom-raycast, or attack through blocks.
+- Friend adaptation is deliberately narrow: a crosshair Player in `FriendManager` is skipped only while global Combat
+  Targets does not explicitly include `FRIENDS`; full Wraith `shouldBeAttacked()` filtering is not applied to every
+  entity. This maps Argon's unavailable `Friends.AntiAttack` toggle without altering `AllEntities`, `StrayBypass`, or
+  non-player behavior.
+- Branch order remains Sword, then Axe when AllItems is off; AllItems uses the Sword branch for every item. Sword and
+  AllItems use SwordDelay and OnlyCritSword; Axe uses AxeDelay and OnlyCritAxe. Item classification uses Wraith's
+  exact sword/axe tags, not damage heuristics.
+- Eligibility is Player, or `StrayBypass` plus target `Zombie` class/subclasses, or `AllEntities`; there is no
+  added alive/living filter. The misnamed StrayBypass therefore retains its generic Zombie quirk.
+- SamePlayer uses the actual vanilla `player.lastHurtMob` / `getLastHurtMob` mapping. It is checked in Sword and
+  AllItems, deliberately absent from Axe. Shield skipping applies only to Player targets when `CheckShield`,
+  blocking, and `wouldBlockHit(localPlayer)` are all true; this preserves Argon's shield-facing direction. Critical
+  settings only require `fallDistance > 0`, with no added vanilla-critical predicate.
+- A ready branch calls direct `MultiPlayerGameMode.attack(player, crosshairEntity)` once, optionally swings MainHand,
+  records exactly one non-gameplay synthetic left click when configured, resamples, and resets. It does not use the
+  higher-level combat helper, custom packets, KeepSprint, rotations, or a second attack.
+- The enabled module's default-priority `AttackInputEvent` handler cancels normal physical Minecraft attack input
+  whenever raw GLFW LMB is not held, independent of OnLeftClick. Direct interaction-manager attacks bypass that
+  input event. Wraith's existing `AttackEntityEvent` mixin still observes/can cancel direct interaction-manager
+  attacks; retaining that project-wide safety hook is the explicit integration adaptation.
+- ClickSimulation records a left press/release approximately 35 ms apart only. Argon's later synthetic-button
+  consumption side effect was omitted because this recorder creates no synthetic physical input marker and current
+  Wraith has no proven left-click CPS/gameplay consumer; no additional Minecraft mixin or input event was added.
+- UseShield remains source-equivalent synthetic behavior, not invented AutoBlock: a ready real-Sword branch records a
+  synthetic RMB release only for actual Offhand Shield plus current blocking; cooldown branches for Sword, Axe, and
+  AllItems record an RMB click for ShieldTime. It never starts/release vanilla shield use or sends a second action.
+
+### Mapping and packet adaptations
+
+- Yarn `interactItem`/`attackEntity`, item components, Zombie class, selected slot, and last-attacked player state
+  were translated to official 26.1.2 APIs only. Existing `InteractionResult.consumesAction` is used for KeyPearl's
+  accepted-result swing.
+- KeyPearl relies on target `useItem`'s internal `ensureHasSentCarriedItem` call after visible selection and calls
+  the same sync once only after a visible switch-back. TriggerBot performs one direct attack per ready cycle and at
+  most its configured manual swing; synthetic records emit no packets or gameplay action.
+- Lifecycle cleanup and the narrow friend policy are Wraith singleton/global-target adaptations. No anti-cheat
+  timing, packet ordering, movement suppression, silent selection, or extra input mixin was invented.
+
+### Verification and runtime status
+
+- `git diff --check` passed. Static searches confirmed one module object and one registration for KeyPearl and
+  TriggerBot, correct categories/settings, Hotbar-only Pearl selection, no target scan/rotation, SamePlayer absent
+  from Axe, AllItems SwordDelay behavior, generic Zombie bypass, and isolated ClickSimulation/UseShield code.
+- Java: OpenJDK `25.0.3` (2026-04-21). Build command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`.
+  Result: `BUILD SUCCESSFUL` in `2m 1s`.
+- Built JAR: `build/libs/liquidbounce-0.31.2.jar`, SHA-256
+  `fe1650f582c35111ee0870f0be9aaa54c1017ae153e611ac1da01678a22da8f9`. JAR audit found exactly one KeyPearl,
+  TriggerBot, AttackInputEvent, MixinMinecraftClient, and MixinClientPlayerInteractionManager class, one
+  ModuleManager bytecode reference for each module, packaged localization, and no `dev/lvstrng/argon` package.
+- Installed the same SHA-256 to
+  `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar`. The prior JAR was
+  preserved without overwriting another backup as
+  `liquidbounce-0.31.2.jar.bak-20260716-argon-keypearl-triggerbot`, SHA-256
+  `7b6cea43a7df5e41ad1dea31e6efd7c2ccf1cd744dc0251a733f26b13e826155`.
+- FCL gameplay runtime is pending: this Termux session cannot resolve an FCL package/activity or provide Minecraft
+  UI/input automation. No KeyPearl hold/delay/missing-Pearl/lifecycle or TriggerBot weapon/friend/shield/input/
+  ClickSimulation/UseShield gameplay claim is made. The required controlled in-game matrix remains the remaining
+  verification work.
+
+### Commit and push status
+
+- Accepted prior MacroAnchor work was preserved first in separate commit `9262845a`
+  (`feat(combat): port Argon MacroAnchor`).
+- This append is staged with the KeyPearl/TriggerBot source commit; its immutable commit hash and push result are
+  recorded in the completion report after the commit is created. No uploaded archive, extracted Argon tree, log, or
+  backup JAR is staged.

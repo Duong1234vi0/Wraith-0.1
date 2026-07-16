@@ -1,7 +1,8 @@
 {
   "liquidbounce.module.inventoryTotem.description": "Refills offhand and optionally a hotbar slot with totems while inventory is open.",
-  "liquidbounce.module.keyPearl.description": "Throws an ender pearl from a keybind and optionally switches back.",
-  "liquidbounce.module.triggerBot.description": "Automatically attacks valid entities under the crosshair with weapon delays.",
+  "liquidbounce.module.keyPearl.description": "Switches to an Ender Pearl and throws it while the activation bind is held.",
+  "liquidbounce.module.keyPearl.switchDelay.description": "Delay after throwing the pearl before returning to the previous slot.",
+  "liquidbounce.module.triggerBot.description": "Automatically attacks eligible entities under the crosshair.",
   "liquidbounce.module.autoCart.description": "Places rails and TNT minecarts at predicted bow or crossbow impact points.",
   "liquidbounce.module.autoCrystal.description": "Automatically places and breaks end crystals under the crosshair.",
   "liquidbounce.module.macroAnchor.description": "Automatically charges and detonates the Respawn Anchor under the crosshair.",
