@@ -73,6 +73,7 @@ object InventoryManager : EventListener {
     private var recentInventoryOpen = false
     private var holdInventoryOpenUntilTick = 0
     private var permittedRedundantCloseContainerId: Int? = null
+    private var detachedPlayerInventoryClickPermit: DetachedPlayerInventoryClickPermit? = null
 
     /**
      * As soon the inventory changes unexpectedly,
@@ -89,6 +90,51 @@ object InventoryManager : EventListener {
     }
 
     /**
+     * Allows one explicit, detached container-0 click to remain detached from
+     * inventory-open tracking. In 26.1.2, `MultiPlayerGameMode.handleContainerInput`
+     * only requires the current player menu to have id 0; it does not open a
+     * screen/session. Vanilla emits `ServerboundContainerClosePacket(0)` from
+     * `AbstractContainerScreen.onClose`, not after an individual detached click.
+     *
+     * The permit is deliberately opt-in and signature-bound to one click. It is never used for an
+     * actual inventory screen, server-controlled menu, or silently opened
+     * legacy ViaFabricPlus inventory, all of which retain normal close tracking.
+     */
+    internal fun permitDetachedPlayerInventoryClick(
+        containerId: Int,
+        slot: Int,
+        button: Int,
+        action: ContainerInput,
+    ) {
+        if (!inGame || isInventoryOpenServerSide || isInInventoryScreen ||
+            !player.screenHandler.isPlayerInventory || interaction.isServerControlledInventory()) {
+            return
+        }
+
+        detachedPlayerInventoryClickPermit = DetachedPlayerInventoryClickPermit(
+            tick = player.age,
+            containerId = containerId,
+            slot = slot,
+            button = button,
+            action = action,
+        )
+    }
+
+    internal fun clearDetachedPlayerInventoryClickPermit() {
+        detachedPlayerInventoryClickPermit = null
+    }
+
+    private fun consumeDetachedPlayerInventoryClickPermit(packet: ServerboundContainerClickPacket): Boolean {
+        val permit = detachedPlayerInventoryClickPermit ?: return false
+        detachedPlayerInventoryClickPermit = null
+
+        return inGame && permit.tick == player.age && !isInventoryOpenServerSide && !isInInventoryScreen &&
+            player.screenHandler.isPlayerInventory && !interaction.isServerControlledInventory() &&
+            packet.containerId == permit.containerId && packet.slotNum.toInt() == permit.slot &&
+            packet.buttonNum.toInt() == permit.button && packet.containerInput == permit.action
+    }
+
+    /**
      * We keep running during the entire time
      * and schedule the inventory actions
      */
@@ -96,7 +142,12 @@ object InventoryManager : EventListener {
     private val repeatingSchedulerExecutor = tickHandler {
         // We are not in-game, so we don't need to do anything and throw away the schedule
         if (!inGame) {
+            clearDetachedPlayerInventoryClickPermit()
             return@tickHandler
+        }
+
+        detachedPlayerInventoryClickPermit?.let { permit ->
+            if (permit.tick != player.age) clearDetachedPlayerInventoryClickPermit()
         }
 
         ModuleDebug.debugParameter(this, "Inventory Open", isInventoryOpen)
@@ -267,7 +318,7 @@ object InventoryManager : EventListener {
         if (packet is ServerboundContainerClickPacket) {
             clickOccurred()
 
-            if (packet.containerId == 0) {
+            if (packet.containerId == 0 && !consumeDetachedPlayerInventoryClickPermit(packet)) {
                 isInventoryOpenServerSide = true
             }
         }
@@ -311,9 +362,18 @@ object InventoryManager : EventListener {
     @Suppress("unused")
     private val handleWorldChange = handler<WorldChangeEvent> {
         isInventoryOpenServerSide = false
+        clearDetachedPlayerInventoryClickPermit()
     }
 
 }
+
+private data class DetachedPlayerInventoryClickPermit(
+    val tick: Int,
+    val containerId: Int,
+    val slot: Int,
+    val button: Int,
+    val action: ContainerInput,
+)
 
 interface InventoryAction {
     fun canPerformAction(inventoryConstraints: InventoryConstraints): Boolean
@@ -345,6 +405,7 @@ data class ClickInventoryAction(
     val slot: ItemSlot,
     val button: Int,
     val actionType: ClickAction,
+    val permitDetachedPlayerInventoryClick: Boolean = false,
 ) : InventoryAction {
 
     companion object {
@@ -431,10 +492,20 @@ data class ClickInventoryAction(
 
     override fun performAction(): Boolean {
         val slotId = slot.getIdForServer(screen) ?: return false
+        if (permitDetachedPlayerInventoryClick) {
+            InventoryManager.permitDetachedPlayerInventoryClick(
+                containerId = screen?.syncId ?: 0,
+                slot = slotId,
+                button = button,
+                action = actionType,
+            )
+        }
         interaction.clickSlot(screen?.syncId ?: 0, slotId, button, actionType, player)
 
         return true
     }
+
+    fun withDetachedPlayerInventoryClickPermit() = copy(permitDetachedPlayerInventoryClick = true)
 
     fun performMissClick(): Boolean {
         if (slot !is ContainerItemSlot || screen == null) {
@@ -537,11 +608,12 @@ data class CreativeInventoryAction(
 data class InventoryActionChain(
     val inventoryConstraints: InventoryConstraints,
     val actions: Array<out InventoryAction>,
-    val priority: Priority
+    val priority: Priority,
+    val precondition: () -> Boolean = { true },
 ) {
 
     fun canPerformAction(): Boolean {
-        return actions.all { action -> action.canPerformAction(inventoryConstraints) }
+        return precondition() && actions.all { action -> action.canPerformAction(inventoryConstraints) }
     }
 
     fun requiresInventoryOpen() = actions.filterIsInstance<ClickInventoryAction>().any { it.screen == null }

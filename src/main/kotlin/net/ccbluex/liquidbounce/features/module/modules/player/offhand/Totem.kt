@@ -22,8 +22,6 @@ import net.ccbluex.liquidbounce.config.types.nesting.ToggleableConfigurable
 import net.ccbluex.liquidbounce.utils.block.*
 import net.ccbluex.liquidbounce.utils.client.Chronometer
 import net.ccbluex.liquidbounce.utils.entity.*
-import net.ccbluex.liquidbounce.utils.inventory.ClickInventoryAction
-import net.ccbluex.liquidbounce.utils.inventory.InventoryManager
 import net.ccbluex.liquidbounce.utils.inventory.Slots
 import net.ccbluex.liquidbounce.utils.math.toVec3d
 import net.minecraft.core.BlockPos
@@ -246,6 +244,14 @@ object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
      */
     private val sendDirectly by boolean("SendDirectly", false)
 
+    /**
+     * Direct Totem handling still bypasses unrelated inventory requests and
+     * configured scheduler delays. It does not bypass the Offhand transaction
+     * gate's vanilla input/packet ordering.
+     */
+    val sendsDirectly: Boolean
+        get() = sendDirectly
+
     val switchBack = Chronometer()
     var switchBackStarted = false
 
@@ -261,16 +267,4 @@ object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
         return Health.healthBelowThreshold()
     }
 
-    /**
-     * @return `true` if the [actions] got performed.
-     */
-    fun send(actions: List<ClickInventoryAction>): Boolean {
-        if (!sendDirectly) {
-            return false
-        }
-
-        InventoryManager.clickOccurred()
-        actions.forEach { it.performAction() }
-        return true
-    }
 }

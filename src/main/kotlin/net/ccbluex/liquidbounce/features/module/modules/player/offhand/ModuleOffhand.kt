@@ -39,6 +39,7 @@ import net.ccbluex.liquidbounce.utils.client.Chronometer
 import net.ccbluex.liquidbounce.utils.client.isNewerThanOrEquals1_16
 import net.ccbluex.liquidbounce.utils.client.usesViaFabricPlus
 import net.ccbluex.liquidbounce.utils.inventory.*
+import net.ccbluex.liquidbounce.utils.kotlin.Priority
 import net.minecraft.core.component.DataComponents
 import net.minecraft.world.item.alchemy.PotionContents
 import net.minecraft.world.effect.MobEffects
@@ -114,6 +115,10 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
     private var lastTagMode: Mode = Mode.NONE
     private var staticMode = Mode.NONE
     private var last: Pair<Item, ItemSlot>? = null
+    private val transactionGate = InventoryActionMovementGate(
+        ownerRunning = { running },
+        diagnosticPrefix = "[OffhandTxnDiag]"
+    )
 
     override val tag: String
         get() = activeMode.modeName
@@ -125,6 +130,10 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
             Totem.enabled && !Totem.Health.enabled -> Mode.TOTEM
             else -> Mode.NONE
         }
+    }
+
+    override fun disable() {
+        transactionGate.cancel("Offhand disabled")
     }
 
     @Suppress("unused")
@@ -198,51 +207,142 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
             return@handler
         }
 
+        val requestedMode = activeMode
+        val expectedSourceItem = slot.itemStack.item
+        val plan = switchMode.get().performSwitch(slot)
+        val actions = plan.clickActions.map(ClickInventoryAction::withDetachedPlayerInventoryClickPermit)
+        val directSend = requestedMode == Mode.TOTEM && Totem.sendsDirectly
         if (Totem.Health.switchBack) {
-            last = slot.itemStack.item to slot
+            last = expectedSourceItem to slot
         }
+        val request = InventoryActionMovementGate.Request(
+            mode = requestedMode.modeName,
+            sourceSlot = slot,
+            expectedSourceItem = expectedSourceItem,
+            switchMode = switchMode.get().choiceName,
+            sendDirectly = directSend,
+            clickSignatures = actions.mapNotNull(ClickInventoryAction::inventoryClickSignature),
+            expectsOffhandSwap = plan.usesHotbarOffhandSwap,
+            timeoutTicks = transactionTimeout(plan, directSend),
+            onFirstActionSent = {},
+        )
 
-        val actions = switchMode.get().performSwitch(slot)
-        if (actions.isEmpty()) {
-            chronometer.reset()
+        transactionGate.request(request)
+        if (!transactionGate.isCurrent(request)) {
             return@handler
         }
 
-        if (activeMode != Mode.TOTEM || !Totem.send(actions)) {
-            it.schedule(inventoryConstraints, actions)
+        // The first pickup legitimately changes the source slot. Only reject
+        // a moved source before this transaction has actually emitted its
+        // first expected packet; afterwards the gate owns the atomic chain.
+        if (!transactionGate.hasStarted(request) && !transactionGate.isSourceValid(request)) {
+            transactionGate.cancel("source item moved before transaction execution")
+            return@handler
         }
 
+        if (!transactionGate.isReady(request)) {
+            return@handler
+        }
+
+        // A scheduled transaction has to be immediately viable. Once the
+        // InventoryManager starts it, its TickSequence owns configured
+        // Start/Click/Close delays; if it cannot start, leave the gate ready
+        // instead of losing the request behind an empty schedule.
+        if (!directSend && !plan.usesHotbarOffhandSwap &&
+            !actions.all { action -> action.canPerformAction(inventoryConstraints) }) {
+            return@handler
+        }
+
+        if (!transactionGate.beginExecution(request)) {
+            return@handler
+        }
+
+        // Keep the restored module's delay bookkeeping at the point where its
+        // action chain is accepted; the gate only changes packet ordering.
         chronometer.reset()
-    }
 
-    fun performSwitch(from: ItemSlot, smart: Boolean): List<ClickInventoryAction> {
-        val actions = ArrayList<ClickInventoryAction>(3)
-
-        if (smart && from is HotbarItemSlot) {
-            val selectedSlot = player.inventory.selectedSlot
-            val targetSlot = from.hotbarSlot
-            if (selectedSlot != targetSlot) {
-                network.sendPacket(ServerboundSetCarriedItemPacket(targetSlot))
-            }
-            network.sendPacket(
-                ServerboundPlayerActionPacket(
-                    ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND,
-                    BlockPos.ZERO,
-                    Direction.DOWN
+        when {
+            plan.usesHotbarOffhandSwap -> performHotbarOffhandSwap(slot)
+            directSend -> actions.forEach { action -> action.performAction() }
+            else -> it.schedule.add(
+                InventoryActionChain(
+                    inventoryConstraints = inventoryConstraints,
+                    actions = actions.toTypedArray(),
+                    priority = Priority.NORMAL,
+                    precondition = {
+                        // A pickup transaction intentionally moves the source
+                        // after its first click. Revalidate while waiting, then
+                        // let the already-started click chain finish normally.
+                        // A reset/cancellation still stops every remaining click.
+                        when {
+                            !transactionGate.isCurrent(request) -> false
+                            !actions.all { action -> action.canPerformAction(inventoryConstraints) } -> {
+                                transactionGate.cancel("scheduled action became unavailable")
+                                false
+                            }
+                            transactionGate.hasStarted(request) -> true
+                            else -> transactionGate.isSourceValid(request).also { valid ->
+                                if (!valid) transactionGate.cancel("source item moved before scheduled click")
+                            }
+                        }
+                    }
                 )
             )
-            if (selectedSlot != targetSlot) {
-                network.sendPacket(ServerboundSetCarriedItemPacket(selectedSlot))
-            }
-        } else {
-            actions += ClickInventoryAction.performPickup(slot = from)
-            actions += ClickInventoryAction.performPickup(slot = OffHandSlot)
-            if (!OffHandSlot.itemStack.isEmpty) {
-                actions += ClickInventoryAction.performPickup(slot = from)
-            }
+        }
+    }
+
+    private data class SwitchPlan(
+        val clickActions: List<ClickInventoryAction>,
+        val usesHotbarOffhandSwap: Boolean = false,
+    )
+
+    private fun performSwitch(from: ItemSlot, smart: Boolean): SwitchPlan {
+        if (smart && from is HotbarItemSlot) {
+            return SwitchPlan(emptyList(), usesHotbarOffhandSwap = true)
         }
 
-        return actions
+        val actions = ArrayList<ClickInventoryAction>(3)
+        actions += ClickInventoryAction.performPickup(slot = from)
+        actions += ClickInventoryAction.performPickup(slot = OffHandSlot)
+        if (!OffHandSlot.itemStack.isEmpty) {
+            actions += ClickInventoryAction.performPickup(slot = from)
+        }
+
+        return SwitchPlan(actions)
+    }
+
+    private fun performHotbarOffhandSwap(from: ItemSlot) {
+        val hotbarSlot = from as? HotbarItemSlot ?: return
+        val selectedSlot = player.inventory.selectedSlot
+        val targetSlot = hotbarSlot.hotbarSlot
+
+        if (selectedSlot != targetSlot) {
+            network.sendPacket(ServerboundSetCarriedItemPacket(targetSlot))
+        }
+        network.sendPacket(
+            ServerboundPlayerActionPacket(
+                ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND,
+                BlockPos.ZERO,
+                Direction.DOWN
+            )
+        )
+        if (selectedSlot != targetSlot) {
+            network.sendPacket(ServerboundSetCarriedItemPacket(selectedSlot))
+        }
+    }
+
+    private fun transactionTimeout(plan: SwitchPlan, directSend: Boolean): Int {
+        if (directSend || plan.usesHotbarOffhandSwap) {
+            return 20
+        }
+
+        // On current protocols a detached player-inventory action remains
+        // detached, so InventoryManager may apply StartDelay before each click
+        // while it confirms the player inventory is available. Budget every
+        // action rather than timing out a valid configured chain early.
+        return inventoryConstraints.startDelay.last * (plan.clickActions.size + 1) +
+            inventoryConstraints.clickDelay.last * plan.clickActions.size +
+            inventoryConstraints.closeDelay.last + 4
     }
 
     fun isOperating() = running && activeMode != Mode.NONE
@@ -389,7 +489,7 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
          * often and quickly.
          */
         SMART("Smart") {
-            override fun performSwitch(from: ItemSlot) = performSwitch(from, true)
+            override fun performSwitch(from: ItemSlot) = ModuleOffhand.performSwitch(from, true)
         },
 
         /**
@@ -402,7 +502,7 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
                     from = from,
                     to = OffHandSlot
                 )
-            )
+            ).let(::SwitchPlan)
         },
 
         /**
@@ -410,14 +510,14 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
          * Works on all versions.
          */
         PICKUP("PickUp") {
-            override fun performSwitch(from: ItemSlot) = performSwitch(from, false)
+            override fun performSwitch(from: ItemSlot) = ModuleOffhand.performSwitch(from, false)
         },
 
         /**
          * Chooses the switch action based on the version. Only works if vfp is installed.
          */
         AUTOMATIC("Automatic") {
-            override fun performSwitch(from: ItemSlot): List<ClickInventoryAction> {
+            override fun performSwitch(from: ItemSlot): SwitchPlan {
                 return if (isNewerThanOrEquals1_16) {
                     SWITCH.performSwitch(from)
                 } else {
@@ -426,7 +526,7 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
             }
         };
 
-        abstract fun performSwitch(from: ItemSlot): List<ClickInventoryAction>
+        abstract fun performSwitch(from: ItemSlot): SwitchPlan
     }
 
 }
