@@ -284,6 +284,18 @@ public abstract class MixinMinecraftClient {
         rightClickDelay = useCooldownEvent.getCooldown();
     }
 
+    /**
+     * Physical use input only. Direct MultiPlayerGameMode interactions intentionally bypass this,
+     * matching V-core's EventItemUse interception point.
+     */
+    @Inject(method = "startUseItem", at = @At("HEAD"), cancellable = true)
+    private void hookItemUseInput(CallbackInfo callbackInfo) {
+        ItemUseEvent event = EventManager.INSTANCE.callEvent(new ItemUseEvent());
+        if (event.isCancelled()) {
+            callbackInfo.cancel();
+        }
+    }
+
     @Inject(method = "pickBlockOrEntity", at = @At("HEAD"), cancellable = true)
     private void hookItemPick(CallbackInfo ci) {
         if (ModuleMiddleClickAction.Pearl.INSTANCE.cancelPick()) {
@@ -308,6 +320,18 @@ public abstract class MixinMinecraftClient {
             target = "Lnet/minecraft/client/Minecraft;missTime:I", ordinal = 1))
     private boolean disableAttackCooldown(Minecraft instance, int value) {
         return true;
+    }
+
+    /**
+     * Physical attack input only. Direct MultiPlayerGameMode attacks intentionally bypass this,
+     * matching V-core's EventAttack pre hook.
+     */
+    @Inject(method = "startAttack", at = @At("HEAD"), cancellable = true)
+    private void hookAttackInput(CallbackInfoReturnable<Boolean> cir) {
+        AttackInputEvent event = EventManager.INSTANCE.callEvent(new AttackInputEvent());
+        if (event.isCancelled()) {
+            cir.setReturnValue(false);
+        }
     }
 
     @Inject(method = "startAttack", at = @At("HEAD"), cancellable = true)

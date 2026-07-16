@@ -3,6 +3,8 @@
   "liquidbounce.module.keyPearl.description": "Throws an ender pearl from a keybind and optionally switches back.",
   "liquidbounce.module.triggerBot.description": "Automatically attacks valid entities under the crosshair with weapon delays.",
   "liquidbounce.module.autoCart.description": "Places rails and TNT minecarts at predicted bow or crossbow impact points.",
+  "liquidbounce.module.autoCrystal.description": "Automatically places and breaks end crystals under the crosshair.",
+  "liquidbounce.module.crystalOptimizer.description": "Removes attacked crystals client-side faster.",
   "liquidbounce.module.autoHitCrystal.description": "Automatically builds an obsidian crystal hit sequence and times crystal breaks.",
   "liquidbounce.module.popChams.description": "Renders a rising, fading silhouette of a player when they pop a totem.",
   "liquidbounce.module.totemParticles.description": "Replaces the vanilla totem pop particles with MasEffects-style revive rings and returning sparks.",

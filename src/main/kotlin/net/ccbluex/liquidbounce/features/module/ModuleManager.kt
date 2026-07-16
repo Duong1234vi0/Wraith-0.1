@@ -188,6 +188,8 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleMaceKill,
             ModuleMaceSwap,
             ModuleLegitHelper,
+            ModuleAutoCrystal,
+            ModuleCrystalOptimizer,
 
             // Exploit
             ModuleExtendedFirework,

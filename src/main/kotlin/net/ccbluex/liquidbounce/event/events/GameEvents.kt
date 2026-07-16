@@ -62,6 +62,14 @@ class KeyEvent(
 @Nameable("inputHandle")
 object InputHandleEvent : Event()
 
+/** Fired before Minecraft processes a physical attack input in startAttack(). */
+@Nameable("attackInput")
+class AttackInputEvent : CancellableEvent()
+
+/** Fired before Minecraft processes a physical item-use input in startUseItem(). */
+@Nameable("itemUse")
+class ItemUseEvent : CancellableEvent()
+
 @Nameable("movementInput")
 class MovementInputEvent(
     var directionalInput: DirectionalInput,
