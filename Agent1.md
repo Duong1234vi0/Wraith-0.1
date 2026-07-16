@@ -7384,3 +7384,130 @@ push; neither result is a claim of visual parity before the user test.
 
 This entry corrects prior “full/source-complete” descriptions: compile/class/resource counts are not behavioral proof,
 and visual parity will not be claimed until the user confirms working MainHand and Offhand animation.
+
+## V-core AutoCrystal and CrystalOptimizer port (2026-07-16, Codex)
+
+### Request and references checked
+
+Ported V-core 0.8's `AutoCrystal` as a separate Wraith Combat module together with its direct
+`CrystalOptimizer` dependency. This is explicitly V-core's **crosshair-driven helper**, not a damage-based
+CrystalAura: it has no target scan, position scoring, damage/self-damage logic, rotations, ranges, prediction,
+rendering, Offhand support, silent switching, or automatic target acquisition.
+
+Inspected in full from the supplied extracted `VCore-0.8` source:
+
+- `vcore/features/modules/combat/AutoCrystal.java`
+- `vcore/features/modules/combat/CrystalOptimizer.java`
+- `vcore/utility/player/InventoryUtility.java` and `SearchInvResult.java`
+- `vcore/events/impl/EventAttack.java` and `EventItemUse.java`
+- `vcore/injection/MixinMinecraftClient.java` and `MixinPlayerEntity.java`
+- `vcore/features/modules/Module.java` and `vcore/core/manager/client/ModuleManager.java`
+
+Also inspected `CrystalManager.java`, `MixinEndCrystal.java`, and `ICrystal.java`. Direct-reference and repository
+searches show no edge from V-core `AutoCrystal` or `CrystalOptimizer` to any of those three; `ICrystal` is only used
+by `MixinEndCrystal`, and the manager is isolated from this helper path. They were intentionally not ported.
+
+Wraith inspection covered the module registry and existing crystal helpers, interaction/inventory extensions,
+event manager, client/input mixins, target-version Minecraft sources, and packet/entity APIs. `ModuleLegitHelper`
+and `CrystalDestroyFeature` were inspected but not changed or reused. They remain independent modules and can make
+competing actions if enabled together, matching the absence of mutual exclusion in V-core.
+
+### Implemented behavior
+
+Added `ModuleAutoCrystal` with these exact source-facing settings:
+
+- `ActivateKey` (unbound by default; raw physical HOLD behavior), `PlaceDelay` 0 (`0..10` ticks), and
+  `BreakDelay` 0 (`0..10` ticks).
+- `SwitchDelay` 0 and `BaseDelay` 0 (`0..10` ticks each), both visible only with `CrystalBase`.
+- `CrystalBase`, `StopOnKill`, `DamageTick`, and `AntiWeakness`, all default `false`.
+- Hidden-until-`CrystalBase` `BaseSetting` subgroup: `CheckPlace` false, `WorkWithTotem` false,
+  `WorkWithCrystal` false, and `SwordSwap` true.
+
+The implementation preserves `placeClock`, `breakClock`, `basePlaceClock`, `baseSwitchClock`, `lastCrystalTick`,
+the CrystalBase flags, and readable `crystalling`. Enable, disable, disconnect, world replacement, and local-player
+replacement reset exactly the V-core state path. GUI, use-item, StopOnKill, and DamageTick pauses do not reset it.
+
+`runCrystalTick(ignoreActivationKey)` keeps the V-core ordering: screen gate; main delay clocks; pauses; activation
+reset; CrystalBase handling/reset; `crystalling`; MainHand-only crystal gate; once-per-`tickCount`; entity first;
+block second. Entity targets are only crosshair `EndCrystal` or `Slime`; blocks are only the crosshair block, or the
+fixed 5.0-block, no-fluid `player.pick(5.0, 1.0f, false)` fallback behind an optimizer-inhibited crystal. Placement
+uses V-core's Obsidian/Bedrock, one-air-block, two-block-tall entity-box rule.
+
+CrystalBase remains crosshair-driven: valid sword/totem/crystal starts, `CheckPlace`, base/charged-anchor handling,
+visible hotbar Obsidian selection, base placement, then visible crystal selection. Its switch/place clocks decrement
+only when queried. `SwordSwap` only initiates an existing base sequence; it is not a general swap-back setting.
+
+AntiWeakness keeps the original Weakness/Strength comparison and searches only slots `0..8` for the first valid
+sword/pickaxe/axe/shovel. It visibly changes `selectedSlot`, calls `ensureHasSentCarriedItem()`, and restores only
+the previous slot after an AntiWeakness attack. Target-version tool classes were mapped to the equivalent item tags.
+`DamageTick` retains V-core's unusual airborne/hurt-time predicate and local-vehicle check literally.
+
+Added cancellable `AttackInputEvent` and `ItemUseEvent`, registered in `ALL_EVENT_CLASSES`, and dispatched from
+`Minecraft.startAttack()` / `startUseItem()` at method HEAD. The attack hook returns `false` when cancelled; item use
+cancels the method. AutoCrystal's raw GLFW button-0/button-1 guards match V-core. Its direct
+`MultiPlayerGameMode.attack` / `useItemOn` calls intentionally bypass those input events.
+
+Added `ModuleCrystalOptimizer` with only `Blatant` (default `true`) and a concurrent inhibited-ID timestamp map.
+It uses `max(150 ms, player ping * 2)`, clears on disable/disconnect/world or player replacement, handles actual
+`ServerboundAttackPacket` entity attacks, and uses `ClientboundExplodePacket.center()` for explosion inhibition.
+Blatant mode cancels only already-inhibited outgoing attack packets; non-Blatant only removes the attacked crystal
+locally. Nearby EndCrystals within squared distance `144.0` are inhibited. `ClientLevel.removeEntity(id, KILLED)`
+was selected because its 26.1.2 implementation invokes the client removal callback once, avoiding the old manual
+double-callback path. Only inhibited EndCrystals are ignored for placement.
+
+### Files and target-version adaptations
+
+Changed:
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleAutoCrystal.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleCrystalOptimizer.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/events/GameEvents.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/event/EventManager.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/client/MixinMinecraftClient.java`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`
+- `src/main/resources/resources/liquidbounce/lang/en_us.json`
+
+Minecraft 26.1.2 adaptations are limited to Mojmap/API names: `RespawnAnchorBlock.CHARGE`,
+`ServerboundAttackPacket(int entityId)`, `ClientboundExplodePacket.center()`, `ClientLevel.removeEntity`, modern
+`EndCrystal`/`Slime`, Wraith's direct interaction extensions, and Wraith `InputBind` plus raw GLFW state. These
+adaptations do not introduce a conventional CrystalAura behavior.
+
+### Static/build/install/runtime status
+
+- `git diff --check`: passed.
+- Static review confirmed exactly one registration for each module; only one Optimizer setting; no AutoCrystal
+  target manager, rotation manager, range/damage/render logic, SilentHotbar, Offhand, CrystalDestroyFeature, or
+  changes to ModuleLegitHelper/CrystalDestroyFeature.
+- Java: OpenJDK `25.0.3` (2026-04-21).
+- Build command:
+
+  ```sh
+  env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk \
+    PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin \
+    sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt
+  ```
+
+  Final result: **BUILD SUCCESSFUL** in `2m 35s`.
+- Final JAR: `build/libs/liquidbounce-0.31.2.jar`, SHA-256
+  `4128bc77d00b5cd25d7ed87073488f8903ef455ab483c170740b48ecfaac85c3`.
+- Packaged JAR inspection confirmed both module classes, both input-event classes, `MixinMinecraftClient`, and
+  `resources/liquidbounce/lang/en_us.json` entries.
+- Installed the final JAR at
+  `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar`; installed SHA-256
+  matches the build. Preserved prior JARs as non-overwritten backups, including
+  `liquidbounce-0.31.2.jar.bak-20260716-autocrystal` and
+  `liquidbounce-0.31.2.jar.bak-20260716-autocrystal-pre-input-order`.
+- FCL runtime matrix remains unverified. An authorized launcher attempt used
+  `am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p com.tungsten.fcl`, but Android
+  returned `Error: Activity not started, unable to resolve Intent ...`. No main-menu/world/placement/break/
+  CrystalBase/optimizer runtime claim is made. The remaining deviation is runtime evidence only, not a known
+  source-port deviation.
+
+### Commit / push
+
+Feature commit: `ff0ac8522` (`feat(combat): port V-core AutoCrystal`).
+
+Branch: `main`. Remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`.
+
+Push result: successful; `origin/main` advanced from `2c04e9818` to `ff0ac8522`. This documentation entry is the
+separate follow-up so it can record that completed feature commit and push without self-referential commit metadata.
