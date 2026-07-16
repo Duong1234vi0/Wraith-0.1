@@ -24,33 +24,24 @@ import net.ccbluex.liquidbounce.utils.client.Chronometer
 import net.ccbluex.liquidbounce.utils.entity.*
 import net.ccbluex.liquidbounce.utils.inventory.ClickInventoryAction
 import net.ccbluex.liquidbounce.utils.inventory.InventoryManager
-import net.ccbluex.liquidbounce.utils.inventory.PlayerInventoryConstraints
 import net.ccbluex.liquidbounce.utils.inventory.Slots
 import net.ccbluex.liquidbounce.utils.math.toVec3d
-import net.minecraft.world.level.block.BedBlock
-import net.minecraft.world.level.block.RespawnAnchorBlock
 import net.minecraft.core.BlockPos
 import net.minecraft.world.level.Level
+import net.minecraft.world.level.block.BedBlock
+import net.minecraft.world.level.block.RespawnAnchorBlock
 
 object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
-
-    private val hp by float("HP", 4.0f, 0.0f..20.0f, "HP")
-    private val elytraHp by float("ElytraHP", 16.0f, 0.0f..20.0f, "HP")
-    private val goldenHearts by boolean("GoldenHearts", false)
-    private val safety by boolean("Safety", true)
-    private val safeHealthThreshold by float("SafeHealthThreshold", 20.0f, 0.0f..20.0f, "HP")
 
     /**
      * The totem mode might have a lower switch delay than other items.
      */
-    private val delay by int("Delay", 0, 0..500, "ms")
-    val switchDelay: Int
-        get() = delay
+    val switchDelay by int("SwitchDelay", 0, 0..500, "ms")
 
     /**
      * The totem mode might have a higher and separate switch back delay than other items.
      */
-    val switchBackDelay = 40
+    val switchBackDelay by int("SwitchBackDelay", 40, 0..500, "ms")
 
     /**
      * Switch to a totem on low health and back to the original item when the health goes up again.
@@ -58,12 +49,35 @@ object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
     object Health : ToggleableConfigurable(ModuleOffhand, "Health", true) {
 
         /**
+         * At which health we switch to a totem.
+         */
+        private val healthThreshold by int("HealthThreshold", 14, 0..20)
+
+        /**
+         * For crystal pvp, allows to have longer a useful item in your offhand if you're not in danger of
+         * the main damage source.
+         */
+        private object Safety : ToggleableConfigurable(ModuleOffhand, "Safety", true) {
+            // TODO option for 2x2 and 2x1
+
+            /**
+             * At which health we switch to a totem when we're from explosions and stuff meaning in bedrock / obsidian
+             * holes.
+             */
+            val safeHealth by int("SafeHealthThreshold", 10, 0..20)
+        }
+
+        init {
+            tree(Safety)
+        }
+
+        /**
          * Subtracts the calculated maximum possible damage from the current health.
          *
          * This can lead to a more aggressive auto totem, where a totem is put in the offhand if it
          * might not be necessary.
          */
-        private val subtractCalculatedDamage by boolean("SubtractCalculatedDamage", true)
+        private val subtractCalculatedDamage by boolean("SubtractCalculatedDamage", false)
 
         /**
          * Predicts explosions from creepers, crystals, etc. See [getExplosionDamageFromEntity].
@@ -73,16 +87,16 @@ object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
         /**
          * Predicts explosions from beds and respawn anchors.
          */
-        private val explosionDamageBlocks by boolean("PredictExplosionDamageBlocks", true).onChanged {
+        private val explosionDamageBlocks by boolean("PredictExplosionDamageBlocks", false).onChanged {
             sphere = BlockPos.ZERO.getSortedSphere(10f)
         }
 
         private object FallDamage : ToggleableConfigurable(this, "PredictFallDamage", true) {
 
-            private val ignoreElytra by boolean("IgnoreElytra", false)
+            val ignoreElytra by boolean("IgnoreElytra", false)
 
             fun getFallDamage(): Float {
-                if (!FallDamage.enabled || player.fallDistance <= 3f) {
+                if (isModuleRunningByExactName("NoFall") || !FallDamage.enabled || player.fallDistance <= 3f) {
                     return 0f
                 }
 
@@ -104,15 +118,15 @@ object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
 
         private val missingArmor by boolean("MissingArmor", true)
 
-        val switchBack by boolean("SwitchBack", false)
-
-        //val mainHand by boolean("MainHand", false)
-
-        private var sphere: Array<BlockPos>? = BlockPos.ZERO.getSortedSphere(10f)
-
         init {
             tree(FallDamage)
         }
+
+        val switchBack by boolean("SwitchBack", true)
+
+        //val mainHand by boolean("MainHand", false)
+
+        private var sphere: Array<BlockPos>? = null
 
         fun healthBelowThreshold(): Boolean {
             if (!enabled) {
@@ -123,22 +137,13 @@ object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
                 return true
             }
 
-            val health = player.health + if (goldenHearts) {
-                player.absorptionAmount
-            } else {
-                0f
-            }
+            val health = player.health + player.absorptionAmount
 
-            val healthThreshold = if (player.isGliding && player.pose == net.minecraft.world.entity.Pose.FALL_FLYING) {
-                elytraHp
-            } else {
-                hp
-            }
-            val safetyOperating = safety && (player.isBurrowed() || player.isInHole())
+            val safetyOperating = Safety.enabled && (player.isBurrowed() || player.isInHole())
             var allowedDamage = health - if (safetyOperating) {
-                safeHealthThreshold
+                Safety.safeHealth.toFloat()
             } else {
-                healthThreshold
+                healthThreshold.toFloat()
             }
 
             // the health is below or at the threshold
@@ -230,7 +235,6 @@ object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
 
             return maxDamage
         }
-
     }
 
     init {
@@ -240,56 +244,10 @@ object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
     /**
      * Ignores all active inventory requests, switch settings and sends the switch packets directly.
      */
-    private const val sendDirectly = false
+    private val sendDirectly by boolean("SendDirectly", false)
 
     val switchBack = Chronometer()
     var switchBackStarted = false
-
-    object TotemGuard : ToggleableConfigurable(Totem, "GrimStop", true) {
-        private const val ACTIVE_WINDOW_MS = 1500L
-
-        private val ticksDelay by int("TicksDelay", 2, 0..10, "ticks")
-
-        val constraints = PlayerInventoryConstraints(
-            name = "TotemGuardInternal",
-            defaultStartDelay = 0..0,
-            defaultClickDelay = 0..0,
-            defaultCloseDelay = 0..0
-        )
-
-        private var lastPopTime = 0L
-        private var pickDelayIndex = 0
-        private var placeDelayIndex = 0
-
-        fun markPop() {
-            lastPopTime = System.currentTimeMillis()
-        }
-
-        fun shouldUseGuardedTiming(): Boolean {
-            return enabled && lastPopTime != 0L && System.currentTimeMillis() - lastPopTime <= ACTIVE_WINDOW_MS
-        }
-
-        fun markScheduled() {
-            lastPopTime = 0L
-        }
-
-        fun nextPickDelayTicks(): Int {
-            val pattern = intArrayOf(0, 2, 0, 3, 1, 3)
-            val delay = pattern[pickDelayIndex++ % pattern.size]
-            return delay
-        }
-
-        fun nextPlaceDelayTicks(): Int {
-            val pattern = intArrayOf(2, 3, 2, 4, 2, 3)
-            return (ticksDelay + pattern[placeDelayIndex++ % pattern.size]).coerceAtLeast(2)
-        }
-
-        fun nextReturnDelayTicks() = (1..3).random()
-    }
-
-    init {
-        tree(TotemGuard)
-    }
 
     fun shouldEquip(): Boolean {
         if (!enabled) {
@@ -315,5 +273,4 @@ object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
         actions.forEach { it.performAction() }
         return true
     }
-
 }

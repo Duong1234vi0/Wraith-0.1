@@ -23,13 +23,12 @@ import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.config.types.nesting.ToggleableConfigurable
 import net.ccbluex.liquidbounce.event.EventManager
 import net.ccbluex.liquidbounce.event.events.KeyEvent
-import net.ccbluex.liquidbounce.event.events.PacketEvent
 import net.ccbluex.liquidbounce.event.events.RefreshArrayListEvent
 import net.ccbluex.liquidbounce.event.events.ScheduleInventoryActionEvent
-import net.ccbluex.liquidbounce.event.events.TransferOrigin
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
+import net.ccbluex.liquidbounce.features.module.ModuleManager
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
 import net.ccbluex.liquidbounce.utils.entity.*
 import net.ccbluex.liquidbounce.utils.inventory.HotbarItemSlot
@@ -48,10 +47,16 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket
-import net.minecraft.network.protocol.game.ClientboundEntityEventPacket
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import org.lwjgl.glfw.GLFW
+
+internal fun isModuleRunningByExactName(name: String): Boolean {
+    return ModuleManager.firstOrNull { module ->
+        module.name.equals(name, ignoreCase = true) ||
+            module.aliases.any { alias -> alias.equals(name, ignoreCase = true) }
+    }?.running == true
+}
 
 /**
  * Offhand module
@@ -60,28 +65,35 @@ import org.lwjgl.glfw.GLFW
  */
 object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayOf("AutoTotem")) {
 
-    private val inventoryConstraints = PlayerInventoryConstraints(
-        name = "OffhandInternal",
-        defaultStartDelay = 0..0,
-        defaultClickDelay = 0..0,
-        defaultCloseDelay = 0..0
-    )
-    private var switchMode = enumChoice(
+    private val inventoryConstraints = tree(PlayerInventoryConstraints())
+    private val switchMode = enumChoice(
         "SwitchMode",
         if (usesViaFabricPlus) SwitchMode.AUTOMATIC else SwitchMode.SWITCH
     )
+    private val switchDelay by int("SwitchDelay", 0, 0..500, "ms")
     private val cycleSlots by key("Cycle", GLFW.GLFW_KEY_H)
 
     private object Gapple : ToggleableConfigurable(this, "Gapple", true) {
+        object WhileHoldingSword : ToggleableConfigurable(this, "WhileHoldingSword", true) {
+            val onlyWhileKa by boolean("OnlyWhileKillAura", true)
+        }
+
         val gappleBind by key("GappleBind")
+
+        init {
+            tree(WhileHoldingSword)
+        }
     }
 
     private object Crystal : ToggleableConfigurable(this, "Crystal", true) {
+        val onlyWhileCa by boolean("OnlyWhileCrystalAura", false)
         val whenNoTotems by boolean("WhenNoTotems", true)
         val crystalBind by key("CrystalBind")
     }
 
     private object Strength : ToggleableConfigurable(this, "StrengthPotion", false) {
+        val onlyWhileHoldingSword by boolean("OnlyWhileHoldingSword", true)
+        val onlyWhileKa by boolean("OnlyWhileKillAura", true)
         val strengthBind by key("StrengthBind")
     }
 
@@ -102,7 +114,6 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
     private var lastTagMode: Mode = Mode.NONE
     private var staticMode = Mode.NONE
     private var last: Pair<Item, ItemSlot>? = null
-    private var guardedTotemSwap: GuardedTotemSwap? = null
 
     override val tag: String
         get() = activeMode.modeName
@@ -151,18 +162,6 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
     }
 
     @Suppress("unused")
-    private val packetHandler = handler<PacketEvent> { event ->
-        if (event.origin != TransferOrigin.INCOMING) {
-            return@handler
-        }
-
-        val packet = event.packet as? ClientboundEntityEventPacket ?: return@handler
-        if (packet.eventId.toInt() == TOTEM_USE_STATUS && packet.getEntity(world) == player) {
-            Totem.TotemGuard.markPop()
-        }
-    }
-
-    @Suppress("unused")
     private val autoTotemHandler = handler<ScheduleInventoryActionEvent>(priority = 100) {
         activeMode = Mode.entries.firstOrNull(Mode::shouldEquip) ?: staticMode
         if (activeMode == Mode.NONE && Totem.Health.switchBack && lastMode == Mode.TOTEM) {
@@ -187,10 +186,6 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
 
         Totem.switchBackStarted = false
 
-        if (continueGuardedTotemRefill(it)) {
-            return@handler
-        }
-
         if (!chronometer.hasElapsed(activeMode.getDelay().toLong())) {
             return@handler
         }
@@ -207,12 +202,6 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
             last = slot.itemStack.item to slot
         }
 
-        val guardedTotemRefill = activeMode == Mode.TOTEM && Totem.TotemGuard.shouldUseGuardedTiming()
-        if (guardedTotemRefill) {
-            startGuardedTotemRefill(it, slot)
-            return@handler
-        }
-
         val actions = switchMode.get().performSwitch(slot)
         if (actions.isEmpty()) {
             chronometer.reset()
@@ -224,97 +213,6 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
         }
 
         chronometer.reset()
-    }
-
-    private fun startGuardedTotemRefill(event: ScheduleInventoryActionEvent, from: ItemSlot) {
-        val returnSlot = if (!OffHandSlot.itemStack.isEmpty) {
-            from
-        } else {
-            null
-        }
-
-        val delayTicks = Totem.TotemGuard.nextPickDelayTicks()
-        guardedTotemSwap = GuardedTotemSwap(
-            stage = GuardedTotemStage.PICK_TOTEM,
-            sourceSlot = from,
-            returnSlot = returnSlot,
-            delayTicks = delayTicks,
-            lastTick = player.age
-        )
-
-        InventoryManager.holdInventoryOpenFor(delayTicks + 7)
-        if (delayTicks <= 0) {
-            event.schedule(Totem.TotemGuard.constraints, ClickInventoryAction.performPickup(slot = from))
-            guardedTotemSwap?.stage = GuardedTotemStage.PLACE_OFFHAND
-            guardedTotemSwap?.delayTicks = Totem.TotemGuard.nextPlaceDelayTicks()
-        }
-        Totem.TotemGuard.markScheduled()
-        chronometer.reset()
-    }
-
-    private fun continueGuardedTotemRefill(event: ScheduleInventoryActionEvent): Boolean {
-        val state = guardedTotemSwap ?: return false
-
-        if (OffHandSlot.itemStack.item == Items.TOTEM_OF_UNDYING) {
-            guardedTotemSwap = null
-            InventoryManager.releaseInventoryOpenHold()
-            return false
-        }
-
-        val currentTick = player.age
-        if (state.lastTick != currentTick) {
-            state.lastTick = currentTick
-            if (state.delayTicks > 0) {
-                state.delayTicks--
-            }
-        }
-
-        if (state.delayTicks > 0) {
-            InventoryManager.holdInventoryOpenFor(2)
-            return true
-        }
-
-        when (state.stage) {
-            GuardedTotemStage.PICK_TOTEM -> {
-                event.schedule(Totem.TotemGuard.constraints, ClickInventoryAction.performPickup(slot = state.sourceSlot))
-                state.stage = GuardedTotemStage.PLACE_OFFHAND
-                state.delayTicks = Totem.TotemGuard.nextPlaceDelayTicks()
-                state.lastTick = currentTick
-                InventoryManager.holdInventoryOpenFor(state.delayTicks + 3)
-            }
-
-            GuardedTotemStage.PLACE_OFFHAND -> {
-                val returnSlot = state.returnSlot
-                if (returnSlot != null) {
-                    event.schedule(Totem.TotemGuard.constraints, ClickInventoryAction.performPickup(slot = OffHandSlot))
-                    state.stage = GuardedTotemStage.RETURN_CURSOR
-                    state.delayTicks = Totem.TotemGuard.nextReturnDelayTicks()
-                    state.lastTick = currentTick
-                    InventoryManager.holdInventoryOpenFor(state.delayTicks + 2)
-                } else {
-                    InventoryManager.releaseInventoryOpenHold()
-                    event.schedule(
-                        Totem.TotemGuard.constraints,
-                        ClickInventoryAction.performPickup(slot = OffHandSlot),
-                        CloseInventorySilentlyAction
-                    )
-                    guardedTotemSwap = null
-                }
-            }
-
-            GuardedTotemStage.RETURN_CURSOR -> {
-                InventoryManager.releaseInventoryOpenHold()
-                event.schedule(
-                    Totem.TotemGuard.constraints,
-                    ClickInventoryAction.performPickup(slot = state.returnSlot ?: return false),
-                    CloseInventorySilentlyAction
-                )
-                guardedTotemSwap = null
-            }
-        }
-
-        chronometer.reset()
-        return true
     }
 
     fun performSwitch(from: ItemSlot, smart: Boolean): List<ClickInventoryAction> {
@@ -349,20 +247,6 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
 
     fun isOperating() = running && activeMode != Mode.NONE
 
-    private data class GuardedTotemSwap(
-        var stage: GuardedTotemStage,
-        val sourceSlot: ItemSlot,
-        val returnSlot: ItemSlot?,
-        var delayTicks: Int,
-        var lastTick: Int
-    )
-
-    private enum class GuardedTotemStage {
-        PICK_TOTEM,
-        PLACE_OFFHAND,
-        RETURN_CURSOR
-    }
-
     private enum class Mode(val modeName: String, private val item: Item, private val fallBackItem: Item? = null) {
         TOTEM("Totem", Items.TOTEM_OF_UNDYING) {
             override fun shouldEquip() = Totem.shouldEquip()
@@ -393,11 +277,12 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
             }
 
             override fun shouldEquip(): Boolean {
-                if (!Strength.enabled || !ModuleKillAura.running || player.hasStatusEffect(MobEffects.STRENGTH)) {
+                val killAura = Strength.onlyWhileKa && !ModuleKillAura.running
+                if (!Strength.enabled || killAura || player.hasStatusEffect(MobEffects.STRENGTH)) {
                     return false
                 }
 
-                return player.mainHandItem.isSword
+                return player.mainHandItem.isSword || !Strength.onlyWhileHoldingSword
             }
 
             override fun getSlot(): ItemSlot? {
@@ -414,13 +299,22 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
                     return false
                 }
 
-                return player.mainHandItem.isSword
+                if (player.mainHandItem.isSword && Gapple.WhileHoldingSword.enabled) {
+                    return if (Gapple.WhileHoldingSword.onlyWhileKa) {
+                        ModuleKillAura.running
+                    } else {
+                        true
+                    }
+                }
+
+                return false
             }
 
             override fun canCycleTo() = Gapple.enabled
         },
         CRYSTAL("Crystal", Items.END_CRYSTAL) {
-            override fun canCycleTo() = Crystal.enabled
+            override fun canCycleTo() = Crystal.enabled &&
+                (!Crystal.onlyWhileCa || isModuleRunningByExactName("CrystalAura"))
         },
         BACK("Back", Items.AIR) {
             override fun getSlot(): ItemSlot? {
@@ -435,7 +329,7 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
 
         open fun shouldEquip() = false
 
-        open fun getDelay() = 0
+        open fun getDelay() = switchDelay
 
         open fun canCycleTo() = false
 
@@ -534,7 +428,5 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
 
         abstract fun performSwitch(from: ItemSlot): List<ClickInventoryAction>
     }
-
-    private const val TOTEM_USE_STATUS = 35
 
 }
