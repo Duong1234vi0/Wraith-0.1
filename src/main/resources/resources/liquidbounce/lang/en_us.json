@@ -4,6 +4,8 @@
   "liquidbounce.module.triggerBot.description": "Automatically attacks valid entities under the crosshair with weapon delays.",
   "liquidbounce.module.autoCart.description": "Places rails and TNT minecarts at predicted bow or crossbow impact points.",
   "liquidbounce.module.autoCrystal.description": "Automatically places and breaks end crystals under the crosshair.",
+  "liquidbounce.module.macroAnchor.description": "Automatically charges and detonates the Respawn Anchor under the crosshair.",
+  "liquidbounce.module.macroAnchor.whileUse.description": "Pauses the macro while eating or using a shield.",
   "liquidbounce.module.crystalOptimizer.description": "Removes attacked crystals client-side faster.",
   "liquidbounce.module.autoHitCrystal.description": "Automatically builds an obsidian crystal hit sequence and times crystal breaks.",
   "liquidbounce.module.popChams.description": "Renders a rising, fading silhouette of a player when they pop a totem.",

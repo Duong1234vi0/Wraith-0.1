@@ -7624,3 +7624,202 @@ Push result: successful; `origin/main` advanced from `00e2e519b` to `2d46a7e01`.
 
 This supersedes the mixed multi-client Offhand implementation. The mixed current Offhand implementation was replaced
 with the Minecraft 1.21.4 behavior; no second Offhand module was added.
+
+## Offhand vanilla-ordered Totem transaction and Grim MultiActions fix (2026-07-16, Codex)
+
+### Requested configuration and reproduction
+
+- Requested configuration: `SwitchMode=Automatic`, `SwitchDelay=0`, all inventory constraints `0..0` with no
+  requirements, Totem `SwitchDelay=0`, `SwitchBackDelay=0`, `HealthThreshold=20`, `SwitchBack=false`, and
+  `SendDirectly=true`.
+- Requested repro: hold a Totem in Offhand, place Obsidian plus an End Crystal, sprint with movement input, pop the
+  Totem in the explosion, and let Offhand equip the replacement.
+
+### Grim findings and root cause
+
+- `MultiActionsC` rejects a player-inventory `ServerboundContainerClickPacket` while the server believes the player
+  is sprinting, under the old sneaking condition, or while modern `knownInput.moving()` reports forward, backward,
+  left, right, or jump. Local velocity changes and a sprint packet alone therefore do not satisfy the check.
+- `MultiActionsD` applies the same sprint/input predicate to `ServerboundContainerClosePacket`.
+- `PacketOrderE/F/G/K` and `Post` additionally make same-tick held-slot, offhand-swap, use/attack/dig, inventory,
+  close, and client-tick-end ordering relevant.
+- On 26.1.2, `Automatic` resolves to `Switch`, which creates a container-0 `ClickInventoryAction.performSwap`.
+  Previously `Totem.SendDirectly` performed it immediately, bypassing constraints, normal scheduling, and
+  `NoMovement`.
+- The old InventoryManager policy marked every container-0 click as server-side inventory open and later sent a
+  synthetic close. Thus a sprinting/moving direct replacement emitted click then close while the server still knew
+  moving/sprinting input, which is the C then D flag sequence.
+
+### Changed transaction ordering
+
+- Added `InventoryActionMovementGate` with `IDLE`, waiting-for-stationary-input, ready, executing,
+  waiting-for-close, and next-tick-release states. It records request/source/expected item/request tick, observed
+  server input, sprint-stop, expected click(s), Smart offhand swap, execution, and close evidence.
+- Reused the proven `InventoryMove.STOP_ON_ACTION` idea without depending on that module: at final-decision input
+  priority it clears directional/jump/sneak and clears INPUT-source sprint. Minecraft then emits its own empty
+  player-input and one normal sprint-stop update; no manual duplicate sprint packet is sent.
+- The gate waits for outgoing 26.1.2 `ServerboundPlayerInputPacket`, `STOP_SPRINTING` when needed, and
+  `ServerboundClientTickEndPacket`, then permits the Offhand packet only on the following client tick. It holds
+  suppression through all tracked click/swap/held-slot packets and any required close, then releases on a later
+  tick.
+- Direct Totem sends still bypass unrelated inventory queues and configured scheduler delays, but no longer bypass
+  the movement gate. Scheduled sends are not queued until ready and retain configured Start/Click/Close delays.
+  The source slot is revalidated until the first expected click; its own subsequent pickup mutation cannot cancel
+  the atomic chain.
+- Attack/use/interact/dig/drop/pick/held-slot/offhand-swap conflicts are observed and defer only the Offhand action
+  to a clean tick. A tick-based bounded safety timeout reports and releases without sending an unsafe stale action.
+  World change, disconnect, death, and module disable clear the gate and permit state.
+
+### Container-close audit
+
+- 26.1.2 `MultiPlayerGameMode.handleContainerInput` only verifies the current player menu id is `0`; it does not
+  create an inventory screen/session. `AbstractContainerScreen.onClose` is the vanilla source of a close packet.
+  The direct detached player-inventory click therefore does not need a synthetic `ServerboundContainerClosePacket(0)`.
+- Added a signature-bound, one-shot `InventoryManager.permitDetachedPlayerInventoryClick`. It is consumed only by
+  the matching same-tick container-0 click while no real inventory/server-controlled/ViaFabricPlus legacy inventory
+  is active. Normal screen/server inventory tracking and legitimate closes remain unchanged.
+
+### Files and diagnostics
+
+- Changed: `ModuleOffhand.kt`, `Totem.kt`, `InventoryManager.kt`, and new
+  `utils/inventory/InventoryActionMovementGate.kt`.
+- Restored 1.21.4 Offhand settings, mode order, Totem health/prediction/SwitchBack behavior, Gapple/Crystal/Strength
+  behavior, search priorities, and switch choices are preserved. No `GrimStop`, `TotemGuard`, random post-pop delay,
+  post-pop listener, or second module was added.
+- Retained bounded test diagnostics under `[OffhandTxnDiag]`; it logs request/input/sprint states, stationary packet
+  evidence, ready/click/swap/close/completion/release, and invalidation. The allowance resets on world/disconnect.
+
+### Verification status
+
+- `git diff --check` passed.
+- Final build command: `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`.
+- Final result: `BUILD SUCCESSFUL` in `1m 45s`.
+- Final built and installed SHA-256: `ad40acbc0971bb105bdda431b1e8508185aba76e76c5b8c56560ee011b44b107` for
+  `build/libs/liquidbounce-0.31.2.jar` and
+  `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar`.
+  The immediately preceding installed JAR was saved as
+  `liquidbounce-0.31.2.jar.bak-20260716-offhand-txn-5`.
+- `unzip -t` passed for both JARs. FCL was then launched after the copy completed and logged
+  `LiquidBounce has been successfully initialized` at `14:23:24`; this verifies the final artifact loads, not the
+  gameplay reproduction.
+- The final JAR performed a live moving/sprinting `Automatic` / `SendDirectly=false` replacement at ticks 1818--1820:
+  the request began with outgoing forward+sprint input and same-tick attack/place/use conflicts; it then logged an
+  empty `ServerboundPlayerInputPacket`, normal `STOP_SPRINTING`, client-tick-end confirmation, its expected
+  container-0 `SWAP` click on tick 1819 with `inventoryOpen=false`, and movement release on tick 1820. No
+  Grim `MultiActionsC`, `MultiActionsD`, PacketOrder, Post, or timeout marker appeared in that final log. This is strong
+  packet-order evidence, but it did not prove a crystal pop or direct-send mode.
+- Exact `SendDirectly=true` sprinting crystal-pop, sideways/jump variants, Smart/Switch/PickUp variants, and
+  failure/reset interactions remain runtime-pending because this Termux session has no usable Minecraft input/UI
+  automation. The loaded FCL `LiquidBounce/modules.json` currently matches the supplied zero-delay Automatic setup
+  but has `Totem.SendDirectly=false`; it was not changed during this work. No C/D, PacketOrder/Post, or
+  movement-release pass is claimed for the requested exact direct-send reproduction.
+
+### Commit / push status
+
+- Branch: `main`; remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`.
+- No fix commit and no push were made. The required exact reproduction has not passed, so the requested
+  `fix(player): order Offhand swaps like vanilla` commit is intentionally deferred.
+
+## Argon MacroAnchor strict behavior port (2026-07-16, Codex)
+
+### Request and authority
+
+- Requested a strict observable-behavior port of Argon `AnchorMacro` into Wraith as the separately toggleable
+  Combat module `MacroAnchor` (visible identity `MacroAnchor`; source-visible name remains `Anchor Macro`). It is a
+  crosshair-driven charge/detonation macro, not an AnchorAura and not an automatic anchor-placement module.
+- Behavior authority: Argon for Minecraft `1.21.11`, Yarn `1.21.11+build.4`, Fabric Loader `0.18.4`. Integration
+  authority: live Wraith targeting Minecraft `26.1.2` with official mappings. `Agent1.md` history was treated as
+  chronology only.
+- Read the required port guidance plus complete Argon `AnchorMacro`, `BlockUtils`, `WorldUtils`, `InventoryUtils`,
+  `KeyUtils`, `MathUtils`, `MouseSimulation`, `ItemUseListener`, `MinecraftClientMixin`, and `ModuleManager`.
+  `DoubleAnchor` and `Prevent` were inspected only to keep their separate behavior excluded.
+- Audited current Wraith `ModuleManager`, `ModuleAutoCrystal`, `ModuleLegitHelper`, game/window events,
+  `EventManager`, `MixinMinecraftClient`, inventory slots, mapping extensions, `InputTracker`, `MixinMouse`, and
+  target-version `MultiPlayerGameMode.useItemOn` bytecode. Later AutoCrystal, LegitHelper, ItemUseEvent, hotbar,
+  input, and Grim/packet-order history entries were also read.
+
+### Added module and exact surface
+
+- Added `ModuleMacroAnchor` under Combat and registered it once in `ModuleManager`; added its English description
+  and the accurate WhileUse description.
+- Custom setting order/defaults: `WhileUse=true`, `StopOnKill=false`, `ClickSimulation=false`, `PlaceChance=100`
+  (`0..100`), `SwitchDelay=0` ticks (`0..20`), `SwitchChance=100` (`0..100`), `GlowstoneDelay=0` ticks (`0..20`),
+  `GlowstoneChance=100` (`0..100`), `ExplodeDelay=0` ticks (`0..20`), `ExplodeChance=100` (`0..100`),
+  `ExplodeSlot=1` (`1..9`), `OnlyOwn=false`, and `OnlyCharge=false`.
+- State is exactly integer `switchClock`, `glowstoneClock`, `explodeClock`, plus a hash-set `ownedAnchors`.
+  Enable resets only clocks; ordinary disable leaves ownership intact. Disconnect, world replacement, and dimension
+  replacement reset clocks and clear ownership, including when the module is disabled.
+
+### Ported behavior and preserved quirks
+
+- Uses only `GameTickEvent`; absent player/world and any open screen return without clock changes. Activation is the
+  physical GLFW RMB state, not `useKey` or a hold bind. Once an eligible exact crosshair Respawn Anchor passes
+  `OnlyOwn`, it sets only the logical use key false to suppress duplicate vanilla held-use processing.
+- `WhileUse` pauses only for physical RMB plus Food data component or a `ShieldItem` in either held hand.
+  `StopOnKill` scans other players only, within squared distance `36.0`, using the current dead/dying state.
+- Every Argon chance roll remains `Random.Default.nextInt(1, 100)`: 1 through 99, upper bound exclusive, and
+  success is `<=` the configured value. Thus 0 never succeeds while 99 and 100 always succeed.
+- `PlaceChance` gates the entire uncharged-anchor switch/charge path. The same `switchClock` is shared by Glowstone
+  and explosion-slot switching; all delay gates retain `clock != configuredDelay`, no runtime clamping, and chance
+  failures retry while the clock remains at the reached delay.
+- Glowstone is selected visibly from the first Hotbar slot in `0..8`; no main-inventory search, Offhand selection,
+  SilentHotbar, or swap-back occurs. `useItemOn` synchronizes the visible selected slot itself, so no duplicate
+  carried-slot packet is sent.
+- Charging and detonation use the original `BlockHitResult`, MainHand direct `useItemOn`, and swing only when the
+  resulting `InteractionResult` consumes the action. A charged anchor uses `ExplodeSlot - 1`, even if that slot holds
+  any item. `OnlyCharge` still permits that slot switch and explosion-clock reset but performs no charged interaction.
+- Owned placement is optimistically recorded through the existing physical `ItemUseEvent` before server confirmation;
+  a physical charged-anchor use removes the exact target, while direct macro detonation removes it after the attempt.
+  Direct macro interaction intentionally bypasses `ItemUseEvent`, as does Argon's source hook placement.
+
+### Click simulation and compatibility
+
+- Added a small client-thread `MacroAnchorClickSimulation` record adapter: enabled direct interactions record one
+  synthetic right press and a release after approximately 35 ms. It never dispatches `MouseButtonEvent`, changes
+  GLFW/physical input, feeds module binds, sleeps, creates a thread pool, or starts another use action.
+- Wraith currently has no right-click CPS/display consumer (the debug CPS recorder tracks left clicks), so the adapter
+  intentionally remains an isolated non-gameplay record with press/release counters. It has no gameplay effect.
+- `ModuleLegitHelper` was not changed; enabling both anchor helpers can create competing interactions. No mutual
+  exclusion was added. `ModuleAutoCrystal`, Offhand, InventoryMove, and HandMyItems were not modified: AutoCrystal's
+  physical ItemUse cancellation remains independent, Offhand does not alter MacroAnchor selection, and normal
+  MainHand animation remains available.
+
+### Deliberate exclusions and mappings
+
+- Excluded with source-level evidence: no anchor placement, AnchorAura search/target queue, DoubleAnchor/Prevent
+  behavior, rotation, damage or self-damage calculation, friend/health/range/wall checks, Offhand use, silent swap,
+  swap-back, refill, air-place packets, movement suppression, Grim timing, render/HUD state, or extra ItemUseEvent
+  mixin. The module only checks the exact crosshair block and uses direct vanilla interaction.
+- Adapted Yarn names to official 26.1.2: `RespawnAnchorBlock.CHARGE`, `DataComponents.FOOD`, `ShieldItem`,
+  `InteractionResult`, `MultiPlayerGameMode.useItemOn`, `BlockPos.relative`, and current `isDeadOrDying` state.
+  Existing `MixinMinecraftClient` ItemUseEvent was reused. Target bytecode confirms `useItemOn` calls
+  `ensureHasSentCarriedItem()` internally, which is why the port does not send it separately.
+
+### Files and verification
+
+- Changed: `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleMacroAnchor.kt`,
+  `src/main/kotlin/net/ccbluex/liquidbounce/utils/input/MacroAnchorClickSimulation.kt`,
+  `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`, and
+  `src/main/resources/resources/liquidbounce/lang/en_us.json`; this appended entry preserves older history.
+- `git diff --check` passed. Source/JAR checks found one MacroAnchor class and one registration, one existing
+  `ItemUseEvent`, localization entries, no Argon package/classes, no new ItemUseEvent mixin, and no changes to
+  `ModuleLegitHelper` or `ModuleAutoCrystal`.
+- Java: OpenJDK `25.0.3` (2026-04-21). Build command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`.
+  Result: `BUILD SUCCESSFUL` in `2m 19s`.
+- Built JAR: `build/libs/liquidbounce-0.31.2.jar`, SHA-256
+  `7b6cea43a7df5e41ad1dea31e6efd7c2ccf1cd744dc0251a733f26b13e826155`.
+  Installed JAR at `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar` has the
+  same SHA-256. Its prior contents were preserved as
+  `liquidbounce-0.31.2.jar.bak-20260716-macroanchor` with SHA-256
+  `ad40acbc0971bb105bdda431b1e8508185aba76e76c5b8c56560ee011b44b107`.
+- FCL runtime gameplay testing has not been performed in this session. No claim is made for charging, detonation,
+  OnlyOwn, OnlyCharge, ClickSimulation, settings UI, or conflict parity in FCL. The only remaining non-behavioral
+  adaptation is the isolated ClickSimulation record because no right-click CPS consumer currently exists.
+
+### Commit / push status
+
+- No MacroAnchor commit or push was made. Before this port, `Agent1.md` already contained an unrelated uncommitted
+  Offhand history entry; staging this file as requested would also stage that unrelated work. To preserve the dirty
+  worktree, the MacroAnchor source remains unstaged pending authorization to include the pre-existing Agent1 change
+  or to commit the port without its history entry.

@@ -187,6 +187,7 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleKeepSprint,
             ModuleMaceKill,
             ModuleMaceSwap,
+            ModuleMacroAnchor,
             ModuleLegitHelper,
             ModuleAutoCrystal,
             ModuleCrystalOptimizer,
