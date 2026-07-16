@@ -31,6 +31,7 @@ import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.entity.isAccepted
 import net.ccbluex.liquidbounce.utils.entity.swingHand
 import net.ccbluex.liquidbounce.utils.input.InputBind
+import net.ccbluex.liquidbounce.utils.network.ActionTickBoundary
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.item.Items
 import org.lwjgl.glfw.GLFW
@@ -56,6 +57,14 @@ object ModuleKeyPearl : ClientModule("KeyPearl", Category.MISC) {
     private var clock = 0
     private var previousSlot = -1
     private var switchClock = 0
+    private var selectedPearlSlot = -1
+
+    // A direct restore after useItem is a HELD_ITEM_CHANGE after USE_ITEM. Grim keeps
+    // rightClicking true until the actual client tick-end packet, so the restore must
+    // remain pending until that packet has left the client.
+    private var waitingForPostUseBoundary = false
+    private var postUseBoundarySerial = Long.MIN_VALUE
+    private var cycleDiagnosticsEnabled = false
 
     private var observedPlayer: Any? = null
     private var observedLevel: Any? = null
@@ -100,6 +109,13 @@ object ModuleKeyPearl : ClientModule("KeyPearl", Category.MISC) {
             return@handler
         }
 
+        // A released activation bind never aborts an already-active cycle. Complete its safe
+        // post-use restore first, then let the normal activation path decide the next cycle.
+        if (waitingForPostUseBoundary) {
+            handlePostUseBoundary(gameMode = mc.gameMode ?: return@handler, player = player)
+            return@handler
+        }
+
         if (isActivationDown()) {
             active = true
         }
@@ -112,6 +128,7 @@ object ModuleKeyPearl : ClientModule("KeyPearl", Category.MISC) {
 
         if (previousSlot == -1) {
             previousSlot = player.inventory.selectedSlot
+            cycleDiagnosticsEnabled = ActionTickBoundary.claimDiagnosticCycle()
         }
 
         // Intentionally ignore the result. With no Hotbar pearl, Argon uses the still-selected MainHand item.
@@ -123,21 +140,50 @@ object ModuleKeyPearl : ClientModule("KeyPearl", Category.MISC) {
         }
 
         if (!hasActivated) {
+            val action = ActionTickBoundary.beginAction(
+                owner = "KeyPearl",
+                kind = ActionTickBoundary.ActionKind.USE_ITEM,
+                diagnosticsEnabled = cycleDiagnosticsEnabled
+            )
+            if (selectedPearlSlot in 0..8 && selectedPearlSlot != previousSlot) {
+                ActionTickBoundary.expectHeldItemChange(
+                    owner = "KeyPearl",
+                    purpose = "selected pearl slot",
+                    action = action,
+                    diagnosticsEnabled = cycleDiagnosticsEnabled
+                )
+            }
+            ActionTickBoundary.diagnostic(
+                cycleDiagnosticsEnabled,
+                "KeyPearl useItem called selectedSlot=${player.inventory.selectedSlot} " +
+                    "previousSlot=$previousSlot switchClock=$switchClock"
+            )
+
             // 26.1.2 useItem calls ensureHasSentCarriedItem itself, matching Argon's selection-then-interact path.
             val result = gameMode.useItem(player, InteractionHand.MAIN_HAND)
+            ActionTickBoundary.actionCallCompleted(action)
             if (result.isAccepted) {
                 player.swingHand(InteractionHand.MAIN_HAND)
             }
 
             // The source advances the cycle even when useItem returns a rejected result.
             hasActivated = true
+            if (!switchBack) {
+                reset()
+                return@handler
+            }
+
+            postUseBoundarySerial = ActionTickBoundary.currentSerial()
+            waitingForPostUseBoundary = true
+            ActionTickBoundary.diagnostic(
+                cycleDiagnosticsEnabled,
+                "KeyPearl waiting post-use boundary serial=$postUseBoundarySerial " +
+                    "selectedSlot=${player.inventory.selectedSlot} previousSlot=$previousSlot switchClock=$switchClock"
+            )
+            return@handler
         }
 
-        if (switchBack) {
-            switchBack(gameMode, player)
-        } else {
-            reset()
-        }
+        switchBack(gameMode, player)
     }
 
     @Suppress("unused")
@@ -174,10 +220,38 @@ object ModuleKeyPearl : ClientModule("KeyPearl", Category.MISC) {
         for (slot in 0..8) {
             if (player.inventory.getItem(slot).item == Items.ENDER_PEARL) {
                 // Selection remains visible and is synchronized by the later useItem call.
+                val previousSelectedSlot = player.inventory.selectedSlot
                 player.inventory.selectedSlot = slot
+                selectedPearlSlot = slot
+                if (previousSelectedSlot != slot) {
+                    ActionTickBoundary.diagnostic(
+                        cycleDiagnosticsEnabled,
+                        "KeyPearl selected pearl slot=$slot previousSlot=$previousSlot switchClock=$switchClock"
+                    )
+                }
                 return
             }
         }
+
+        selectedPearlSlot = -1
+    }
+
+    private fun handlePostUseBoundary(
+        gameMode: net.minecraft.client.multiplayer.MultiPlayerGameMode,
+        player: net.minecraft.client.player.LocalPlayer,
+    ) {
+        if (!ActionTickBoundary.hasPassed(postUseBoundarySerial)) {
+            return
+        }
+
+        waitingForPostUseBoundary = false
+        ActionTickBoundary.diagnostic(
+            cycleDiagnosticsEnabled,
+            "KeyPearl boundary passed serial=${ActionTickBoundary.currentSerial()} " +
+                "postUseSerial=$postUseBoundarySerial selectedSlot=${player.inventory.selectedSlot} " +
+                "previousSlot=$previousSlot switchClock=$switchClock"
+        )
+        switchBack(gameMode, player)
     }
 
     private fun switchBack(
@@ -189,16 +263,54 @@ object ModuleKeyPearl : ClientModule("KeyPearl", Category.MISC) {
             return
         }
 
+        if (!ActionTickBoundary.canSendPostActionHeldItemChange(
+                owner = "KeyPearl",
+                actionBoundarySerial = postUseBoundarySerial,
+                diagnosticsEnabled = cycleDiagnosticsEnabled
+            )
+        ) {
+            // Keep the active cycle and pending restore intact. A later natural tick boundary
+            // will retry without emitting an unsafe HELD_ITEM_CHANGE.
+            return
+        }
+
+        ActionTickBoundary.diagnostic(
+            cycleDiagnosticsEnabled,
+            "KeyPearl restoring previous slot=$previousSlot selectedSlot=${player.inventory.selectedSlot} " +
+                "boundarySerial=$postUseBoundarySerial switchClock=$switchClock"
+        )
+        val expectation = ActionTickBoundary.expectHeldItemChange(
+            owner = "KeyPearl",
+            purpose = "restoring previous slot",
+            postActionBoundarySerial = postUseBoundarySerial,
+            diagnosticsEnabled = cycleDiagnosticsEnabled
+        )
+        if (!expectation.allowed) {
+            return
+        }
+
         player.inventory.selectedSlot = previousSlot
         // Unlike useItem, this direct restoration needs the one explicit selected-slot synchronization.
         gameMode.ensureHasSentCarriedItem()
+        ActionTickBoundary.completeHeldItemChangeAttempt(expectation)
         reset()
     }
 
     private fun reset() {
+        if (previousSlot != -1) {
+            ActionTickBoundary.diagnostic(
+                cycleDiagnosticsEnabled,
+                "KeyPearl cycle reset selectedSlot=$selectedPearlSlot previousSlot=$previousSlot " +
+                    "boundarySerial=$postUseBoundarySerial switchClock=$switchClock"
+            )
+        }
         previousSlot = -1
         clock = 0
         switchClock = 0
+        selectedPearlSlot = -1
+        waitingForPostUseBoundary = false
+        postUseBoundarySerial = Long.MIN_VALUE
+        cycleDiagnosticsEnabled = false
         active = false
         hasActivated = false
     }

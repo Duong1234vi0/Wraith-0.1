@@ -45,6 +45,7 @@ import net.ccbluex.liquidbounce.utils.item.isAxe
 import net.ccbluex.liquidbounce.utils.item.isPickaxe
 import net.ccbluex.liquidbounce.utils.item.isShovel
 import net.ccbluex.liquidbounce.utils.item.isSword
+import net.ccbluex.liquidbounce.utils.network.ActionTickBoundary
 import net.minecraft.world.InteractionHand
 import net.minecraft.core.BlockPos
 import net.minecraft.world.effect.MobEffects
@@ -99,6 +100,23 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
     private var baseActive = false
     private var baseCrystalling = false
     private var baseCrystalSelected = false
+    private var waitingForBasePlaceBoundary = false
+    private var basePlaceActionSerial = Long.MIN_VALUE
+    private var baseBoundaryWaitLoggedSerial = Long.MIN_VALUE
+    private var baseDiagnosticsClaimed = false
+    private var baseDiagnosticsEnabled = false
+
+    private data class PendingAntiWeaknessRestoration(
+        val previousSlot: Int,
+        val actionBoundarySerial: Long,
+        val player: Any,
+        val level: Any,
+        val diagnosticsEnabled: Boolean,
+        var lastWaitLoggedSerial: Long = Long.MIN_VALUE,
+    )
+
+    private var pendingAntiWeaknessRestoration: PendingAntiWeaknessRestoration? = null
+    private var antiWeaknessRestoredAtSerial = Long.MIN_VALUE
 
     var crystalling = false
         private set
@@ -224,6 +242,20 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
             breakClock--
         }
 
+        // The next held-item restore belongs to an earlier attack. It must complete before
+        // any further AutoCrystal action, and only after the actual client tick boundary. Keep
+        // the V-core clocks advancing before this mandatory no-action return.
+        if (handlePendingAntiWeaknessRestoration(player, level)) {
+            return
+        }
+
+        // `runCrystalTick` remains callable by integrations. Once a deferred restore has
+        // happened, a second invocation in the same server-visible action tick cannot start
+        // another attack/place sequence ahead of the next natural CLIENT_TICK_END.
+        if (antiWeaknessRestoredAtSerial == ActionTickBoundary.currentSerial()) {
+            return
+        }
+
         if (stopOnKill && isDeadPlayerNearby(player)) {
             return
         }
@@ -241,13 +273,18 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
             return
         }
 
-        if (crystalBase) {
+        val crystalBaseBlocked = if (crystalBase) {
             handleCrystalBase()
         } else {
             resetCrystalBaseState()
+            false
         }
 
         crystalling = true
+
+        if (crystalBaseBlocked) {
+            return
+        }
 
         if (!isHolding(Items.END_CRYSTAL)) {
             return
@@ -255,7 +292,9 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
 
         if (lastCrystalTick != player.tickCount) {
             lastCrystalTick = player.tickCount
-            handleEntityTarget(dontBreak)
+            if (handleEntityTarget(dontBreak)) {
+                return
+            }
             handleBlockTarget(dontPlace)
         }
     }
@@ -265,6 +304,8 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
         breakClock = 0
         lastCrystalTick = -1
         crystalling = false
+        pendingAntiWeaknessRestoration = null
+        antiWeaknessRestoredAtSerial = Long.MIN_VALUE
         resetCrystalBaseState()
     }
 
@@ -274,11 +315,41 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
         baseActive = false
         baseCrystalling = false
         baseCrystalSelected = false
+        waitingForBasePlaceBoundary = false
+        basePlaceActionSerial = Long.MIN_VALUE
+        baseBoundaryWaitLoggedSerial = Long.MIN_VALUE
+        baseDiagnosticsClaimed = false
+        baseDiagnosticsEnabled = false
     }
 
-    private fun handleCrystalBase() {
-        val hit = getLookedBlock() ?: return
-        val player = mc.player ?: return
+    /**
+     * @return true when a just-emitted base placement still owns this action tick. The explicit
+     * boundary state is intentionally stronger than changing the source's two independent `if`s:
+     * integrations may invoke [runCrystalTick] more than once before Minecraft sends tick-end.
+     */
+    private fun handleCrystalBase(): Boolean {
+        if (waitingForBasePlaceBoundary) {
+            if (!ActionTickBoundary.hasPassed(basePlaceActionSerial)) {
+                if (baseBoundaryWaitLoggedSerial != ActionTickBoundary.currentSerial()) {
+                    baseBoundaryWaitLoggedSerial = ActionTickBoundary.currentSerial()
+                    ActionTickBoundary.diagnostic(
+                        baseDiagnosticsEnabled,
+                        "CrystalBase waiting post-place boundary serial=$basePlaceActionSerial"
+                    )
+                }
+                return true
+            }
+
+            waitingForBasePlaceBoundary = false
+            ActionTickBoundary.diagnostic(
+                baseDiagnosticsEnabled,
+                "CrystalBase boundary passed serial=${ActionTickBoundary.currentSerial()} " +
+                    "postPlaceSerial=$basePlaceActionSerial"
+            )
+        }
+
+        val hit = getLookedBlock() ?: return false
+        val player = mc.player ?: return false
 
         if (baseActive || !BaseSetting.checkPlace || canPlaceAgainst(hit)) {
             if (baseActive || isValidBaseStartItem(player.mainHandItem)) {
@@ -288,8 +359,8 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
 
                 baseActive = true
 
-                if (!baseCrystalling) {
-                    handleBasePlacement(hit)
+                if (!baseCrystalling && handleBasePlacement(hit)) {
+                    return true
                 }
 
                 if (baseCrystalling) {
@@ -297,27 +368,82 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
                 }
             }
         }
+
+        return false
     }
 
-    private fun handleBasePlacement(hit: BlockHitResult) {
+    /**
+     * @return true only when this invocation emitted the base-placement action and must not flow
+     * into Crystal selection until a real CLIENT_TICK_END has been observed.
+     */
+    private fun handleBasePlacement(hit: BlockHitResult): Boolean {
         if (!isCrystalBase(hit.blockPosition()) && !isChargedAnchor(hit.blockPosition())) {
             mc.options.useKey.setPressed(false)
 
+            val baseDiagnostics = getBaseDiagnostics()
+            val placingThisInvocation = basePlaceClock == 0
+            var action: ActionTickBoundary.ActionToken? = null
+
             if (!isHolding(Items.OBSIDIAN)) {
                 if (!tickBaseSwitchClock()) {
-                    return
+                    return false
                 }
 
                 baseSwitchClock = switchDelay
-                selectHotbarItem(Items.OBSIDIAN)
+                if (placingThisInvocation) {
+                    action = ActionTickBoundary.beginAction(
+                        owner = "CrystalBase",
+                        kind = ActionTickBoundary.ActionKind.USE_ITEM_ON,
+                        diagnosticsEnabled = baseDiagnostics
+                    )
+                }
+
+                if (selectHotbarItem(
+                        item = Items.OBSIDIAN,
+                        owner = "CrystalBase",
+                        action = action,
+                        purpose = "selected Obsidian",
+                        diagnosticsEnabled = baseDiagnostics
+                    )
+                ) {
+                    ActionTickBoundary.diagnostic(
+                        baseDiagnostics,
+                        "CrystalBase selected Obsidian slot=${mc.player?.inventory?.selectedSlot}"
+                    )
+                }
             }
 
             if (isHolding(Items.OBSIDIAN) && tickBasePlaceClock()) {
-                placeCrystal(hit)
+                val placementAction = action ?: ActionTickBoundary.beginAction(
+                    owner = "CrystalBase",
+                    kind = ActionTickBoundary.ActionKind.USE_ITEM_ON,
+                    diagnosticsEnabled = baseDiagnostics
+                )
+                if (!placeCrystal(hit, placementAction)) {
+                    ActionTickBoundary.cancelAction(placementAction)
+                    return false
+                }
+
                 basePlaceClock = baseDelay
                 baseCrystalling = true
+                basePlaceActionSerial = ActionTickBoundary.currentSerial()
+                waitingForBasePlaceBoundary = true
+                baseBoundaryWaitLoggedSerial = Long.MIN_VALUE
+                ActionTickBoundary.diagnostic(
+                    baseDiagnostics,
+                    "CrystalBase placed Obsidian boundarySerial=$basePlaceActionSerial"
+                )
+                ActionTickBoundary.diagnostic(
+                    baseDiagnostics,
+                    "CrystalBase waiting post-place boundary serial=$basePlaceActionSerial"
+                )
+                return true
             }
+
+            action?.let(ActionTickBoundary::cancelAction)
         }
+
+        return false
     }
 
     private fun handleBaseCrystalSelection() {
@@ -326,7 +452,18 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
                 return
             }
 
-            baseCrystalSelected = selectHotbarItem(Items.END_CRYSTAL)
+            baseCrystalSelected = selectHotbarItem(
+                item = Items.END_CRYSTAL,
+                owner = "CrystalBase",
+                purpose = "selected End Crystal",
+                diagnosticsEnabled = getBaseDiagnostics()
+            )
+            if (baseCrystalSelected) {
+                ActionTickBoundary.diagnostic(
+                    baseDiagnosticsEnabled,
+                    "CrystalBase selected End Crystal slot=${mc.player?.inventory?.selectedSlot}"
+                )
+            }
             baseSwitchClock = switchDelay
         }
     }
@@ -335,54 +472,209 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
         val hit = getLookedBlock() ?: return
 
         if (!dontPlace && canPlaceCrystal(hit.blockPosition())) {
-            placeCrystal(hit)
+            val basePlacementAction = if (crystalBase && baseCrystalling) {
+                ActionTickBoundary.beginAction(
+                    owner = "CrystalBase",
+                    kind = ActionTickBoundary.ActionKind.USE_ITEM_ON,
+                    diagnosticsEnabled = getBaseDiagnostics()
+                )
+            } else {
+                null
+            }
+
+            if (!placeCrystal(hit, basePlacementAction)) {
+                basePlacementAction?.let(ActionTickBoundary::cancelAction)
+                return
+            }
+
+            if (basePlacementAction != null) {
+                ActionTickBoundary.diagnostic(
+                    baseDiagnosticsEnabled,
+                    "CrystalBase placed End Crystal slot=${mc.player?.inventory?.selectedSlot}"
+                )
+            }
             placeClock = placeDelay
         }
     }
 
-    private fun handleEntityTarget(dontBreak: Boolean) {
-        val entity = getLookedEntity()?.entity ?: return
+    /**
+     * @return true when an AntiWeakness attack created a deferred restoration and this invocation
+     * must not continue into another AutoCrystal action.
+     */
+    private fun handleEntityTarget(dontBreak: Boolean): Boolean {
+        val entity = getLookedEntity()?.entity ?: return false
 
         if (dontBreak || entity !is EndCrystal && entity !is Slime) {
-            return
+            return false
         }
 
         if (ModuleCrystalOptimizer.isAttackInhibited(entity)) {
-            return
+            return false
         }
 
-        val player = mc.player ?: return
+        val player = mc.player ?: return false
+        val level = mc.level ?: return false
         val previousSlot = player.inventory.selectedSlot
+        var antiWeaknessSwitched = false
+        var antiWeaknessDiagnostics = false
+        var attackAction: ActionTickBoundary.ActionToken? = null
 
         if (antiWeakness && cantBreakCrystal(player)) {
-            val weaponSlot = findAntiWeaknessTool(player) ?: return
-            if (!selectHotbarSlot(weaponSlot)) {
-                return
+            val weaponSlot = findAntiWeaknessTool(player) ?: return false
+            antiWeaknessDiagnostics = ActionTickBoundary.claimDiagnosticCycle()
+            attackAction = ActionTickBoundary.beginAction(
+                owner = "AutoCrystal AntiWeakness",
+                kind = ActionTickBoundary.ActionKind.ATTACK,
+                diagnosticsEnabled = antiWeaknessDiagnostics
+            )
+            if (!selectHotbarSlot(
+                    slot = weaponSlot,
+                    owner = "AutoCrystal AntiWeakness",
+                    action = attackAction,
+                    purpose = "selected weakness tool",
+                    diagnosticsEnabled = antiWeaknessDiagnostics
+                )
+            ) {
+                attackAction?.let(ActionTickBoundary::cancelAction)
+                return false
             }
+
+            antiWeaknessSwitched = player.inventory.selectedSlot != previousSlot
+            ActionTickBoundary.diagnostic(
+                antiWeaknessDiagnostics,
+                "AutoCrystal selected weakness tool slot=$weaponSlot previousSlot=$previousSlot"
+            )
         }
 
-        attackEntity(entity)
+        if (!attackEntity(entity, attackAction)) {
+            attackAction?.let(ActionTickBoundary::cancelAction)
+            if (antiWeaknessSwitched) {
+                selectHotbarSlot(
+                    slot = previousSlot,
+                    owner = "AutoCrystal AntiWeakness",
+                    purpose = "restoring weakness tool after no attack",
+                    diagnosticsEnabled = antiWeaknessDiagnostics
+                )
+            }
+            return false
+        }
+
         breakClock = breakDelay
 
-        if (antiWeakness) {
-            selectHotbarSlot(previousSlot)
+        if (!antiWeaknessSwitched) {
+            return false
         }
+
+        val actionBoundarySerial = ActionTickBoundary.currentSerial()
+        pendingAntiWeaknessRestoration = PendingAntiWeaknessRestoration(
+            previousSlot = previousSlot,
+            actionBoundarySerial = actionBoundarySerial,
+            player = player,
+            level = level,
+            diagnosticsEnabled = antiWeaknessDiagnostics
+        )
+        ActionTickBoundary.diagnostic(
+            antiWeaknessDiagnostics,
+            "AutoCrystal attacked Crystal boundarySerial=$actionBoundarySerial previousSlot=$previousSlot"
+        )
+        ActionTickBoundary.diagnostic(
+            antiWeaknessDiagnostics,
+            "AutoCrystal waiting post-attack boundary serial=$actionBoundarySerial"
+        )
+        return true
     }
 
-    private fun placeCrystal(hit: BlockHitResult) {
-        val player = mc.player ?: return
-        val interaction = mc.gameMode ?: return
+    /**
+     * Handles only the deferred post-attack slot restoration. A successful restore intentionally
+     * ends this [runCrystalTick] invocation so an integration cannot create a second action after
+     * the restore in the same server-visible action tick.
+     */
+    private fun handlePendingAntiWeaknessRestoration(player: Player, level: Any): Boolean {
+        val pending = pendingAntiWeaknessRestoration ?: return false
+
+        if (pending.player !== player || pending.level !== level) {
+            pendingAntiWeaknessRestoration = null
+            antiWeaknessRestoredAtSerial = ActionTickBoundary.currentSerial()
+            return true
+        }
+
+        if (!ActionTickBoundary.hasPassed(pending.actionBoundarySerial)) {
+            if (pending.lastWaitLoggedSerial != ActionTickBoundary.currentSerial()) {
+                pending.lastWaitLoggedSerial = ActionTickBoundary.currentSerial()
+                ActionTickBoundary.diagnostic(
+                    pending.diagnosticsEnabled,
+                    "AutoCrystal waiting post-attack boundary serial=${pending.actionBoundarySerial}"
+                )
+            }
+            return true
+        }
+
+        if (pending.previousSlot !in 0..8) {
+            ActionTickBoundary.diagnostic(
+                pending.diagnosticsEnabled,
+                "AutoCrystal dropped invalid weakness restoration slot=${pending.previousSlot}"
+            )
+            pendingAntiWeaknessRestoration = null
+            antiWeaknessRestoredAtSerial = ActionTickBoundary.currentSerial()
+            return true
+        }
+
+        if (!ActionTickBoundary.canSendPostActionHeldItemChange(
+                owner = "AutoCrystal AntiWeakness",
+                actionBoundarySerial = pending.actionBoundarySerial,
+                diagnosticsEnabled = pending.diagnosticsEnabled
+            )
+        ) {
+            return true
+        }
+
+        ActionTickBoundary.diagnostic(
+            pending.diagnosticsEnabled,
+            "AutoCrystal restored previous slot=${pending.previousSlot} " +
+                "boundarySerial=${pending.actionBoundarySerial}"
+        )
+        if (!selectHotbarSlot(
+                slot = pending.previousSlot,
+                owner = "AutoCrystal AntiWeakness",
+                purpose = "restored previous slot",
+                diagnosticsEnabled = pending.diagnosticsEnabled,
+                postActionBoundarySerial = pending.actionBoundarySerial
+            )
+        ) {
+            // Keep the pending state so a transient interaction-manager absence cannot turn into
+            // a stale restore in a different world or an unsafe immediate slot packet.
+            return true
+        }
+
+        pendingAntiWeaknessRestoration = null
+        antiWeaknessRestoredAtSerial = ActionTickBoundary.currentSerial()
+        return true
+    }
+
+    private fun placeCrystal(
+        hit: BlockHitResult,
+        action: ActionTickBoundary.ActionToken? = null,
+    ): Boolean {
+        val player = mc.player ?: return false
+        val interaction = mc.gameMode ?: return false
 
         interaction.interactBlock(player, InteractionHand.MAIN_HAND, hit)
+        action?.let(ActionTickBoundary::actionCallCompleted)
         player.swingHand(InteractionHand.MAIN_HAND)
+        return true
     }
 
-    private fun attackEntity(entity: Entity) {
-        val player = mc.player ?: return
-        val interaction = mc.gameMode ?: return
+    private fun attackEntity(
+        entity: Entity,
+        action: ActionTickBoundary.ActionToken? = null,
+    ): Boolean {
+        val player = mc.player ?: return false
+        val interaction = mc.gameMode ?: return false
 
         interaction.attackEntity(player, entity)
+        action?.let(ActionTickBoundary::actionCallCompleted)
         player.swingHand(InteractionHand.MAIN_HAND)
+        return true
     }
 
     private fun tickBaseSwitchClock(): Boolean {
@@ -401,6 +693,15 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
         }
 
         return true
+    }
+
+    private fun getBaseDiagnostics(): Boolean {
+        if (!baseDiagnosticsClaimed) {
+            baseDiagnosticsClaimed = true
+            baseDiagnosticsEnabled = ActionTickBoundary.claimDiagnosticCycle()
+        }
+
+        return baseDiagnosticsEnabled
     }
 
     private fun updateActivationBindState(bind: InputBind, matches: Boolean, action: Int) {
@@ -469,18 +770,69 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
         stack.isSword || BaseSetting.workWithTotem && stack.item == Items.TOTEM_OF_UNDYING ||
             BaseSetting.workWithCrystal && stack.item == Items.END_CRYSTAL
 
-    private fun selectHotbarItem(item: Item): Boolean {
+    private fun selectHotbarItem(
+        item: Item,
+        owner: String? = null,
+        action: ActionTickBoundary.ActionToken? = null,
+        purpose: String = "selected hotbar item",
+        diagnosticsEnabled: Boolean = false,
+        postActionBoundarySerial: Long? = null,
+    ): Boolean {
         val player = mc.player ?: return false
         val slot = (0..8).firstOrNull { player.inventory.getStack(it).item == item } ?: return false
-        return selectHotbarSlot(slot)
+        return selectHotbarSlot(
+            slot = slot,
+            owner = owner,
+            action = action,
+            purpose = purpose,
+            diagnosticsEnabled = diagnosticsEnabled,
+            postActionBoundarySerial = postActionBoundarySerial
+        )
     }
 
-    private fun selectHotbarSlot(slot: Int): Boolean {
+    private fun selectHotbarSlot(
+        slot: Int,
+        owner: String? = null,
+        action: ActionTickBoundary.ActionToken? = null,
+        purpose: String = "selected hotbar slot",
+        diagnosticsEnabled: Boolean = false,
+        postActionBoundarySerial: Long? = null,
+    ): Boolean {
+        if (slot !in 0..8) {
+            return false
+        }
+
         val player = mc.player ?: return false
         val interaction = mc.gameMode ?: return false
 
+        if (owner != null && postActionBoundarySerial != null && !ActionTickBoundary.canSendPostActionHeldItemChange(
+                owner,
+                postActionBoundarySerial,
+                diagnosticsEnabled
+            )
+        ) {
+            return false
+        }
+
+        val changedSlot = player.inventory.selectedSlot != slot
+        val expectation = if (owner != null && changedSlot) {
+            ActionTickBoundary.expectHeldItemChange(
+                owner = owner,
+                purpose = purpose,
+                action = action,
+                postActionBoundarySerial = postActionBoundarySerial,
+                diagnosticsEnabled = diagnosticsEnabled
+            )
+        } else {
+            null
+        }
+        if (expectation != null && !expectation.allowed) {
+            return false
+        }
+
         player.inventory.selectedSlot = slot
         interaction.ensureHasSentCarriedItem()
+        expectation?.let(ActionTickBoundary::completeHeldItemChangeAttempt)
         return true
     }
 

@@ -7962,3 +7962,97 @@ with the Minecraft 1.21.4 behavior; no second Offhand module was added.
 - This append is staged with the KeyPearl/TriggerBot source commit; its immutable commit hash and push result are
   recorded in the completion report after the commit is created. No uploaded archive, extracted Argon tree, log, or
   backup JAR is staged.
+
+## KeyPearl and CrystalBase PacketOrderE action-order fix (2026-07-16, Codex)
+
+### Reported reproduction and Grim authority
+
+- The reported server-visible action-tick analogy was precise: selecting an item before its action is valid, but a
+  second carried-slot change is a new action phase and must not be placed behind a right-click/attack before the
+  server sees its natural tick boundary. Reproductions were KeyPearl with `Delay=0`, `SwitchBack=true`, and
+  `SwitchDelay=0`, plus CrystalBase with zero Switch/Base/Place delays.
+- Read Grim 2.0 `PacketOrderE`, `PacketOrderProcessor`, and `Check` completely. `PacketOrderE` handles
+  `HELD_ITEM_CHANGE` and flags when any current action flag is true. For these reports, `rightClicking` is
+  `placing || using || interacting`; therefore a carried-slot packet after `USE_ITEM`/`USE_ITEM_ON` is invalid while
+  that state is still live.
+- Grim clears these action flags only at a recognized packet boundary: a movement/flying tick packet, or the
+  `CLIENT_TICK_END` fallback on 1.21.2+. The target 26.1.2 bytecode confirms that Minecraft naturally emits
+  `ServerboundClientTickEndPacket`; no packet was fabricated, cancelled, or reordered by this work.
+
+### Root causes retained as evidence
+
+- KeyPearl previously produced `HELD_ITEM_CHANGE(Pearl) -> USE_ITEM -> HELD_ITEM_CHANGE(previous) ->
+  CLIENT_TICK_END`. The first synchronization is the target `MultiPlayerGameMode.useItem` pre-action sync and is
+  valid. The immediate restoration is the invalid post-right-click packet.
+- CrystalBase could execute both independent source branches in one invocation: `HELD_ITEM_CHANGE(Obsidian) ->
+  USE_ITEM_ON(place Obsidian) -> HELD_ITEM_CHANGE(End Crystal) -> CLIENT_TICK_END`. The second slot change is invalid
+  because the placement kept Grim `rightClicking=true`.
+- AutoCrystal AntiWeakness also had the analogous latent attack sequence: `HELD_ITEM_CHANGE(tool) -> ATTACK ->
+  HELD_ITEM_CHANGE(previous) -> CLIENT_TICK_END`. Its final restoration can produce PacketOrderE with
+  `attacking=true`.
+
+### Narrow packet-boundary implementation
+
+- Added `utils/network/ActionTickBoundary.kt`. It monotonically increments a completed-action serial only when the
+  existing outgoing-packet event observes a natural `ServerboundClientTickEndPacket`; it has no wall clock,
+  background thread, packet send, cancellation, movement suppression, global slot interception, or container logic.
+- The utility records module-owned expected carried-slot/action packets only while the caller synchronously performs
+  them, validates an attempted post-action slot change before local selection is mutated, and clears expectations on
+  tick boundary/world change/disconnect. It logs an error and returns no-send permission if an owned action would be
+  followed by a held-slot packet too early.
+- KeyPearl records a post-use serial regardless of `useItem` acceptance, then waits for a real boundary before
+  beginning the existing SwitchDelay clock. `SwitchDelay=0` restores on the first eligible next action tick;
+  `SwitchDelay=N` waits N additional eligible ticks. `SwitchBack=false` still resets immediately because it sends no
+  post-use restore. Hold-to-repeat and release-after-activation remain cycle-safe.
+- CrystalBase records a barrier only after it actually performs the Obsidian placement interaction, returns from that
+  action phase, and refuses repeated `runCrystalTick` calls until the serial passes. Crystal selection delay does not
+  tick during that barrier. Once it passes, End Crystal selection and placement may still share the new action tick.
+  Existing Obsidian/Bedrock bases retain immediate `select Crystal -> USE_ITEM_ON`; charged Respawn Anchor handling
+  gains no barrier without an emitted placement action.
+- AntiWeakness stores the previous Hotbar slot, boundary serial, and exact player/world identities. It revalidates
+  the range, restores only after the real boundary, then returns from that AutoCrystal invocation so no second
+  action can follow restoration in the same action tick. Disable, disconnect, world change, and player replacement
+  clear all pending barrier/restoration state.
+- The only strict-port deviation is the mandatory server packet boundary between a post-action restore/phase switch;
+  it is required by Grim's documented ordering semantics. Normal V-core clocks still advance during AntiWeakness's
+  no-action restoration tick, and valid pre-action visible switching remains immediate.
+
+### Bounded diagnostics
+
+- Test-build diagnostics use `[ActionOrderDiag]`, capped at 32 cycles and 512 informational records per world/session.
+  They include client tick, boundary serial, slots, KeyPearl SwitchDelay clock, and module-owned packet sequence/type
+  evidence for `ServerboundSetCarriedItemPacket`, `ServerboundUseItemPacket`, `ServerboundUseItemOnPacket`, target
+  26.1.2 `ServerboundAttackPacket` with `ATTACK`, and `ServerboundClientTickEndPacket`.
+- The retained logs name: KeyPearl pearl selection/use/boundary/restore/reset; CrystalBase Obsidian selection/place,
+  boundary, End Crystal selection/place; and AntiWeakness tool selection/attack/wait/restore. They remain installed
+  for the requested FCL reproduction rather than being removed after compilation.
+
+### Files, build, install, and runtime status
+
+- Changed: `src/main/kotlin/net/ccbluex/liquidbounce/utils/network/ActionTickBoundary.kt`,
+  `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/misc/ModuleKeyPearl.kt`,
+  `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleAutoCrystal.kt`, and this append-only
+  `Agent1.md` entry. TriggerBot and MacroAnchor source behavior were not changed. No use of
+  `InventoryActionMovementGate`, movement/sprint suppression, manual tick-end packet, or random delay was added.
+- `git diff --check` passed. The requested clean command
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+  completed `BUILD SUCCESSFUL` in `1m 47s`.
+- Built `build/libs/liquidbounce-0.31.2.jar` SHA-256:
+  `8a839ab70df74fad124f95e36d4c407410cc7592a935daa4af8621dd9239e62d`. It was installed to
+  `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar` with the identical
+  SHA-256. The prior JAR is preserved as `liquidbounce-0.31.2.jar.bak-20260716-action-order`, SHA-256
+  `fe1650f582c35111ee0870f0be9aaa54c1017ae153e611ac1da01678a22da8f9`.
+- FCL runtime reproduction has not been run from this Termux-only session. KeyPearl exact hold/delay cases,
+  CrystalBase zero-delay/existing-base/repeated-call cases, AntiWeakness, and disable/disconnect/world/player
+  lifecycle cases remain pending user gameplay verification. Consequently there is no claim yet that PacketOrderE,
+  Post/BadPackets slot flags, or any other Grim flags are absent; the installed diagnostics are the evidence to
+  collect next.
+
+### Commit / push status
+
+- Accepted Offhand transaction work was preserved separately in local commit `261aab70`
+  (`fix(player): order Offhand swaps like vanilla`). Its earlier append-only history already existed and was not
+  rewritten or duplicated.
+- The current action-order fix is intentionally uncommitted and unpushed until both exact KeyPearl and CrystalBase
+  reproductions complete without PacketOrderE, as required. Current branch: `main`; remote: `origin`
+  (`https://github.com/Duong1234vi0/Wraith-0.1.git`).
