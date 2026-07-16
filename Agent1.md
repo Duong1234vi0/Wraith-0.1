@@ -7511,3 +7511,116 @@ Branch: `main`. Remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`.
 
 Push result: successful; `origin/main` advanced from `2c04e9818` to `ff0ac8522`. This documentation entry is the
 separate follow-up so it can record that completed feature commit and push without self-referential commit metadata.
+
+## Restored Minecraft 1.21.4 Offhand module behavior (2026-07-16, Codex)
+
+### Request and authority
+
+The user requested replacement of Wraith's mixed Offhand implementation with the exact observable behavior and
+configuration surface from the supplied Minecraft **1.21.4**, Yarn **1.21.4+build.8** project. The reference source
+controls behavior; live Wraith controls 26.1.2 official mappings, event/scheduler integration, and available helpers.
+`Agent1.md` was used only to identify the superseded GrimStop history, never as current-source authority.
+
+### Files inspected
+
+Read completely from `WorkSpace/Client/tesststststststst`:
+
+- `features/module/modules/player/offhand/ModuleOffhand.kt` and `Totem.kt`;
+- `utils/inventory/InventoryUtils.kt`, `Slots.kt`, and `ItemSlot.kt`;
+- `utils/client/Chronometer.kt` and `event/events/PlayerEvents.kt`;
+- `features/module/modules/combat/killaura/ModuleKillAura.kt`;
+- `features/module/modules/combat/crystalaura/ModuleCrystalAura.kt`;
+- `features/module/modules/player/nofall/ModuleNoFall.kt`.
+
+Read live Wraith's Offhand/Totem sources, `src.zip` (the target files match the live copies byte-for-byte),
+`InventoryUtils.kt`, `InventoryManager.kt`, scheduling event/action definitions, slots, `ClientModule`,
+`ModuleManager`, item compatibility helpers, explosion/fall/block helpers, and 26.1.2 Minecraft mapped sources.
+The live module registry has `ModuleAutoCrystal` but no `ModuleCrystalAura` or `ModuleNoFall`.
+
+### Mixed behavior removed
+
+- Removed `Totem.TotemGuard` / `GrimStop`, `TicksDelay`, post-pop timestamps/indexes, randomized pick/place/return
+  delays, and its hidden zero-delay constraints.
+- Removed Offhand's `guardedTotemSwap`, guarded stages, guarded refill functions, inventory-open holds, and all
+  post-pop swap staging.
+- Removed the Offhand incoming `ClientboundEntityEventPacket` / status-35 handler and `TOTEM_USE_STATUS` constant.
+- Removed top-level `HP`, `ElytraHP`, `GoldenHearts`, flat `Safety`, `SafeHealthThreshold`, and `Delay` settings.
+- Removed the forced-zero `OffhandInternal` constraints and the forced false `SendDirectly` constant.
+
+### Restored 1.21.4 behavior and settings
+
+- Restored visible default `PlayerInventoryConstraints`: StartDelay `1..2`, ClickDelay `2..4`, CloseDelay `1..2`,
+  MissChance `0`, and configurable requirements.
+- Restored top-level `SwitchMode`, `Cycle` (`H`), and `SwitchDelay` (`0`, `0..500 ms`). `Mode.getDelay()` now uses
+  the general delay; Totem overrides it with `Totem.SwitchDelay`.
+- Preserved `Smart`, `Switch`, `PickUp`, and `Automatic` switch methods. The single clean default registration is
+  `Automatic` when ViaFabricPlus is present, otherwise `Switch`, matching the old effective default.
+- Restored Gapple defaults/hierarchy: `Gapple` true; `GappleBind`; `WhileHoldingSword` true; nested
+  `OnlyWhileKillAura` true. Automatic Gapple only equips under that exact sword/KillAura predicate, while binds,
+  cycle, and static mode remain available.
+- Restored Crystal defaults: `Crystal` true, `OnlyWhileCrystalAura` false, `WhenNoTotems` true, and `CrystalBind`.
+  Totem fallback retains Crystal's normal main-inventory-first lookup.
+- Restored StrengthPotion defaults: disabled; `OnlyWhileHoldingSword` true; `OnlyWhileKillAura` true; `StrengthBind`.
+  It recognizes only normal `POTION` stacks containing Strength, does not cycle normally, and applies the original
+  KillAura/sword/effect gates.
+- Restored Totem config: `SwitchDelay` `0`, `SwitchBackDelay` `40`; `Health` true with integer `HealthThreshold`
+  `14`; nested `Safety` true / `SafeHealthThreshold` `10`; `SubtractCalculatedDamage` false;
+  entity prediction true; block prediction false; fall prediction true / `IgnoreElytra` false; `MissingArmor` true;
+  `SwitchBack` true; `SendDirectly` false.
+- Restored absorption-inclusive health, hole/burrow Safety threshold, missing-armor early return, lethal-only
+  damage mode when subtraction is disabled, entity/bed/anchor/fall prediction order, exact-slot SwitchBack, and
+  optional direct Totem sends only.
+- Restored the enum order and priority `TOTEM`, `STRENGTH`, `GAPPLE`, `CRYSTAL`, `BACK`, `NONE`, including direct
+  bind toggles, cycle behavior, initial static-mode selection, priority-100 scheduling, and ordinary scheduler path.
+
+### Required target adaptations
+
+- Yarn item/packet APIs map to `mainHandItem` / `offhandItem`, `DataComponents.POTION_CONTENTS`,
+  `PotionContents.EMPTY`, `MobEffects.STRENGTH`, `ServerboundSetCarriedItemPacket`,
+  `ServerboundPlayerActionPacket`, `BlockPos.ZERO`, and `Direction.DOWN`.
+- Current Wraith compatibility extensions retain the source's potion effect, status-effect, and packet-send behavior.
+- 26.1.2 client entities are iterated through `world.entitiesForRendering()`; its mapped implementation returns the
+  client entity collection. Bed/anchor dimension checks use the current `Level.OVERWORLD` / `Level.NETHER` API.
+- Because no compiled `CrystalAura` or `NoFall` exists, a narrow case-insensitive exact module-name-or-alias lookup
+  is used. It cannot match `AutoCrystal`, `CrystalOptimizer`, `LegitHelper`, or arbitrary names containing
+  "Crystal". Thus `OnlyWhileCrystalAura=true` disables Crystal cycling when the exact module is absent, while
+  missing NoFall leaves normal fall prediction active.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/player/offhand/ModuleOffhand.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/player/offhand/Totem.kt`
+
+No module registration, localization, AutoCrystal, CrystalOptimizer, LegitHelper, KillAura, inventory-manager, or
+other module source was changed.
+
+### Static, build, install, and runtime status
+
+- `git diff --check`: passed.
+- Source scans found no Offhand/Totem `TotemGuard`, `GrimStop`, guarded-stage, status-35 packet handler,
+  `GoldenHearts`, `ElytraHP`, hidden zero-delay constraints, or legacy HP/Delay settings.
+- Registration remains exactly once in `ModuleManager`; JAR inspection found `ModuleOffhand` and `Totem`, but no
+  `TotemGuard`, `GuardedTotemSwap`, or guarded-stage class/packet handler.
+- Java: OpenJDK `25.0.3` (2026-04-21).
+- Build command: `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`.
+- Result: **BUILD SUCCESSFUL** in `2m 8s`.
+- Built JAR: `build/libs/liquidbounce-0.31.2.jar`, SHA-256
+  `24edf735435752c50cffef22b25cfa046459b2f57bfb01b4303a837a173c762d`.
+- Installed JAR has the same SHA-256 at
+  `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar`. The prior installed JAR
+  was preserved as `liquidbounce-0.31.2.jar.bak-20260716-offhand-restore` with SHA-256
+  `4128bc77d00b5cd25d7ed87073488f8903ef455ab483c170740b48ecfaac85c3`.
+- FCL runtime is **not verified**. Android denied package-resolution access to this Termux user, and the direct
+  `com.tungsten.fcl` launcher intent returned `Activity not started, unable to resolve Intent`. No disabled/enabled
+  launch, configuration UI, world, Totem, or switch-mode runtime claim is made.
+
+### Commit / push
+
+Feature commit: `2d46a7e01` (`refactor(player): restore 1.21.4 Offhand`).
+
+Branch: `main`. Remote: `origin https://github.com/Duong1234vi0/Wraith-0.1.git`.
+
+Push result: successful; `origin/main` advanced from `00e2e519b` to `2d46a7e01`.
+
+This supersedes the mixed multi-client Offhand implementation. The mixed current Offhand implementation was replaced
+with the Minecraft 1.21.4 behavior; no second Offhand module was added.
