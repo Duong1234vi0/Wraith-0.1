@@ -8133,3 +8133,162 @@ with the Minecraft 1.21.4 behavior; no second Offhand module was added.
 - This MultiActionsF diagnostic fix is intentionally uncommitted and unpushed pending the requested FCL test. The
   eventual commit must contain only this narrow source change and this entry, using
   `fix(combat): separate crystal attack and placement`.
+
+## AutoCrystal Silent HeadBob base-anchored targeting (2026-07-16, Codex)
+
+### User request, definition, and authority
+
+- User requested one optional `HeadBob` Boolean for the live Minecraft 26.1.2 crosshair-driven AutoCrystal:
+  `false` by default, immediately after `BreakDelay`, with the description “Silently targets the crystal above the
+  looked-at base without requiring the visible crosshair to touch the crystal.” No range, delay, speed, rotation,
+  wall, FOV, mode, bind, aura, damage, mixin, or camera setting was added.
+- Manual Crystal head bob is the visible sequence `look at Crystal hitbox -> attack -> look at Obsidian/Bedrock ->
+  place`. Silent HeadBob preserves the visible camera/crosshair on the exact Obsidian/Bedrock base while making the
+  necessary server-facing silent rotation to the Crystal, attacking it, crossing a real action boundary, silently
+  rotating back to the actual base hit point/face, and only then placing.
+- No proprietary paid-client source was supplied or used. This is a specification-based Wraith integration; it does
+  not claim byte-for-byte or implementation parity with any paid client. The user behavior specification is feature
+  authority, live Wraith is integration authority, target bytecode is packet/API authority, and supplied Grim is
+  validation authority.
+
+### Evidence and rejected shortcut
+
+- Read the mandatory Skill workflow documents, latest relevant Agent1 history, complete live AutoCrystal,
+  CrystalOptimizer, ActionTickBoundary, RotationManager/RotationTarget/RotationsConfigurable/RotationFinding,
+  CrystalDestroyFeature, and supplied Grim `Reach`, `Hitboxes`, `MultiActionsF`, `PacketOrderE`, `RotationPlace`,
+  `Post`, and related checks.
+- Target 26.1.2 bytecode confirmed `MultiPlayerGameMode.attack`, `useItemOn`, LocalPlayer movement rotation packets,
+  natural `ServerboundClientTickEndPacket`, EndCrystal placement occupancy, and live entity/block interaction-range
+  APIs. RotationManager's `actualServerRotation` tracks an un-cancelled sent rotation packet; desired
+  `currentRotation` is not accepted as proof.
+- A direct `find crystal above base -> attack` shortcut was rejected. Grim Hitboxes checks EndCrystal interaction
+  against current/previous server look vectors, and Grim Reach checks the actual interaction geometry. HeadBob gates
+  every virtual Crystal attack on Wraith `facingEnemy` with `actualServerRotation`, target-version entity range, and
+  a zero-wall visible `raytraceBox` point. Thus it never attacks merely because a Crystal was found nearby.
+
+### Implementation
+
+- Added `HeadBob` only to `ModuleAutoCrystal` and its English description to `en_us.json`. With HeadBob disabled,
+  direct crosshair entity handling, looked-block placement, CrystalBase, CrystalOptimizer, AntiWeakness, delays, and
+  the accepted action-boundary behavior retain their existing paths; no HeadBob rotation request is made.
+- Added a narrow exact-base resolver: it begins only from the visible `BlockHitResult`, requires that exact block to
+  be Obsidian or Bedrock, queries only the one-block-wide/two-block-tall `base.above()` placement column, accepts
+  alive EndCrystals whose logical position belongs to that same base, and chooses by column-center squared distance
+  then entity ID. It does not scan a radius, select Slimes/players/adjacent-base Crystals, accept MISS/entity hits,
+  Respawn Anchors, or automatically choose enemy positions.
+- Added explicit `Idle`, `AimingCrystal`, `WaitingAfterAttack`, and `AimingBase` HeadBob states. They continuously
+  revalidate the visible base hit and cleanly cancel on look-away, setting disable, activation release, screen,
+  player/world replacement, disconnect, missing Crystal, or no held EndCrystal. Cancellation consumes a natural
+  safety reset boundary so an old silent rotation cannot immediately become a normal placement.
+- Crystal aim requests a short-lived direct `MovementCorrection.SILENT` target at
+  `Priority.IMPORTANT_FOR_USAGE_3`; it does not write camera yaw/pitch, mouse deltas, cursor state, or use
+  `CHANGE_LOOK`. The request is refreshed only for the active phase and action waits for the sent server rotation to
+  hit the selected Crystal.
+- HeadBob reuses AutoCrystal's entity handler, optimizer behavior, AntiWeakness switching/restoration, and the
+  accepted `pendingEntityActionBoundary`/`ActionTickBoundary` tracker. A real HeadBob attack arms the same boundary;
+  base aim does not start until the natural `CLIENT_TICK_END` passed it, and AntiWeakness restoration retains its
+  existing priority. Optimizer inhibition before any Crystal rotation follows existing
+  `INHIBITED_WITHOUT_PACKET` placement behavior; if it happens after a Crystal rotation was requested, HeadBob still
+  enters base aim before placement rather than using the stale Crystal-facing server rotation.
+- Base aim uses the current real visible `BlockHitResult` location and face, a silent target, target-version block
+  range, and a world `facingBlock` raytrace of `actualServerRotation` to the same base/face before it invokes the
+  existing `handleBlockTarget`. No synthetic centered hit result or neighbouring base is used.
+- Bounded installed diagnostics use `[HeadBobDiag]` (32 cycles/512 messages). They record base/Crystal resolution,
+  requested and actual yaw/pitch, target yaw/pitch, range, exact visible hit, Crystal ID, slot, delay clocks, state,
+  attack/boundary/base-raytrace/placement evidence, and cancellation/reset reasons. They remain for gameplay tests.
+
+### Files, static checks, build, and install
+
+- Changed: `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleAutoCrystal.kt`,
+  `src/main/resources/resources/liquidbounce/lang/en_us.json`, and this append-only `Agent1.md` entry. No rotation
+  helper, CrystalOptimizer, ActionTickBoundary, other module, mixin, archive, backup JAR, log, or dirty Offhand file
+  was changed for HeadBob.
+- `git diff --check` passed. Static review confirms one Boolean setting, exact-column `getEntities` lookup only,
+  `actualServerRotation` action gates, zero wall range, existing ActionTickBoundary reuse, no HeadBob
+  `CHANGE_LOOK`/camera mutation, and no new configurable range/delay/rotation or damage-target scan.
+- Requested clean command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+  completed `BUILD SUCCESSFUL` in `2m`.
+- Built `build/libs/liquidbounce-0.31.2.jar` SHA-256:
+  `8e2efdade133157ba69a304fc213f8a8c0fb68a805ec49369058376300c639c3`. It was installed to
+  `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar` with the identical
+  SHA-256. The prior accepted MultiActionsF test JAR was preserved outside the repository as
+  `liquidbounce-0.31.2.pre-headbob-20260716.jar`, SHA-256
+  `a85556f87a05ede8ca5754c005804eae0353350fd2905746661475082d03de18`.
+
+### Runtime, flags, and Git status
+
+- FCL gameplay runtime has not been performed in this Termux-only session. The required disabled regression,
+  basic repeat cycle, Crystal/base hitbox proof, look-away, adjacent-base, no-Crystal, direct-crosshair,
+  CrystalOptimizer (both Blatant modes), CrystalBase, AntiWeakness, delay, rotation-conflict, and lifecycle matrix
+  remain pending. Therefore there is no claim yet that visible-camera stability, break/replacement behavior, or
+  absence of Grim Hitboxes, Reach, MultiActionsF, PacketOrderE, RotationPlace, PositionPlace, Post, BadPackets,
+  AimDuplicateLook, or AimModulo360 flags has been verified. No known deviation has been observed statically; that is
+  not runtime parity proof.
+- Accepted prior MultiActionsF fix was committed separately as `ace1f2acc`
+  (`fix(combat): separate crystal attack and placement`) and pushed successfully to `origin/main` before HeadBob.
+- HeadBob is intentionally uncommitted and unpushed pending those required runtime tests. Its later commit must stage
+  only the three files above and use `feat(combat): add AutoCrystal HeadBob`; current branch is `main`, remote is
+  `origin` (`https://github.com/Duong1234vi0/Wraith-0.1.git`).
+
+## AutoCrystal HeadBob post-rotation fast path (2026-07-16, Codex)
+
+### Reported latency and event-order finding
+
+- The user accepted the functional silent HeadBob implementation but reported that, with `PlaceDelay = 0` and
+  `BreakDelay = 0`, it felt substantially slower than direct legitimate Crystal interaction.
+- The cause was an event-order mismatch, not a configurable delay: `MixinMinecraftClient` emits `GameTickEvent` at
+  tick start, `RotationManager` owns that event at `FIRST_PRIORITY`, calls `RotationUpdateEvent`, and performs
+  `RotationManager.update()` before AutoCrystal's ordinary tick handler. The prior HeadBob handler therefore requested
+  its rotation too late for that tick's movement packet.
+- `actualServerRotation` only changes after the outgoing rotation-bearing movement packet. The old polling path was
+  consequently approximately: request Crystal after update (tick N), apply it (N+1), observe old actual server
+  rotation, then attack (N+2); it repeated the same request/apply/observe delay for the base phase.
+- An initially investigated post-move action shortcut was rejected against the live Grim build: `PacketOrderO` and
+  `Post` reject non-async `ATTACK`/`USE_ITEM_ON` after a movement packet and before natural `CLIENT_TICK_END`.
+  The resulting implementation is the fastest verified safe variant, not an unsafe same-tick post-move shortcut.
+
+### Fast safe execution path
+
+- HeadBob planning now runs from `RotationUpdateEvent`, before `RotationManager.update()`, so a silent target at
+  `Priority.IMPORTANT_FOR_USAGE_3` reaches the normal movement phase in the same client tick. Initial exact-base
+  Crystal acquisition is also performed there; direct visible entity targeting retains priority.
+- A `RotationTarget.whenReached` `RestrictedSingleUseAction` schedules only a post-move rotation confirmation through
+  `PostRotationExecutor(postMove = true)`. It sends no interaction packet. That confirmation rechecks the exact
+  server-facing raytrace, range, lifecycle, delay, visible base, and target identity, then schedules one normal
+  `PostRotationExecutor` task for the next GameTick pre-move phase.
+- The next pre-move phase revalidates `RotationManager.actualServerRotation` before invoking the existing explicit
+  HeadBob entity/block handlers. The live safe timeline is therefore:
+  `RotationUpdateEvent request -> MOVE/LOOK -> post-move proof -> next-tick pre-move ATTACK -> CLIENT_TICK_END ->
+  RotationUpdateEvent base request -> MOVE/LOOK -> post-move proof -> next-tick pre-move USE_ITEM_ON`.
+  There is no old idle state-machine/polling tick; the one-tick server-rotation confirmation before each action and
+  the real attack/place boundary remain deliberately intact.
+- `ActionTickBoundary`, `pendingEntityActionBoundary`, CrystalBase precedence, CrystalOptimizer inhibition,
+  AntiWeakness switching/restoration, zero-delay semantics, exact-base resolution, silent camera behavior, and the
+  direct-crosshair/no-Crystal paths remain in place. There is still one `HeadBob` Boolean and no speed setting.
+- Delay clocks now use a once-per-player-tick snapshot shared by RotationUpdateEvent and ordinary AutoCrystal ticks,
+  avoiding a double decrement while preserving `clock = 1` as "block this tick, permit the following tick." A
+  monotonic HeadBob generation plus captured base/Crystal/state checks discard stale post-move or pre-move callbacks
+  on look-away, disable, world/player change, target replacement, binding release, or state reset.
+
+### Diagnostics, build, and runtime evidence
+
+- `[HeadBobDiag]` remains bounded and now records phase-entry, rotation-request, rotation-packet, pre-move action,
+  boundary serial, rotation/boundary wait counts, and separately measured server/network Crystal-spawn latency.
+  It logs Crystal/base requests, proof, attack/place execution, cancellation, and the boundary transition.
+- The clean requested build command completed successfully. Final built and installed
+  `liquidbounce-0.31.2.jar` SHA-256 matched:
+  `a3a1bf46128ea7763dc2249f542b9e3179bfa32386ba9f858264820b022fa734`.
+  A dated installed-JAR backup was made before replacement.
+- Runtime repeat cycles on `test.ccbluex.net` showed the expected serial cadence: request/rotation packet in one
+  movement phase, action in the next pre-move phase, natural action boundary after attack, immediate next eligible
+  base request, then next pre-move placement. Typical recorded Crystal spawn/network latency was four client ticks;
+  that is reported separately from client state-machine latency. Look-away cancellation was also observed before a
+  queued base placement could run.
+- In the observed HeadBob ordering window, no `PacketOrderO`, `Post`, `Hitboxes`, `Reach`, `MultiActionsF`,
+  `PacketOrderE`, `RotationPlace`, or `PositionPlace` report was emitted. The shared test profile did emit Grim's
+  separate experimental `DuplicateRotPlace` diagnostic; it is recorded as separate evidence rather than being
+  misrepresented as one of the required order/reach/rotation checks.
+- Final static checks before handoff: `git diff --check` clean; compile and clean assemble succeeded. The final
+  commit/push was explicitly requested after this append; the terminal handoff records its resulting hash and push
+  status.
