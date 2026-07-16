@@ -8056,3 +8056,80 @@ with the Minecraft 1.21.4 behavior; no second Offhand module was added.
 - The current action-order fix is intentionally uncommitted and unpushed until both exact KeyPearl and CrystalBase
   reproductions complete without PacketOrderE, as required. Current branch: `main`; remote: `origin`
   (`https://github.com/Duong1234vi0/Wraith-0.1.git`).
+
+## AutoCrystal plus CrystalOptimizer MultiActionsF action split (2026-07-16, Codex)
+
+### User report and Grim authority
+
+- Reported verbose: `[GrimAC] failed MultiActionsF: place` with `AutoCrystal` and `CrystalOptimizer` enabled.
+- Read the live Grim 2.0 `MultiActionsF.java` completely, plus `MultiActionsE`, `PacketOrderB`, `PacketOrderE`,
+  `PacketOrderJ`, `Post`, `MultiPlace`, `Check.isTickPacket`, and the relevant packet-order processor paths.
+  `MultiActionsF` sets `entity=true` for `INTERACT_ENTITY`, `ATTACK`, or `SPECTATE_ENTITY`; its block-place handler
+  emits `action=place` only when that entity state is already true. It clears both state flags at a recognized tick
+  packet. On 1.21.2+, Grim recognizes `CLIENT_TICK_END` as the non-movement tick fallback when appropriate.
+- Therefore `action=place` proves the server observed `ATTACK/INTERACT_ENTITY -> block placement` before a tick
+  boundary, not an inventory, sprint, movement, or held-item-order violation.
+- Target 26.1.2 bytecode was checked: `MultiPlayerGameMode.attack` calls `ensureHasSentCarriedItem`, sends
+  `ServerboundAttackPacket`, then performs the local attack; `useItemOn` sends a sequenced
+  `ServerboundUseItemOnPacket`; `Minecraft.tick` naturally sends `ServerboundClientTickEndPacket.INSTANCE` when
+  connected and not paused. No packet was fabricated by this work.
+
+### Confirmed combined cause
+
+- V-core `AutoCrystal` intentionally handles the crosshair entity before the block target in one invocation.
+  Live Wraith preserved that order.
+- On the first direct crystal attack, live `CrystalOptimizer` marks the attacked crystal and nearby crystals
+  inhibited, then removes the attacked crystal client-side. It does **not** directly send the later placement packet.
+- After that immediate local inhibition/removal, AutoCrystal's existing optimizer fallback can raycast the block
+  behind the crosshair `EntityHitResult`; its existing placement collision rule ignores inhibited EndCrystals.
+  That lets AutoCrystal send `ServerboundUseItemOnPacket` in the same action tick after the attack.
+- Without CrystalOptimizer, `shouldIgnoreForPlacement` is false for the still-crosshair crystal, so no fallback
+  block target is resolved after the break. This is why the reported flag occurs only with the optimizer enabled.
+
+### Changed
+
+- Refactored AutoCrystal entity handling to return explicit `NO_TARGET`, `NO_ACTION`,
+  `INHIBITED_WITHOUT_PACKET`, or `ATTACK_ATTEMPTED` outcomes.
+- Only `ATTACK_ATTEMPTED` arms a narrow pending entity-action boundary using the existing
+  `ActionTickBoundary.currentSerial()` / `hasPassed()` tracker. Before a real observed
+  `ServerboundClientTickEndPacket` advances that serial, AutoCrystal returns before CrystalBase, entity, or block
+  actions. The next phase may then follow the original entity-before-block priority.
+- An already inhibited crystal returns `INHIBITED_WITHOUT_PACKET`; it sends no entity action in that call and may
+  still use the existing fallback raycast/placement in the current action tick.
+- The existing CrystalBase post-Obsidian and AntiWeakness post-attack held-slot barriers remain intact. In the
+  AntiWeakness case, the entity boundary and existing safe restore ordering coexist; the accepted restore path still
+  returns before a later action phase.
+- Added bounded `[CrystalSequenceDiag]` action-scoped diagnostics to the existing shared boundary observer, including
+  AutoCrystal entity result/attempt, optimizer inhibition/removal, pending/passed boundary, actual owned
+  `ATTACK`/`USE_ITEM_ON`, and a preflight warning/suppression if a future path would recreate
+  `ATTACK -> USE_ITEM_ON` before `CLIENT_TICK_END`.
+- `CrystalOptimizer` behavior is unchanged: Blatant setting, inhibition TTL, 12-block chain marking, explosion
+  handling, client-side removal, duplicate attack cancellation, placement-ignore behavior, and non-Blatant path
+  remain as before. No configured delay, movement suppression, `InventoryActionMovementGate`, manual tick-end
+  packet, or optimizer disable was added.
+
+### Files and verification
+
+- Changed: `features/module/modules/combat/ModuleAutoCrystal.kt`,
+  `features/module/modules/combat/ModuleCrystalOptimizer.kt`,
+  `utils/network/ActionTickBoundary.kt`, and this append-only entry.
+- `git diff --check` passed. Clean build command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+  completed **BUILD SUCCESSFUL** in `1m 54s`.
+- Built JAR: `build/libs/liquidbounce-0.31.2.jar`, SHA-256
+  `a85556f87a05ede8ca5754c005804eae0353350fd2905746661475082d03de18`.
+  It was installed with the identical SHA-256 to
+  `/storage/emulated/0/FCL/.minecraft/versions/26.1.2-Fabric/mods/liquidbounce-0.31.2.jar`.
+  The previously accepted action-order JAR (`8a839ab70df74fad124f95e36d4c407410cc7592a935daa4af8621dd9239e62d`)
+  is preserved as `liquidbounce-0.31.2.jar.bak-20260716-multiactionsf-pretest`.
+
+### Runtime and Git status
+
+- Exact optimizer-enabled FCL reproduction is pending. Until it completes without `MultiActionsF: place` or
+  `MultiActionsF: entity`, there is no claim that this issue is fixed and no claim about PacketOrderE, PacketOrderJ,
+  Post, MultiPlace, or other Grim flags.
+- The accepted prior post-action hotbar-switch fix was committed separately as `f1ad7141`
+  (`fix(modules): order post-action hotbar switches`) and pushed to `origin/main` before this work.
+- This MultiActionsF diagnostic fix is intentionally uncommitted and unpushed pending the requested FCL test. The
+  eventual commit must contain only this narrow source change and this entry, using
+  `fix(combat): separate crystal attack and placement`.

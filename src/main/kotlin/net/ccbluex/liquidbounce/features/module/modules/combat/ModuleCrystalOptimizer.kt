@@ -32,6 +32,7 @@ import net.ccbluex.liquidbounce.utils.item.isAxe
 import net.ccbluex.liquidbounce.utils.item.isPickaxe
 import net.ccbluex.liquidbounce.utils.item.isShovel
 import net.ccbluex.liquidbounce.utils.item.isSword
+import net.ccbluex.liquidbounce.utils.network.ActionTickBoundary
 import net.minecraft.world.effect.MobEffects
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal
@@ -152,6 +153,9 @@ object ModuleCrystalOptimizer : ClientModule("CrystalOptimizer", Category.COMBAT
         return isInhibited(entity.id)
     }
 
+    /** Read-only diagnostic surface; AutoCrystal never changes this setting or optimizer behavior. */
+    internal fun isBlatantEnabled(): Boolean = blatant
+
     private fun handleBlatantAttack(event: PacketEvent, entityId: Int, entity: Entity?) {
         if (isInhibited(entityId)) {
             if (entity is EndCrystal) {
@@ -164,25 +168,37 @@ object ModuleCrystalOptimizer : ClientModule("CrystalOptimizer", Category.COMBAT
 
         if (entity is EndCrystal && !cantBreakCrystal()) {
             markInhibited(entity.id)
-            markNearbyCrystalsDead(entity.x, entity.y, entity.z)
+            val nearbyInhibited = markNearbyCrystalsDead(entity.x, entity.y, entity.z)
+            ActionTickBoundary.crystalSequenceDiagnosticForCurrentAction(
+                "CrystalOptimizer marked inhibited entityId=${entity.id} entityType=${entity.javaClass.simpleName} " +
+                    "blatant=$blatant nearbyInhibited=$nearbyInhibited"
+            )
             removeCrystal(entity)
         }
     }
 
     private fun removeCrystal(entity: Entity) {
         // ClientLevel.removeEntity performs the current-version client removal callback exactly once.
+        ActionTickBoundary.crystalSequenceDiagnosticForCurrentAction(
+            "CrystalOptimizer removed crystal client-side entityId=${entity.id} " +
+                "entityType=${entity.javaClass.simpleName} blatant=$blatant"
+        )
         mc.level?.removeEntity(entity.id, Entity.RemovalReason.KILLED)
     }
 
-    private fun markNearbyCrystalsDead(x: Double, y: Double, z: Double) {
-        val level = mc.level ?: return
+    private fun markNearbyCrystalsDead(x: Double, y: Double, z: Double): Int {
+        val level = mc.level ?: return 0
         val now = System.currentTimeMillis()
+        var marked = 0
 
         for (entity in level.entitiesForRendering()) {
             if (entity is EndCrystal && entity.distanceToSqr(x, y, z) <= CHAIN_CRYSTAL_RADIUS_SQ && !isInhibited(entity.id)) {
                 inhibitedCrystals[entity.id] = now
+                marked++
             }
         }
+
+        return marked
     }
 
     private fun markInhibited(entityId: Int) {

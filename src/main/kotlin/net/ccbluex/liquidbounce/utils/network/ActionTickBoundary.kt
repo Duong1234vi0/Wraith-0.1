@@ -50,6 +50,7 @@ object ActionTickBoundary : EventListener {
         val owner: String,
         internal val kind: ActionKind,
         val diagnosticsEnabled: Boolean,
+        internal val onObserved: ((ActionKind) -> Unit)?,
     ) {
         internal var observed = false
         internal var observedSerial = Long.MIN_VALUE
@@ -59,6 +60,19 @@ object ActionTickBoundary : EventListener {
             ActionKind.USE_ITEM_ON -> packet is ServerboundUseItemOnPacket
             ActionKind.ATTACK -> packet is ServerboundAttackPacket
         }
+    }
+
+    /**
+     * Bounded, action-scoped diagnostics used by the crystal attack/place reproduction.
+     *
+     * This is deliberately diagnostic-only: it does not own a boundary, send a packet, or alter
+     * CrystalOptimizer behavior. The caller still makes the action-phase decision.
+     */
+    class CrystalSequenceDiagnostic internal constructor(
+        internal val enabled: Boolean,
+    ) {
+        internal var context = ""
+        internal var observedAttackSerial = Long.MIN_VALUE
     }
 
     class HeldItemChangeExpectation internal constructor(
@@ -74,9 +88,12 @@ object ActionTickBoundary : EventListener {
     private var outgoingPacketSequence = 0L
     private var diagnosticCyclesRemaining = MAX_DIAGNOSTIC_CYCLES
     private var diagnosticMessagesRemaining = MAX_DIAGNOSTIC_MESSAGES
+    private var crystalSequenceDiagnosticCyclesRemaining = MAX_CRYSTAL_SEQUENCE_DIAGNOSTIC_CYCLES
+    private var crystalSequenceDiagnosticMessagesRemaining = MAX_CRYSTAL_SEQUENCE_DIAGNOSTIC_MESSAGES
 
     private val pendingActions = mutableListOf<ActionToken>()
     private val expectedHeldItemChanges = ArrayDeque<HeldItemChangeExpectation>()
+    private var activeCrystalSequenceDiagnostic: CrystalSequenceDiagnostic? = null
 
     /**
      * This observer must retain its lifecycle handlers even while a module is disabled, so stale
@@ -102,12 +119,118 @@ object ActionTickBoundary : EventListener {
         return true
     }
 
-    fun beginAction(owner: String, kind: ActionKind, diagnosticsEnabled: Boolean): ActionToken {
-        val token = ActionToken(owner, kind, diagnosticsEnabled)
+    fun claimCrystalSequenceDiagnostic(): CrystalSequenceDiagnostic {
+        val enabled = crystalSequenceDiagnosticCyclesRemaining > 0 && crystalSequenceDiagnosticMessagesRemaining > 0
+        if (enabled) {
+            crystalSequenceDiagnosticCyclesRemaining--
+        }
+
+        return CrystalSequenceDiagnostic(enabled)
+    }
+
+    fun updateCrystalSequenceContext(diagnostic: CrystalSequenceDiagnostic, context: String) {
+        diagnostic.context = context
+    }
+
+    fun <T> withCrystalSequenceDiagnostic(
+        diagnostic: CrystalSequenceDiagnostic,
+        action: () -> T,
+    ): T {
+        val previous = activeCrystalSequenceDiagnostic
+        activeCrystalSequenceDiagnostic = diagnostic
+        return try {
+            action()
+        } finally {
+            activeCrystalSequenceDiagnostic = previous
+        }
+    }
+
+    /** Allows CrystalOptimizer to add context only while AutoCrystal owns the synchronous action call. */
+    fun crystalSequenceDiagnosticForCurrentAction(message: String) {
+        activeCrystalSequenceDiagnostic?.let { crystalSequenceDiagnostic(it, message) }
+    }
+
+    fun crystalSequenceDiagnostic(diagnostic: CrystalSequenceDiagnostic, message: String) {
+        logCrystalSequenceDiagnostic(diagnostic, message, warning = false)
+    }
+
+    fun crystalSequenceWarning(diagnostic: CrystalSequenceDiagnostic, message: String) {
+        logCrystalSequenceDiagnostic(diagnostic, message, warning = true)
+    }
+
+    private fun logCrystalSequenceDiagnostic(
+        diagnostic: CrystalSequenceDiagnostic,
+        message: String,
+        warning: Boolean,
+    ) {
+        if (!diagnostic.enabled || crystalSequenceDiagnosticMessagesRemaining <= 0) {
+            return
+        }
+
+        crystalSequenceDiagnosticMessagesRemaining--
+        val context = diagnostic.context.takeIf(String::isNotBlank)?.let { "$it " }.orEmpty()
+        val formatted = "$CRYSTAL_SEQUENCE_DIAGNOSTIC_PREFIX tick=${mc.player?.tickCount ?: -1} " +
+            "serial=$completedTickSerial $context$message"
+        if (warning) {
+            logger.warn(formatted)
+        } else {
+            logger.info(formatted)
+        }
+    }
+
+    /** Records only an action token explicitly created by ModuleAutoCrystal. */
+    fun recordCrystalSequenceAction(diagnostic: CrystalSequenceDiagnostic, kind: ActionKind) {
+        when (kind) {
+            ActionKind.ATTACK -> diagnostic.observedAttackSerial = completedTickSerial
+            ActionKind.USE_ITEM_ON -> if (
+                diagnostic.observedAttackSerial != Long.MIN_VALUE &&
+                !hasPassed(diagnostic.observedAttackSerial)
+            ) {
+                crystalSequenceWarning(
+                    diagnostic,
+                    "observed unsafe AutoCrystal-owned ATTACK -> USE_ITEM_ON before CLIENT_TICK_END " +
+                        "attackSerial=${diagnostic.observedAttackSerial}"
+                )
+            }
+
+            ActionKind.USE_ITEM -> Unit
+        }
+
+        crystalSequenceDiagnostic(diagnostic, "AutoCrystal-owned packet action=${kind.name}")
+    }
+
+    /**
+     * This preflight is a diagnostic backstop. ModuleAutoCrystal's pending boundary is the real
+     * prevention path, while this catches any future direct call that would otherwise recreate
+     * ATTACK -> USE_ITEM_ON before CLIENT_TICK_END.
+     */
+    fun canSendCrystalSequenceBlockAction(diagnostic: CrystalSequenceDiagnostic): Boolean {
+        val attackSerial = diagnostic.observedAttackSerial
+        if (attackSerial == Long.MIN_VALUE || hasPassed(attackSerial)) {
+            return true
+        }
+
+        crystalSequenceWarning(
+            diagnostic,
+            "unsafe AutoCrystal-owned ATTACK -> USE_ITEM_ON before CLIENT_TICK_END; suppressing USE_ITEM_ON " +
+                "attackSerial=$attackSerial"
+        )
+        return false
+    }
+
+    fun beginAction(
+        owner: String,
+        kind: ActionKind,
+        diagnosticsEnabled: Boolean,
+        onObserved: ((ActionKind) -> Unit)? = null,
+    ): ActionToken {
+        val token = ActionToken(owner, kind, diagnosticsEnabled, onObserved)
         pendingActions += token
         diagnostic(diagnosticsEnabled, "$owner preparing ${kind.name}")
         return token
     }
+
+    fun wasActionObserved(token: ActionToken): Boolean = token.observed
 
     fun actionCallCompleted(token: ActionToken) {
         diagnostic(
@@ -268,6 +391,7 @@ object ActionTickBoundary : EventListener {
         val token = pendingActions.firstOrNull { !it.observed && it.matches(packet) } ?: return
         token.observed = true
         token.observedSerial = completedTickSerial
+        token.onObserved?.invoke(token.kind)
 
         diagnostic(
             token.diagnosticsEnabled,
@@ -279,9 +403,12 @@ object ActionTickBoundary : EventListener {
     private fun clearExpectations(resetDiagnosticBudget: Boolean) {
         pendingActions.clear()
         expectedHeldItemChanges.clear()
+        activeCrystalSequenceDiagnostic = null
         if (resetDiagnosticBudget) {
             diagnosticCyclesRemaining = MAX_DIAGNOSTIC_CYCLES
             diagnosticMessagesRemaining = MAX_DIAGNOSTIC_MESSAGES
+            crystalSequenceDiagnosticCyclesRemaining = MAX_CRYSTAL_SEQUENCE_DIAGNOSTIC_CYCLES
+            crystalSequenceDiagnosticMessagesRemaining = MAX_CRYSTAL_SEQUENCE_DIAGNOSTIC_MESSAGES
         }
     }
 
@@ -297,4 +424,7 @@ object ActionTickBoundary : EventListener {
     private const val DIAGNOSTIC_PREFIX = "[ActionOrderDiag]"
     private const val MAX_DIAGNOSTIC_CYCLES = 32
     private const val MAX_DIAGNOSTIC_MESSAGES = MAX_DIAGNOSTIC_CYCLES * 16
+    private const val CRYSTAL_SEQUENCE_DIAGNOSTIC_PREFIX = "[CrystalSequenceDiag]"
+    private const val MAX_CRYSTAL_SEQUENCE_DIAGNOSTIC_CYCLES = 32
+    private const val MAX_CRYSTAL_SEQUENCE_DIAGNOSTIC_MESSAGES = MAX_CRYSTAL_SEQUENCE_DIAGNOSTIC_CYCLES * 16
 }

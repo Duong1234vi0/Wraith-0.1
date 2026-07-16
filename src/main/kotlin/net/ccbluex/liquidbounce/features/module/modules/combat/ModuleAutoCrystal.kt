@@ -118,6 +118,36 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
     private var pendingAntiWeaknessRestoration: PendingAntiWeaknessRestoration? = null
     private var antiWeaknessRestoredAtSerial = Long.MIN_VALUE
 
+    private enum class EntityActionResult {
+        NO_TARGET,
+        NO_ACTION,
+        INHIBITED_WITHOUT_PACKET,
+        ATTACK_ATTEMPTED,
+    }
+
+    private data class EntityActionOutcome(
+        val result: EntityActionResult,
+        val diagnostics: ActionTickBoundary.CrystalSequenceDiagnostic? = null,
+        val targetId: Int = -1,
+        val targetType: String = "none",
+    )
+
+    private data class PendingEntityActionBoundary(
+        val actionBoundarySerial: Long,
+        val targetId: Int,
+        val targetType: String,
+        val diagnostics: ActionTickBoundary.CrystalSequenceDiagnostic,
+        var lastWaitLoggedSerial: Long = Long.MIN_VALUE,
+    )
+
+    private sealed interface EntityActionBoundaryGate {
+        object Open : EntityActionBoundaryGate
+        object Waiting : EntityActionBoundaryGate
+        data class Passed(val diagnostics: ActionTickBoundary.CrystalSequenceDiagnostic) : EntityActionBoundaryGate
+    }
+
+    private var pendingEntityActionBoundary: PendingEntityActionBoundary? = null
+
     var crystalling = false
         private set
 
@@ -273,6 +303,15 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
             return
         }
 
+        // A direct attack is an entity action for Grim even when another Wraith listener later
+        // cancels the interaction. Do not enter CrystalBase or block placement until the real
+        // CLIENT_TICK_END boundary has left the client.
+        val entityBoundaryGate = processPendingEntityActionBoundary()
+        if (entityBoundaryGate === EntityActionBoundaryGate.Waiting) {
+            return
+        }
+        val passedEntityBoundaryDiagnostics = (entityBoundaryGate as? EntityActionBoundaryGate.Passed)?.diagnostics
+
         val crystalBaseBlocked = if (crystalBase) {
             handleCrystalBase()
         } else {
@@ -292,10 +331,21 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
 
         if (lastCrystalTick != player.tickCount) {
             lastCrystalTick = player.tickCount
-            if (handleEntityTarget(dontBreak)) {
-                return
+            val entityOutcome = handleEntityTarget(dontBreak)
+            when (entityOutcome.result) {
+                EntityActionResult.ATTACK_ATTEMPTED -> {
+                    armEntityActionBoundary(entityOutcome)
+                    return
+                }
+
+                EntityActionResult.NO_TARGET,
+                EntityActionResult.NO_ACTION,
+                EntityActionResult.INHIBITED_WITHOUT_PACKET -> {
+                    // Prefer the diagnostic cycle that just crossed the real boundary, so the
+                    // retained test log reads ATTACK -> CLIENT_TICK_END -> USE_ITEM_ON.
+                    handleBlockTarget(dontPlace, passedEntityBoundaryDiagnostics ?: entityOutcome.diagnostics)
+                }
             }
-            handleBlockTarget(dontPlace)
         }
     }
 
@@ -306,7 +356,71 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
         crystalling = false
         pendingAntiWeaknessRestoration = null
         antiWeaknessRestoredAtSerial = Long.MIN_VALUE
+        pendingEntityActionBoundary = null
         resetCrystalBaseState()
+    }
+
+    /**
+     * Opens the next AutoCrystal action phase only after the same packet boundary that Grim uses
+     * to clear MultiActionsF's entity/block state. This intentionally does not use player ticks,
+     * wall-clock time, movement packets, or a fabricated tick-end packet.
+     */
+    private fun processPendingEntityActionBoundary(): EntityActionBoundaryGate {
+        val pending = pendingEntityActionBoundary ?: return EntityActionBoundaryGate.Open
+
+        if (!ActionTickBoundary.hasPassed(pending.actionBoundarySerial)) {
+            if (pending.lastWaitLoggedSerial != ActionTickBoundary.currentSerial()) {
+                pending.lastWaitLoggedSerial = ActionTickBoundary.currentSerial()
+                ActionTickBoundary.crystalSequenceDiagnostic(
+                    pending.diagnostics,
+                    "block placement skipped before boundary targetId=${pending.targetId} " +
+                        "targetType=${pending.targetType} boundarySerial=${pending.actionBoundarySerial}"
+                )
+            }
+            return EntityActionBoundaryGate.Waiting
+        }
+
+        pendingEntityActionBoundary = null
+        ActionTickBoundary.crystalSequenceDiagnostic(
+            pending.diagnostics,
+            "CLIENT_TICK_END observed serial=${ActionTickBoundary.currentSerial()} " +
+                "after ATTACK boundarySerial=${pending.actionBoundarySerial}"
+        )
+        ActionTickBoundary.crystalSequenceDiagnostic(
+            pending.diagnostics,
+            "post-entity boundary passed targetId=${pending.targetId} targetType=${pending.targetType}"
+        )
+        return EntityActionBoundaryGate.Passed(pending.diagnostics)
+    }
+
+    private fun armEntityActionBoundary(outcome: EntityActionOutcome) {
+        val diagnostics = outcome.diagnostics ?: return
+        val serial = ActionTickBoundary.currentSerial()
+
+        pendingEntityActionBoundary = PendingEntityActionBoundary(
+            actionBoundarySerial = serial,
+            targetId = outcome.targetId,
+            targetType = outcome.targetType,
+            diagnostics = diagnostics
+        )
+        ActionTickBoundary.crystalSequenceDiagnostic(
+            diagnostics,
+            "AutoCrystal attack attempted; post-entity boundary armed serial=$serial"
+        )
+    }
+
+    private fun updateCrystalSequenceContext(
+        diagnostics: ActionTickBoundary.CrystalSequenceDiagnostic,
+        entity: Entity?,
+    ) {
+        val crosshairType = mc.crosshairTarget?.type?.name ?: "NONE"
+        ActionTickBoundary.updateCrystalSequenceContext(
+            diagnostics,
+            "entityId=${entity?.id ?: -1} entityType=${entity?.javaClass?.simpleName ?: "none"} " +
+                "blatant=${ModuleCrystalOptimizer.isBlatantEnabled()} breakClock=$breakClock " +
+                "placeClock=$placeClock crosshair=$crosshairType " +
+                "selectedSlot=${mc.player?.inventory?.selectedSlot ?: -1}"
+        )
     }
 
     private fun resetCrystalBaseState() {
@@ -468,15 +582,44 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
         }
     }
 
-    private fun handleBlockTarget(dontPlace: Boolean) {
+    private fun handleBlockTarget(
+        dontPlace: Boolean,
+        diagnostics: ActionTickBoundary.CrystalSequenceDiagnostic? = null,
+    ) {
+        // The normal action-phase gate handles this first. Retain a local guard so a future
+        // direct call cannot reintroduce ATTACK -> USE_ITEM_ON before CLIENT_TICK_END.
+        val pendingEntityBoundary = pendingEntityActionBoundary
+        if (pendingEntityBoundary != null && !ActionTickBoundary.hasPassed(pendingEntityBoundary.actionBoundarySerial)) {
+            ActionTickBoundary.crystalSequenceWarning(
+                pendingEntityBoundary.diagnostics,
+                "suppressing block placement: AutoCrystal-owned ATTACK is still waiting " +
+                    "for CLIENT_TICK_END boundarySerial=${pendingEntityBoundary.actionBoundarySerial}"
+            )
+            return
+        }
+
         val hit = getLookedBlock() ?: return
 
         if (!dontPlace && canPlaceCrystal(hit.blockPosition())) {
+            if (diagnostics != null && !ActionTickBoundary.canSendCrystalSequenceBlockAction(diagnostics)) {
+                return
+            }
+
             val basePlacementAction = if (crystalBase && baseCrystalling) {
                 ActionTickBoundary.beginAction(
                     owner = "CrystalBase",
                     kind = ActionTickBoundary.ActionKind.USE_ITEM_ON,
-                    diagnosticsEnabled = getBaseDiagnostics()
+                    diagnosticsEnabled = getBaseDiagnostics(),
+                    onObserved = diagnostics?.let { crystalDiagnostics ->
+                        { kind -> ActionTickBoundary.recordCrystalSequenceAction(crystalDiagnostics, kind) }
+                    }
+                )
+            } else if (diagnostics != null) {
+                ActionTickBoundary.beginAction(
+                    owner = "AutoCrystal",
+                    kind = ActionTickBoundary.ActionKind.USE_ITEM_ON,
+                    diagnosticsEnabled = false,
+                    onObserved = { kind -> ActionTickBoundary.recordCrystalSequenceAction(diagnostics, kind) }
                 )
             } else {
                 null
@@ -493,39 +636,92 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
                     "CrystalBase placed End Crystal slot=${mc.player?.inventory?.selectedSlot}"
                 )
             }
+            if (diagnostics != null) {
+                ActionTickBoundary.crystalSequenceDiagnostic(
+                    diagnostics,
+                    "AutoCrystal block placement attempted packetObserved=" +
+                        "${basePlacementAction?.let(ActionTickBoundary::wasActionObserved) ?: false}"
+                )
+            }
             placeClock = placeDelay
         }
     }
 
     /**
-     * @return true when an AntiWeakness attack created a deferred restoration and this invocation
-     * must not continue into another AutoCrystal action.
+     * An entity target is not equivalent to an entity packet. In particular, an already inhibited
+     * crystal is removed/ignored locally without AutoCrystal issuing an attack, so its block
+     * fallback remains safe in the same action tick.
      */
-    private fun handleEntityTarget(dontBreak: Boolean): Boolean {
-        val entity = getLookedEntity()?.entity ?: return false
+    private fun handleEntityTarget(dontBreak: Boolean): EntityActionOutcome {
+        val entity = getLookedEntity()?.entity ?: return EntityActionOutcome(EntityActionResult.NO_TARGET)
+        val diagnostics = ActionTickBoundary.claimCrystalSequenceDiagnostic()
+        updateCrystalSequenceContext(diagnostics, entity)
 
-        if (dontBreak || entity !is EndCrystal && entity !is Slime) {
-            return false
+        if (dontBreak) {
+            ActionTickBoundary.crystalSequenceDiagnostic(
+                diagnostics,
+                "AutoCrystal entity target result=NO_ACTION reason=BreakDelay"
+            )
+            return EntityActionOutcome(EntityActionResult.NO_ACTION, diagnostics, entity.id, entity.javaClass.simpleName)
         }
 
-        if (ModuleCrystalOptimizer.isAttackInhibited(entity)) {
-            return false
+        if (entity !is EndCrystal && entity !is Slime) {
+            ActionTickBoundary.crystalSequenceDiagnostic(
+                diagnostics,
+                "AutoCrystal entity target result=NO_ACTION reason=unsupported-target"
+            )
+            return EntityActionOutcome(EntityActionResult.NO_ACTION, diagnostics, entity.id, entity.javaClass.simpleName)
         }
 
-        val player = mc.player ?: return false
-        val level = mc.level ?: return false
+        val inhibitedWithoutPacket = ActionTickBoundary.withCrystalSequenceDiagnostic(diagnostics) {
+            ModuleCrystalOptimizer.isAttackInhibited(entity)
+        }
+        if (inhibitedWithoutPacket) {
+            ActionTickBoundary.crystalSequenceDiagnostic(
+                diagnostics,
+                "AutoCrystal entity target result=INHIBITED_WITHOUT_PACKET"
+            )
+            return EntityActionOutcome(
+                EntityActionResult.INHIBITED_WITHOUT_PACKET,
+                diagnostics,
+                entity.id,
+                entity.javaClass.simpleName
+            )
+        }
+
+        val player = mc.player ?: run {
+            ActionTickBoundary.crystalSequenceDiagnostic(
+                diagnostics,
+                "AutoCrystal entity target result=NO_ACTION reason=missing-player"
+            )
+            return EntityActionOutcome(EntityActionResult.NO_ACTION, diagnostics, entity.id, entity.javaClass.simpleName)
+        }
+        val level = mc.level ?: run {
+            ActionTickBoundary.crystalSequenceDiagnostic(
+                diagnostics,
+                "AutoCrystal entity target result=NO_ACTION reason=missing-level"
+            )
+            return EntityActionOutcome(EntityActionResult.NO_ACTION, diagnostics, entity.id, entity.javaClass.simpleName)
+        }
         val previousSlot = player.inventory.selectedSlot
         var antiWeaknessSwitched = false
         var antiWeaknessDiagnostics = false
-        var attackAction: ActionTickBoundary.ActionToken? = null
+        val attackAction: ActionTickBoundary.ActionToken
 
         if (antiWeakness && cantBreakCrystal(player)) {
-            val weaponSlot = findAntiWeaknessTool(player) ?: return false
+            val weaponSlot = findAntiWeaknessTool(player) ?: run {
+                ActionTickBoundary.crystalSequenceDiagnostic(
+                    diagnostics,
+                    "AutoCrystal entity target result=NO_ACTION reason=missing-antiweakness-tool"
+                )
+                return EntityActionOutcome(EntityActionResult.NO_ACTION, diagnostics, entity.id, entity.javaClass.simpleName)
+            }
             antiWeaknessDiagnostics = ActionTickBoundary.claimDiagnosticCycle()
             attackAction = ActionTickBoundary.beginAction(
                 owner = "AutoCrystal AntiWeakness",
                 kind = ActionTickBoundary.ActionKind.ATTACK,
-                diagnosticsEnabled = antiWeaknessDiagnostics
+                diagnosticsEnabled = antiWeaknessDiagnostics,
+                onObserved = { kind -> ActionTickBoundary.recordCrystalSequenceAction(diagnostics, kind) }
             )
             if (!selectHotbarSlot(
                     slot = weaponSlot,
@@ -535,8 +731,12 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
                     diagnosticsEnabled = antiWeaknessDiagnostics
                 )
             ) {
-                attackAction?.let(ActionTickBoundary::cancelAction)
-                return false
+                ActionTickBoundary.cancelAction(attackAction)
+                ActionTickBoundary.crystalSequenceDiagnostic(
+                    diagnostics,
+                    "AutoCrystal entity target result=NO_ACTION reason=antiweakness-switch-failed"
+                )
+                return EntityActionOutcome(EntityActionResult.NO_ACTION, diagnostics, entity.id, entity.javaClass.simpleName)
             }
 
             antiWeaknessSwitched = player.inventory.selectedSlot != previousSlot
@@ -544,10 +744,20 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
                 antiWeaknessDiagnostics,
                 "AutoCrystal selected weakness tool slot=$weaponSlot previousSlot=$previousSlot"
             )
+        } else {
+            attackAction = ActionTickBoundary.beginAction(
+                owner = "AutoCrystal",
+                kind = ActionTickBoundary.ActionKind.ATTACK,
+                diagnosticsEnabled = false,
+                onObserved = { kind -> ActionTickBoundary.recordCrystalSequenceAction(diagnostics, kind) }
+            )
         }
 
-        if (!attackEntity(entity, attackAction)) {
-            attackAction?.let(ActionTickBoundary::cancelAction)
+        val attackAttempted = ActionTickBoundary.withCrystalSequenceDiagnostic(diagnostics) {
+            attackEntity(entity, attackAction)
+        }
+        if (!attackAttempted) {
+            ActionTickBoundary.cancelAction(attackAction)
             if (antiWeaknessSwitched) {
                 selectHotbarSlot(
                     slot = previousSlot,
@@ -556,32 +766,41 @@ object ModuleAutoCrystal : ClientModule("AutoCrystal", Category.COMBAT) {
                     diagnosticsEnabled = antiWeaknessDiagnostics
                 )
             }
-            return false
+            ActionTickBoundary.crystalSequenceDiagnostic(
+                diagnostics,
+                "AutoCrystal entity target result=NO_ACTION reason=missing-interaction-manager"
+            )
+            return EntityActionOutcome(EntityActionResult.NO_ACTION, diagnostics, entity.id, entity.javaClass.simpleName)
         }
 
         breakClock = breakDelay
+        updateCrystalSequenceContext(diagnostics, entity)
+        ActionTickBoundary.crystalSequenceDiagnostic(
+            diagnostics,
+            "AutoCrystal entity target result=ATTACK_ATTEMPTED " +
+                "packetObserved=${ActionTickBoundary.wasActionObserved(attackAction)}"
+        )
 
-        if (!antiWeaknessSwitched) {
-            return false
+        if (antiWeaknessSwitched) {
+            val actionBoundarySerial = ActionTickBoundary.currentSerial()
+            pendingAntiWeaknessRestoration = PendingAntiWeaknessRestoration(
+                previousSlot = previousSlot,
+                actionBoundarySerial = actionBoundarySerial,
+                player = player,
+                level = level,
+                diagnosticsEnabled = antiWeaknessDiagnostics
+            )
+            ActionTickBoundary.diagnostic(
+                antiWeaknessDiagnostics,
+                "AutoCrystal attacked Crystal boundarySerial=$actionBoundarySerial previousSlot=$previousSlot"
+            )
+            ActionTickBoundary.diagnostic(
+                antiWeaknessDiagnostics,
+                "AutoCrystal waiting post-attack boundary serial=$actionBoundarySerial"
+            )
         }
 
-        val actionBoundarySerial = ActionTickBoundary.currentSerial()
-        pendingAntiWeaknessRestoration = PendingAntiWeaknessRestoration(
-            previousSlot = previousSlot,
-            actionBoundarySerial = actionBoundarySerial,
-            player = player,
-            level = level,
-            diagnosticsEnabled = antiWeaknessDiagnostics
-        )
-        ActionTickBoundary.diagnostic(
-            antiWeaknessDiagnostics,
-            "AutoCrystal attacked Crystal boundarySerial=$actionBoundarySerial previousSlot=$previousSlot"
-        )
-        ActionTickBoundary.diagnostic(
-            antiWeaknessDiagnostics,
-            "AutoCrystal waiting post-attack boundary serial=$actionBoundarySerial"
-        )
-        return true
+        return EntityActionOutcome(EntityActionResult.ATTACK_ATTEMPTED, diagnostics, entity.id, entity.javaClass.simpleName)
     }
 
     /**
