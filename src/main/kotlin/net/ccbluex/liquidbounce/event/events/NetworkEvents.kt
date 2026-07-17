@@ -38,6 +38,9 @@ class PacketEvent(val origin: TransferOrigin, val packet: Packet<*>, val origina
 @Nameable("outgoingPacketSent")
 class OutgoingPacketSentEvent(val packet: Packet<*>) : Event()
 
+@Nameable("outgoingPacketPostSend")
+class OutgoingPacketPostSendEvent(val packet: Packet<*>) : Event()
+
 @Nameable("queuePacket")
 class QueuePacketEvent(
     val packet: Packet<*>?,

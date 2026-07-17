@@ -16,7 +16,8 @@ import com.mojang.blaze3d.platform.InputConstants
 import net.ccbluex.liquidbounce.event.events.DisconnectEvent
 import net.ccbluex.liquidbounce.event.events.GameTickEvent
 import net.ccbluex.liquidbounce.event.events.MovementInputEvent
-import net.ccbluex.liquidbounce.event.events.OutgoingPacketSentEvent
+import net.ccbluex.liquidbounce.event.events.MouseButtonEvent
+import net.ccbluex.liquidbounce.event.events.OutgoingPacketPostSendEvent
 import net.ccbluex.liquidbounce.event.events.SprintEvent
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.handler
@@ -42,6 +43,7 @@ import net.minecraft.world.entity.EquipmentSlot
 import net.minecraft.world.inventory.ContainerInput
 import net.minecraft.world.item.Item
 import net.minecraft.world.item.Items
+import org.lwjgl.glfw.GLFW
 
 /** V-Core ElytraSwap, kept under Wraith's existing public module identity. */
 object ModuleElytraSwap : ClientModule(
@@ -76,8 +78,6 @@ object ModuleElytraSwap : ClientModule(
     override fun enable() {
         resetRuntimeState()
         trackedPlayer = mc.player
-        switchTimerNanos = System.nanoTime()
-        fireworkTimerNanos = System.nanoTime()
     }
 
     override fun disable() {
@@ -102,12 +102,12 @@ object ModuleElytraSwap : ClientModule(
             return@handler
         }
 
-        if (switchButton != InputConstants.UNKNOWN && switchButton.isPressed &&
+        if (shouldPollElytraSwapKeyOnTick(switchButton) && switchButton.isPressed &&
             timerEvery(SWITCH_KEY_INTERVAL_MS, switchTimerNanos) { switchTimerNanos = it }) {
             swapChest()
         }
 
-        if (fireWorkButton != InputConstants.UNKNOWN && fireWorkButton.isPressed &&
+        if (shouldPollElytraSwapKeyOnTick(fireWorkButton) && fireWorkButton.isPressed &&
             timerEvery(FIREWORK_KEY_INTERVAL_MS, fireworkTimerNanos) { fireworkTimerNanos = it } &&
             currentPlayer.isFallFlying) {
             useFireworkForPeakAssist()
@@ -115,10 +115,33 @@ object ModuleElytraSwap : ClientModule(
     }
 
     @Suppress("unused")
-    private val outgoingPacketHandler = handler<OutgoingPacketSentEvent> { event ->
+    private val outgoingPacketHandler = handler<OutgoingPacketPostSendEvent> { event ->
         val command = event.packet as? ServerboundPlayerCommandPacket ?: return@handler
-        if (command.action == ServerboundPlayerCommandPacket.Action.START_FALL_FLYING && startFireWork) {
+        handleElytraSwapStartFireworkPostSend(
+            command.action == ServerboundPlayerCommandPacket.Action.START_FALL_FLYING,
+            startFireWork,
+        ) {
             useFireworkForPeakAssist()
+        }
+    }
+
+    @Suppress("unused")
+    private val mouseButtonHandler = handler<MouseButtonEvent> { event ->
+        val screenOpen = event.screen != null || mc.screen != null
+        val currentPlayer = mc.player ?: return@handler
+
+        when {
+            matchesElytraSwapMousePress(switchButton, event.button, event.action, screenOpen) -> {
+                if (timerEvery(SWITCH_KEY_INTERVAL_MS, switchTimerNanos) { switchTimerNanos = it }) {
+                    swapChest()
+                }
+            }
+            matchesElytraSwapMousePress(fireWorkButton, event.button, event.action, screenOpen) -> {
+                if (timerEvery(FIREWORK_KEY_INTERVAL_MS, fireworkTimerNanos) { fireworkTimerNanos = it } &&
+                    currentPlayer.isFallFlying) {
+                    useFireworkForPeakAssist()
+                }
+            }
         }
     }
 
@@ -461,3 +484,24 @@ internal fun elytraSwapOffhandFireworkActions() = listOf(
     ElytraSwapFireworkAction.SWAP,
     ElytraSwapFireworkAction.CLOSE,
 )
+
+internal fun shouldPollElytraSwapKeyOnTick(key: InputConstants.Key): Boolean =
+    key != InputConstants.UNKNOWN && key.type != InputConstants.Type.MOUSE
+
+internal fun matchesElytraSwapMousePress(
+    configuredKey: InputConstants.Key,
+    button: Int,
+    action: Int,
+    screenOpen: Boolean,
+): Boolean = !screenOpen && action == GLFW.GLFW_PRESS &&
+    configuredKey.type == InputConstants.Type.MOUSE && configuredKey.value == button
+
+internal inline fun handleElytraSwapStartFireworkPostSend(
+    isStartFallFlying: Boolean,
+    startFireworkEnabled: Boolean,
+    useFirework: () -> Unit,
+) {
+    if (isStartFallFlying && startFireworkEnabled) {
+        useFirework()
+    }
+}

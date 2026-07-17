@@ -19,6 +19,7 @@
 package net.ccbluex.liquidbounce.injection.mixins.minecraft.network;
 
 import net.ccbluex.liquidbounce.event.EventManager;
+import net.ccbluex.liquidbounce.event.events.OutgoingPacketPostSendEvent;
 import net.ccbluex.liquidbounce.event.events.OutgoingPacketSentEvent;
 import net.ccbluex.liquidbounce.event.events.PacketEvent;
 import net.ccbluex.liquidbounce.event.events.TransferOrigin;
@@ -58,6 +59,15 @@ public abstract class MixinClientConnection {
         }
 
         EventManager.INSTANCE.callEvent(new OutgoingPacketSentEvent(packet));
+    }
+
+    /**
+     * Observe the one-argument send path only after its normal dispatch/enqueue path returns.
+     * A packet cancelled by {@link #hookSendingPacket} returns from HEAD and never reaches this TAIL.
+     */
+    @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;)V", at = @At("TAIL"))
+    private void hookPacketPostSend(Packet<?> packet, final CallbackInfo callbackInfo) {
+        EventManager.INSTANCE.callEvent(new OutgoingPacketPostSendEvent(packet));
     }
 
     /**

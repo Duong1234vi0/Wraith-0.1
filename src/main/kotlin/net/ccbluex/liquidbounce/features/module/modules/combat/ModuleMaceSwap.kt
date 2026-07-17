@@ -149,13 +149,13 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
     fun isMaceStunAttackInProgress() = maceStunAttackInProgress
 
     private fun processAutoDisable() {
-        if (!autoDisable) {
-            auraPostAttackTriggered = false
-        } else if (auraPostAttackTriggered) {
-            if (!isSwitching || !switchBack) {
+        when (maceSwapAutoDisableAction(autoDisable, auraPostAttackTriggered, isSwitching, switchBack)) {
+            MaceSwapAutoDisableAction.CLEAR_TRIGGER -> auraPostAttackTriggered = false
+            MaceSwapAutoDisableAction.WAIT -> Unit
+            MaceSwapAutoDisableAction.DISABLE -> {
                 auraPostAttackTriggered = false
                 calledFromAura = false
-                disable()
+                enabled = false
             }
         }
     }
@@ -217,4 +217,22 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
         BREACH("Breach"),
         WIND_BURST("WindBurst"),
     }
+}
+
+internal enum class MaceSwapAutoDisableAction {
+    CLEAR_TRIGGER,
+    WAIT,
+    DISABLE,
+}
+
+internal fun maceSwapAutoDisableAction(
+    autoDisable: Boolean,
+    postAttackTriggered: Boolean,
+    isSwitching: Boolean,
+    switchBack: Boolean,
+): MaceSwapAutoDisableAction = when {
+    !autoDisable -> MaceSwapAutoDisableAction.CLEAR_TRIGGER
+    !postAttackTriggered -> MaceSwapAutoDisableAction.WAIT
+    !isSwitching || !switchBack -> MaceSwapAutoDisableAction.DISABLE
+    else -> MaceSwapAutoDisableAction.WAIT
 }

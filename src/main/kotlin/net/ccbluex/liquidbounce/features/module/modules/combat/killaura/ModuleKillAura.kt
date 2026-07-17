@@ -67,6 +67,7 @@ import net.ccbluex.liquidbounce.utils.entity.squaredBoxedDistanceTo
 import net.ccbluex.liquidbounce.utils.inventory.InventoryManager
 import net.ccbluex.liquidbounce.utils.inventory.InventoryManager.isInventoryOpen
 import net.ccbluex.liquidbounce.utils.inventory.isInContainerScreen
+import net.ccbluex.liquidbounce.utils.item.isAxe
 import net.ccbluex.liquidbounce.utils.kotlin.Priority
 import net.ccbluex.liquidbounce.utils.kotlin.random
 import net.ccbluex.liquidbounce.utils.render.WorldTargetRenderer
@@ -335,15 +336,17 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
                 }
 
                 val skipShieldAttack = targetTracker.shouldSkipActualShieldAttack(target)
-                val maceStunShieldBreak = !skipShieldAttack &&
+                val dedicatedShieldBreak = !skipShieldAttack &&
                     target is net.minecraft.world.entity.player.Player &&
                     target.isBlocking && target.wouldBlockHit(player) &&
+                    (player.mainHandItem.isAxe || ModuleAutoWeapon.willBreakShield())
+                val maceStunShieldBreak = dedicatedShieldBreak &&
                     ModuleMaceSwap.running && ModuleMaceSwap.isMaceStun() &&
-                    ModuleAutoWeapon.willBreakShield() && ModuleMaceSwap.hasMaceInHotbar()
+                    ModuleMaceSwap.hasMaceInHotbar()
 
                 if (!skipShieldAttack) {
                     // V-Core sets Aura's MaceSwap source flag immediately before its actual attack.
-                    if (!maceStunShieldBreak && ModuleMaceSwap.running) {
+                    if (!dedicatedShieldBreak && ModuleMaceSwap.running) {
                         ModuleMaceSwap.calledFromAura = true
                         ModuleMaceSwap.silentSwapToMace()
                     }
@@ -363,10 +366,12 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
                     }
                 }
 
-                // V-Core marks EMace at Aura post-action completion even when the attack packet
-                // was cancelled or otherwise not observed on the wire.
-                ModuleEMaceHelper.markAuraPostAttack()
-                ModuleMaceSwap.markAuraPostAttack(!skipShieldAttack)
+                runVCoreAuraPostAction(
+                    dedicatedShieldBreak = dedicatedShieldBreak,
+                    attacked = !skipShieldAttack,
+                    markEMace = ModuleEMaceHelper::markAuraPostAttack,
+                    markMaceSwap = ModuleMaceSwap::markAuraPostAttack,
+                )
                 currentScanExtraRange = scanExtraRange.random()
                 KillAuraNotifyWhenFail.failedHitsIncrement = 0
 
@@ -598,15 +603,19 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
     /** V-Core Track pitch acceleration range: attack range plus aim range, without Aura's +4 acquisition allowance. */
     internal fun isTrackPitchRaytracingTarget(target: Entity, rotation: Rotation): Boolean {
-        if (targetTracker.target !== target) {
-            return false
+        val traceRange = trackPitchRaytraceRange().toDouble()
+        return evaluateTrackPitchRaytrace(
+            isCurrentTarget = targetTracker.target === target,
+            raytraceEnabled = raycast != TRACE_NONE,
+            traceRange = traceRange,
+        ) { range, wallsRange ->
+            facingEnemy(
+                toEntity = target,
+                rotation = rotation,
+                range = range,
+                wallsRange = wallsRange,
+            )
         }
-
-        return facingEnemy(
-            toEntity = target,
-            range = trackPitchRaytraceRange().toDouble(),
-            rotation = rotation,
-        )
     }
 
     private fun isActiveKillAuraRotationFor(target: Entity): Boolean {
@@ -689,4 +698,34 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         TRACE_ALL("All")
     }
 
+}
+
+internal inline fun evaluateTrackPitchRaytrace(
+    isCurrentTarget: Boolean,
+    raytraceEnabled: Boolean,
+    traceRange: Double,
+    facingTarget: (range: Double, wallsRange: Double) -> Boolean,
+): Boolean {
+    if (!isCurrentTarget) {
+        return false
+    }
+    if (!raytraceEnabled) {
+        return true
+    }
+
+    return facingTarget(traceRange, traceRange)
+}
+
+internal inline fun runVCoreAuraPostAction(
+    dedicatedShieldBreak: Boolean,
+    attacked: Boolean,
+    markEMace: () -> Unit,
+    markMaceSwap: (Boolean) -> Unit,
+) {
+    if (dedicatedShieldBreak) {
+        return
+    }
+
+    markEMace()
+    markMaceSwap(attacked)
 }

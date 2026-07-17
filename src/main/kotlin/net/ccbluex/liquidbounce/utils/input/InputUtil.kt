@@ -63,7 +63,7 @@ fun inputByName(name: String): InputConstants.Key {
  * @return `true` if the key is pressed; otherwise, `false`.
  */
 val InputConstants.Key.isPressed get() =
-    InputConstants.isKeyDown(mc.window, this.value)
+    InputTracker.isPressed(this)
 
 /**
  * Reduces a full key name (e.g., "key.keyboard.a") to its minimal form (e.g., "a").

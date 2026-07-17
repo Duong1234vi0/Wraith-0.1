@@ -20,12 +20,20 @@ package net.ccbluex.liquidbounce.features.module.modules.combat.killaura
 import net.ccbluex.liquidbounce.utils.entity.*
 
 import net.ccbluex.liquidbounce.config.types.NamedChoice
+import net.ccbluex.liquidbounce.config.types.Value
+import net.ccbluex.liquidbounce.config.types.ValueType
 import net.ccbluex.liquidbounce.utils.aiming.RotationsConfigurable
 
 object KillAuraRotationsConfigurable : RotationsConfigurable(ModuleKillAura, combatSpecific = true) {
 
     val rotationTiming by enumChoice("RotationTiming", KillAuraRotationTiming.NORMAL)
-    val aimThroughWalls by boolean("ThroughWalls", false)
+    private val aimThroughWallsValue = Value(
+        "ThroughWalls",
+        aliases = arrayOf("IgoneWall"),
+        defaultValue = true,
+        valueType = ValueType.BOOLEAN,
+    ).also { inner.add(it) }
+    val aimThroughWalls get() = aimThroughWallsValue.get()
 
     enum class KillAuraRotationTiming(override val choiceName: String) : NamedChoice {
         NORMAL("Normal"),

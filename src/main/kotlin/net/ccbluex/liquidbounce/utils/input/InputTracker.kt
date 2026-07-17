@@ -21,8 +21,10 @@ package net.ccbluex.liquidbounce.utils.input
 import net.ccbluex.liquidbounce.utils.entity.*
 
 import net.ccbluex.liquidbounce.event.EventListener
+import net.ccbluex.liquidbounce.event.events.KeyboardKeyEvent
 import net.ccbluex.liquidbounce.event.events.MouseButtonEvent
 import net.ccbluex.liquidbounce.event.handler
+import net.ccbluex.liquidbounce.utils.client.mc
 import net.minecraft.client.KeyMapping
 import com.mojang.blaze3d.platform.InputConstants
 import org.lwjgl.glfw.GLFW
@@ -53,6 +55,8 @@ object InputTracker : EventListener {
      * Map key is the GLFW key code, value is the timestamp.
      */
     private val keyLastPressed = mutableMapOf<Int, Long>()
+
+    private val keyboardStates = mutableMapOf<InputConstants.Key, Int>()
 
     /**
      * Extension property that checks if a key binding is pressed on either the keyboard or mouse.
@@ -113,6 +117,10 @@ object InputTracker : EventListener {
      */
     @Suppress("unused")
     private val handleMouseAction = handler<MouseButtonEvent> { event ->
+        if (event.button !in mouseStates.indices) {
+            return@handler
+        }
+
         mouseStates[event.button] = event.action
 
         // Track when the button was pressed
@@ -121,13 +129,28 @@ object InputTracker : EventListener {
         }
     }
 
+    @Suppress("unused")
+    private val handleKeyboardAction = handler<KeyboardKeyEvent> { event ->
+        keyboardStates[event.key] = event.action
+        if (event.action == GLFW.GLFW_PRESS) {
+            keyLastPressed[event.key.value] = System.currentTimeMillis()
+        }
+    }
+
+    fun isPressed(key: InputConstants.Key): Boolean = when (key.type) {
+        InputConstants.Type.KEYSYM -> InputConstants.isKeyDown(mc.window, key.value)
+        InputConstants.Type.SCANCODE -> keyboardStates[key] != GLFW.GLFW_RELEASE && keyboardStates.containsKey(key)
+        InputConstants.Type.MOUSE -> isMouseButtonPressed(key.value)
+    }
+
     /**
      * Checks if the specified mouse button is currently pressed.
      *
      * @param button The GLFW code of the mouse button.
      * @return True if the mouse button is pressed, false otherwise.
      */
-    fun isMouseButtonPressed(button: Int): Boolean = mouseStates[button] == GLFW.GLFW_PRESS
+    fun isMouseButtonPressed(button: Int): Boolean =
+        button in mouseStates.indices && mouseStates[button] == GLFW.GLFW_PRESS
 
     /**
      * Checks if the specified mouse button was pressed recently.

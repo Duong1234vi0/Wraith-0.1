@@ -96,6 +96,7 @@ val ALL_EVENT_CLASSES: Array<KClass<out Event>> = arrayOf(
     PipelineEvent::class,
     PacketEvent::class,
     OutgoingPacketSentEvent::class,
+    OutgoingPacketPostSendEvent::class,
     ClientStartEvent::class,
     ClientShutdownEvent::class,
     ClientLanguageChangedEvent::class,
