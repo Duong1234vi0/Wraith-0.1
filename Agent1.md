@@ -8941,3 +8941,123 @@ Implementation commit: `4607763a` — `fix(elytra): complete vcore dependency fi
 
 Implementation commit pushed successfully to the current `origin/main` branch. A documentation-only follow-up
 commit records this final commit/push state.
+
+## V-Core Elytra combat stack — second fidelity audit and runtime-order correction (2026-07-18, Codex)
+
+### Checked
+
+- Read the current Wraith network mixin/event path, `NetworkUtils`, `ClientModule`, ElytraSwap, MaceSwap,
+  EMaceHelper, KillAura, KillAura rotation configuration, Raytracing, TrackAngleSmooth, current keyboard/mouse
+  events and InputTracker, the existing Firework plan test, AutoWeapon, WallsBypass, GrimAngleSmooth,
+  RotationManager/RotationTarget, and the event registry completely.
+- Read the V-Core ElytraSwap, MaceSwap, Aura, Aura Track, PlayerManager, Module, InputBlocker, and KeyBinding mixin
+  sources completely. V-Core sources under `WorkSpace/Client/VCore-0.8` were not modified.
+- Read the latest Elytra combat history entries and verified every historical claim against live Wraith source.
+
+### Second fidelity audit
+
+- `OutgoingPacketSentEvent` remains the accepted pre-dispatch observation at the HEAD of the one-argument
+  `Connection.send(Packet)` path. It was not renamed or moved.
+- Wraith had no true post-dispatch event, so ElytraSwap StartFireWork was using the HEAD observation and could send
+  `USE_ITEM` before the start-flying command completed dispatch.
+- MaceSwap AutoDisable called only `disable()`, leaving the framework `Enabled` value true. ElytraSwap key polling
+  treated mouse values as keyboard GLFW codes, reset both timers on enable, and Track used an unobstructed raytrace.
+- The current Aura callback marked EMace/MaceSwap after the dedicated Axe shield-break plus optional MaceStun hit,
+  although V-Core returns before `postAttack()`. WallsBypass was also gated by a fresh `ThroughWalls=false`.
+
+### StartFireWork pre/post-send root cause
+
+- Added `OutgoingPacketPostSendEvent`, dispatched exactly once from a TAIL injection on only
+  `Connection.send(Packet)`. The existing HEAD event and cancellation semantics are unchanged; a HEAD-cancelled
+  send returns before TAIL and cannot emit the post event. The two-argument/internal overload is not injected.
+- ElytraSwap now listens to this post-send event for `START_FALL_FLYING` and invokes the authoritative V-Core
+  Firework function in the same callback: `START_FALL_FLYING -> USE_ITEM`, with no packet event, pre-send path,
+  tick delay, or ActionTickBoundary scheduling.
+
+### AutoDisable lifecycle bug
+
+- `processAutoDisable()` preserves the V-Core branches: disabled AutoDisable clears only the trigger; a triggered
+  switch-back waits while switching; a triggered non-switching or no-switch-back state clears source flags and sets
+  `enabled = false`.
+- The framework transition now invokes lifecycle cleanup once, unregisters handlers, and updates config/toggle state
+  without a recursive direct `disable()` call.
+
+### keyboard/mouse bind mapping
+
+- `InputTracker` now tracks keyboard event state for scancodes and exposes type-aware KEYSYM/SCANCODE/MOUSE polling;
+  `InputConstants.Key.isPressed` delegates to that mapping.
+- ElytraSwap polls KEYSYM and SCANCODE bindings with the existing 500 ms/200 ms timers. MOUSE bindings are handled
+  only on configured `GLFW_PRESS` `MouseButtonEvent`, require no screen, use the corresponding timer, and do not
+  repeat merely because the button remains held. Mouse handling is not duplicated in the game-tick path.
+
+### Track raytrace correction
+
+- Track pitch now requires the current Aura target, returns true immediately when Raycast is None, and otherwise
+  calls the target-locked five-argument `facingEnemy` helper with equal `traceRange` values for attack and walls.
+- `traceRange` remains attack range plus aim range and does not use the existing-target `+4` allowance. Focused
+  tests cover visible targets, behind-wall targets inside/outside range, disabled raytrace, and target mismatch.
+
+### shield-break post-action correction
+
+- KillAura identifies the actual dedicated blocking-player Axe/shield-break branch (including optional MaceStun),
+  performs the Axe hit and optional Mace hit, and skips EMace/MaceSwap post-action markers for that cycle.
+- Normal Aura cycles—including a shield-holding target that is not in the dedicated break branch—retain unconditional
+  EMace marking and `MaceSwap.markAuraPostAttack(attacked)`. Click, cooldown, scan-range, and debug bookkeeping stay.
+
+### WallsBypass source-default mapping
+
+- KillAura combat rotation configuration now has one authoritative `ThroughWalls` value with fresh default `true`
+  and legacy/source alias `IgoneWall`. Config loading preserves explicit saved `ThroughWalls=false`; no second wall
+  toggle was introduced. Track and Grim query the same state. ElytraTarget prediction formulas were unchanged.
+
+### timer-lifecycle correction
+
+- Removed only ElytraSwap enable-time timer resets. Pending-swap, suppression, player replacement, world-change,
+  disconnect, and disable cleanup remain unchanged; timers age across toggles as in V-Core's object-lifetime Timer.
+
+### KillAura-owned rotation status
+
+- Audited RotationManager, RotationTarget, Track/Grim processors, and Firework call sites. Wraith exposes KillAura's
+  requested target rotation and the global processed rotation only when KillAura owns the active request; it does not
+  safely expose a cached KillAura-owned processed Track/Grim rotation when another provider wins.
+- Kept the safe behavior: use the narrow KillAura-owned active rotation when proven, otherwise player rotation. No
+  stale global rotation cache was invented.
+
+### Tests
+
+- Added focused tests for post-send mixin ordering/one dispatch, StartFireWork callback ordering, keyboard/scancode
+  versus mouse press handling, MaceSwap AutoDisable decisions, Track raytrace semantics, and dedicated shield-break
+  versus normal post-action markers.
+- Focused tests passed with only the pre-existing `PointFindingKtTest` source excluded by a temporary uncommitted
+  Gradle init filter. The normal repository test compilation remains blocked by its unrelated `math`/`Vec3d`
+  mapping errors.
+
+### Build/JAR hash
+
+- Exact requested `clean assemble -x detekt` command completed with `BUILD SUCCESSFUL`.
+- `build/libs/liquidbounce-0.31.2.jar` SHA-256:
+  `f90d2a4214da3affb27e2947c21a1f85051e6c84550c610f242d809f948e3939`.
+- JAR inspection confirmed `OutgoingPacketPostSendEvent`, ElytraSwap, MaceSwap, KillAura, and InputTracker classes.
+
+### FCL status
+
+- FCL/in-game and server-side Grim capture was unavailable in this headless Termux workspace. Build, focused tests,
+  static packet-order checks, and JAR packaging do not establish runtime acceptance. FCL captures remain for
+  StartFireWork order, all bind/timer modes, four AutoDisable configurations, Track visible/wall/None cases, and
+  dedicated shield-break marker state.
+
+### Remaining ElytraPlus blocker
+
+- Full V-Core ElytraPlus remains intentionally unported. Its enabled-state dependency still affects Track's
+  non-vanilla-Elytra look-point path, Aura acquisition `+4`, and Aura SmartCrit exemption. This task does not claim
+  full dependency closure.
+
+### Commit hashes
+
+- Implementation: `d99ab4989` — `fix(elytra): correct final vcore runtime ordering`.
+- Documentation: this append-only Agent1 record is committed separately after the implementation.
+
+### Push result
+
+- Implementation push succeeded: `12b9e69f5..d99ab4989  main -> main` on `origin`.
+- Documentation push is pending the separate documentation commit created from this append-only record.
