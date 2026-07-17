@@ -22,9 +22,14 @@ import com.google.common.base.Predicate
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.config.types.nesting.ToggleableConfigurable
 import net.ccbluex.liquidbounce.event.EventManager
+import net.ccbluex.liquidbounce.event.events.DisconnectEvent
+import net.ccbluex.liquidbounce.event.events.GameTickEvent
 import net.ccbluex.liquidbounce.event.events.KeyEvent
+import net.ccbluex.liquidbounce.event.events.OutgoingPacketSentEvent
 import net.ccbluex.liquidbounce.event.events.RefreshArrayListEvent
 import net.ccbluex.liquidbounce.event.events.ScheduleInventoryActionEvent
+import net.ccbluex.liquidbounce.event.events.TotemPopEvent
+import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
@@ -37,6 +42,7 @@ import net.ccbluex.liquidbounce.utils.inventory.OffHandSlot
 import net.ccbluex.liquidbounce.utils.item.isSword
 import net.ccbluex.liquidbounce.utils.client.Chronometer
 import net.ccbluex.liquidbounce.utils.client.isNewerThanOrEquals1_16
+import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.client.usesViaFabricPlus
 import net.ccbluex.liquidbounce.utils.inventory.*
 import net.ccbluex.liquidbounce.utils.kotlin.Priority
@@ -47,10 +53,13 @@ import net.minecraft.world.item.Item
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket
+import net.minecraft.network.protocol.game.ServerboundContainerClickPacket
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import org.lwjgl.glfw.GLFW
+import net.minecraft.client.player.LocalPlayer
+import net.minecraft.world.inventory.ContainerInput
 
 internal fun isModuleRunningByExactName(name: String): Boolean {
     return ModuleManager.firstOrNull { module ->
@@ -119,6 +128,15 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
         ownerRunning = { running },
         diagnosticPrefix = "[OffhandTxnDiag]"
     )
+    private val refillHotbarChronometer = Chronometer()
+    private var pendingHotbarRefill: PendingHotbarRefill? = null
+
+    private data class PendingHotbarRefill(
+        val player: LocalPlayer,
+        val delayMs: Int,
+        var sourceSlot: InventoryItemSlot? = null,
+        var targetSlot: HotbarItemSlot? = null,
+    )
 
     override val tag: String
         get() = activeMode.modeName
@@ -133,7 +151,132 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
     }
 
     override fun disable() {
+        clearPendingHotbarRefill()
         transactionGate.cancel("Offhand disabled")
+    }
+
+    @Suppress("unused")
+    private val refillHotbarPopHandler = handler<TotemPopEvent> { event ->
+        val localPlayer = mc.player ?: return@handler
+        if (event.entity !== localPlayer || !Totem.enabled || !Totem.RefillHotbar.enabled) {
+            return@handler
+        }
+
+        pendingHotbarRefill = PendingHotbarRefill(localPlayer, Totem.RefillHotbar.delay.random())
+        refillHotbarChronometer.reset()
+    }
+
+    /**
+     * Runs after the primary Offhand handler. The gate's IDLE state is the fully released state,
+     * so this one detached click cannot overlap an accepted offhand transaction.
+     */
+    @Suppress("unused")
+    private val refillHotbarScheduleHandler = handler<ScheduleInventoryActionEvent>(priority = 99) { event ->
+        val pending = pendingHotbarRefill ?: return@handler
+        val localPlayer = mc.player
+        if (localPlayer !== pending.player || !Totem.enabled || !Totem.RefillHotbar.enabled) {
+            clearPendingHotbarRefill()
+            return@handler
+        }
+
+        if (Slots.Hotbar.any { it.itemStack.item == Items.TOTEM_OF_UNDYING }) {
+            clearPendingHotbarRefill()
+            return@handler
+        }
+
+        if (pending.sourceSlot == null && Slots.Inventory.none { it.itemStack.item == Items.TOTEM_OF_UNDYING }) {
+            clearPendingHotbarRefill()
+            return@handler
+        }
+
+        if (!refillHotbarChronometer.hasElapsed(pending.delayMs.toLong()) ||
+            transactionGate.state != InventoryActionMovementGate.State.IDLE) {
+            return@handler
+        }
+
+        val sourceSlot = pending.sourceSlot ?: Slots.Inventory
+            .filter { it.itemStack.item == Items.TOTEM_OF_UNDYING }
+            .randomOrNull()
+            ?.also { pending.sourceSlot = it }
+            ?: run {
+                clearPendingHotbarRefill()
+                return@handler
+            }
+        val targetSlot = pending.targetSlot ?: HotbarItemSlot(Totem.RefillHotbar.totemSlot - 1)
+            .also { pending.targetSlot = it }
+
+        if (sourceSlot.itemStack.item != Items.TOTEM_OF_UNDYING) {
+            clearPendingHotbarRefill()
+            return@handler
+        }
+
+        val action = ClickInventoryAction.performSwap(from = sourceSlot, to = targetSlot)
+            .withDetachedPlayerInventoryClickPermit()
+        if (!action.canPerformAction(inventoryConstraints)) {
+            return@handler
+        }
+
+        event.schedule.add(
+            InventoryActionChain(
+                inventoryConstraints = inventoryConstraints,
+                actions = arrayOf(action),
+                priority = Priority.NORMAL,
+                precondition = {
+                    when {
+                        pendingHotbarRefill !== pending -> false
+                        mc.player !== pending.player || !Totem.enabled || !Totem.RefillHotbar.enabled -> {
+                            clearPendingHotbarRefill()
+                            false
+                        }
+                        transactionGate.state != InventoryActionMovementGate.State.IDLE -> false
+                        Slots.Hotbar.any { it.itemStack.item == Items.TOTEM_OF_UNDYING } -> {
+                            clearPendingHotbarRefill()
+                            false
+                        }
+                        sourceSlot.itemStack.item != Items.TOTEM_OF_UNDYING -> {
+                            clearPendingHotbarRefill()
+                            false
+                        }
+                        else -> action.canPerformAction(inventoryConstraints)
+                    }
+                }
+            )
+        )
+    }
+
+    @Suppress("unused")
+    private val refillHotbarSentHandler = handler<OutgoingPacketSentEvent> { event ->
+        val pending = pendingHotbarRefill ?: return@handler
+        val sourceSlot = pending.sourceSlot ?: return@handler
+        val targetSlot = pending.targetSlot ?: return@handler
+        val packet = event.packet as? ServerboundContainerClickPacket ?: return@handler
+
+        if (packet.containerId == 0 && packet.slotNum.toInt() == sourceSlot.getIdForServer(null) &&
+            packet.buttonNum.toInt() == targetSlot.hotbarSlotForServer && packet.containerInput == ContainerInput.SWAP) {
+            clearPendingHotbarRefill()
+        }
+    }
+
+    @Suppress("unused")
+    private val refillHotbarPlayerReplacementHandler = handler<GameTickEvent> {
+        val pending = pendingHotbarRefill ?: return@handler
+        if (pending.player !== mc.player || !Totem.enabled || !Totem.RefillHotbar.enabled) {
+            clearPendingHotbarRefill()
+        }
+    }
+
+    @Suppress("unused")
+    private val refillHotbarWorldChangeHandler = handler<WorldChangeEvent> {
+        clearPendingHotbarRefill()
+    }
+
+    @Suppress("unused")
+    private val refillHotbarDisconnectHandler = handler<DisconnectEvent> {
+        clearPendingHotbarRefill()
+    }
+
+    private fun clearPendingHotbarRefill() {
+        pendingHotbarRefill = null
     }
 
     @Suppress("unused")

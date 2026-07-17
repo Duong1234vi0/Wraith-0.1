@@ -31,6 +31,11 @@ import net.minecraft.world.level.block.RespawnAnchorBlock
 
 object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
 
+    object RefillHotbar : ToggleableConfigurable(this, "RefillHotbar", true) {
+        val delay by intRange("Delay", 30..50, 0..300, "ms")
+        val totemSlot by int("TotemSlot", 8, 1..9)
+    }
+
     /**
      * The totem mode might have a lower switch delay than other items.
      */
@@ -236,7 +241,7 @@ object Totem : ToggleableConfigurable(ModuleOffhand, "Totem", true) {
     }
 
     init {
-        tree(Health)
+        treeAll(Health, RefillHotbar)
     }
 
     /**
