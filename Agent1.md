@@ -8418,3 +8418,130 @@ with the Minecraft 1.21.4 behavior; no second Offhand module was added.
 - Pushed successfully to `origin/main`: `772ece39f..f9e620f6c  main -> main`.
 - The append-only history record itself is committed separately immediately after this entry so it can truthfully
   record the already-created feature hash and push result without rewriting prior history.
+
+## TotemHit Grim ordering + RefillHotbar first-pop correction — 2026-07-17, Codex
+
+### Checked
+
+- Read the mandated workflow documents: `Skill/README.md`, `Skill/Agen.md`, `Skill/CODEBASE_RULES.md`,
+  `Skill/AGENT1_USAGE.md`, and `Skill/GrimAC_Checks_Catalog.md`; then read the later chronological `Agent1.md`
+  entries covering the Prestige combat port, TotemHit, RefillHotbar/InventoryTotem, Offhand ordering,
+  InventoryActionMovementGate, ActionTickBoundary, KeyPearl, and AutoCrystal's deferred AntiWeakness restore.
+  History was treated as context only and checked against the live source.
+- Read the supplied, unmodified Grim 2.0 sources: `PacketOrderB.java`, `PacketOrderE.java`,
+  `PacketOrderProcessor.java`, `Post.java`, and `BadPacketsA.java`.
+- Read the mandatory live Wraith modules, inventory/action-boundary utilities, CombatManager/CombatExtensions,
+  SilentHotbar, KeyPearl, AutoCrystal deferred restore, both network/interaction mixins, and the current packet,
+  game-tick, scheduling, pop, world-change, and disconnect event definitions. Direct call sites and every requested
+  packet/action-boundary/gate-state search were inspected.
+
+### Runtime symptoms
+
+- TotemHit produced Grim `PacketOrderB: post-attack` and `PacketOrderE: attacking=true` because it replayed the
+  intercepted attack while selected on a Sword, restored the prior slot before the replay's normal animation, and
+  then let the original attack continue with only one caller-owned swing.
+- RefillHotbar missed the first local pop when a backup Totem already existed in the hotbar: status-35/pop handling
+  observed the stale pre-vanilla/pre-Offhand inventory snapshot and cleared the request merely because *any* hotbar
+  slot contained a Totem.
+
+### Grim source evidence
+
+- On modern clients `PacketOrderB` requires `ATTACK -> MAIN_HAND ANIMATION`; a non-async packet between them is a
+  post-attack violation. `PacketOrderE` rejects held-item changes while its attack flag remains active.
+- `PacketOrderProcessor` sets that flag for an attack and only clears action-order state at the natural tick packet;
+  `Post` confirms the relevant action/post timing. `BadPacketsA` additionally rejects duplicate selected-slot IDs.
+- The live `Connection.send(...)` HEAD mixin dispatches `OutgoingPacketSentEvent` before the outer send returns, so
+  neither TotemHit restoration nor RefillHotbar slot selection may be sent from that callback.
+
+### Root cause
+
+- TotemHit's nested packet replay created two attacks with one natural animation and placed a held-slot restore in
+  the forbidden attack-to-animation/action-boundary window.
+- CombatManager emits `TotemPopEvent` from the incoming status-35 path before vanilla completes the pop update and
+  before the primary Offhand transaction settles. The old global hotbar check therefore consumed the refill request
+  before the configured backup slot had actually been moved into Offhand.
+
+### TotemHit behavior change
+
+- TotemHit now captures player/level/slots/target/action serial, visibly selects the first hotbar Sword, calls
+  `ensureHasSentCarriedItem()` once, and lets the original Player attack continue exactly once. It confirms that
+  exact packet through `OutgoingPacketSentEvent` but does not send from the callback.
+- A narrowly scoped always-running pending-cycle listener restores only the valid prior visible slot on a later
+  `GameTickEvent`, after `ActionTickBoundary.hasPassed(...)`,
+  `canSendPostActionHeldItemChange(...)`, and an expected held-item-change attempt. It also safely handles a
+  cancelled attack, module disable, player/level replacement, world change, and disconnect.
+- “The original Prestige-style nested double-attack sequence was removed because two attacks with one natural swing plus a same-tick post-attack held-slot restoration is incompatible with the inspected Grim PacketOrderB and PacketOrderE state machines. TotemHit now performs one Sword-backed attack and restores the previous slot only after the natural client tick boundary.”
+
+### RefillHotbar race/state-machine fix
+
+- Every eligible local pop now queues one captured refill cycle: local player and level identity, sampled Delay,
+  one-time `TotemSlot - 1` index/`HotbarItemSlot`, and pre-settle ActionTickBoundary serial.
+- The head cycle waits for Delay, a passed natural pop boundary, and primary Offhand gate `IDLE` **before** inspecting
+  anything. It then checks only the captured configured target slot; a Totem in any unrelated hotbar slot no longer
+  clears the cycle.
+- When needed, it randomly selects only a `Slots.Inventory` Totem and schedules the existing detached player
+  inventory `ContainerInput.SWAP`. The precondition rechecks that same target and source so a moved source or an
+  independently filled target cancels cleanly.
+- Observing the exact container SWAP changes state to `WAITING_FOR_POST_CLICK_BOUNDARY`; it neither clears nor
+  selects in `Connection.send(...)` HEAD. After the click boundary and bounded target validation, it visibly selects
+  the configured target only when that slot actually contains a Totem. Disabled/lifecycle-invalid/timeout cycles are
+  cleared without a delayed click or selection.
+
+### Exact changed files
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleTotemHit.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/player/offhand/ModuleOffhand.kt`
+- `Agent1.md` (this append-only record)
+
+### Packet timelines before and after
+
+- TotemHit before: `HELD_ITEM_CHANGE(Sword) -> ATTACK(nested) -> HELD_ITEM_CHANGE(previous) -> ATTACK(original) -> MAIN_HAND ANIMATION -> CLIENT_TICK_END`.
+- TotemHit after: `HELD_ITEM_CHANGE(Sword) -> ATTACK(original, once) -> MAIN_HAND ANIMATION -> CLIENT_TICK_END -> HELD_ITEM_CHANGE(previous)`.
+- Refill after: `TotemPop(pre-settle serial) -> Delay + CLIENT_TICK_END + Offhand gate IDLE -> target-only check -> detached SWAP -> observed click -> CLIENT_TICK_END -> visible configured TotemSlot synchronization`.
+
+### Static verification
+
+- `git diff --check` passed. TotemHit contains no nested/replayed `attackPacket` send, no constructed second attack,
+  no direct carried-item packet, and its restore is gated by `ActionTickBoundary.hasPassed(...)`.
+- RefillHotbar contains no `Slots.Hotbar.any` or `Slots.Inventory.none` terminal condition. Its decision waits for
+  Delay, the pop boundary, and gate `IDLE`; both scheduling and precondition inspect the captured target slot.
+- The matching click transitions state rather than clearing/selecting in the outgoing callback. Visible selection is
+  only attempted after the click boundary, and RefillHotbar-disabled lifecycle checks clear pending work.
+- The final JAR contains `ModuleTotemHit`, `TotemHitCycle`, `ModuleOffhand`,
+  `ModuleOffhand$HotbarRefillState`, `ModuleOffhand$PendingHotbarRefill`, and `Totem$RefillHotbar` classes.
+
+### Build command/result
+
+- Ran exactly:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL` in `2m 9s` (`10 actionable tasks: 7 executed, 3 up-to-date`).
+
+### JAR SHA-256
+
+- `build/libs/liquidbounce-0.31.2.jar`: `16f226cb62a95ba92e97bcb19493a21f4122d61b22739f0b11bbf30c4d5e5bbd`
+
+### FCL/Grim test status
+
+- Not run in FCL in this workspace; compilation/package verification is not presented as Grim runtime success.
+- Required pending capture: TotemHit manual Player and standard Wraith path; no-Sword/non-Player; disable during
+  pending restore; world/disconnect cleanup. Record exactly one attack and the required Sword/attack/animation/
+  tick-end/restore packet timeline with no PacketOrderB, PacketOrderE, or Post.
+- Required pending RefillHotbar capture: all five specified inventory scenarios, explicitly first-pop Scenario A;
+  record pop serial, Offhand gate state, source/target, observed click, click boundary, and selected target. Also
+  test movement/sprinting suppression and later safe execution.
+
+### Known limitations
+
+- Runtime packet sequencing and server-side inventory acknowledgement still need the listed FCL/Grim captures.
+  The post-click target validation is intentionally bounded to five game ticks and clears safely rather than
+  selecting a non-Totem item or retrying forever.
+
+### Commit hash
+
+- Implementation commit: `6bf7d2e3` — `fix(combat): correct totem hit ordering and refill timing`.
+
+### Push result
+
+- Implementation push succeeded: `f58124aec..6bf7d2e3d  main -> main` on `origin`
+  (`https://github.com/Duong1234vi0/Wraith-0.1.git`). This append-only history record is committed separately after
+  the implementation so it can truthfully record the already-created commit and push result.
