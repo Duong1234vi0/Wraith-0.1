@@ -20,7 +20,13 @@ open class RotationsConfigurable(
     combatSpecific: Boolean = false
 ) : Configurable("Rotations") {
 
-    private val angleSmooth = choices(owner, "AngleSmooth", 0) {
+    private val angleSmooth = choices(owner, "AngleSmooth", activeCallback = { choices ->
+        if (combatSpecific) {
+            choices.indexOfFirst { it is GrimAngleSmooth }
+        } else {
+            0
+        }
+    }) {
         val linearAngleSmooth = LinearAngleSmooth(it)
         val interpolationAngleSmooth = if (combatSpecific) InterpolationAngleSmooth(it) else null
 
@@ -29,7 +35,9 @@ open class RotationsConfigurable(
             SigmoidAngleSmooth(it),
             interpolationAngleSmooth,
             AccelerationAngleSmooth(it),
-            if (combatSpecific) MinaraiAngleSmooth(it, interpolationAngleSmooth ?: linearAngleSmooth) else null
+            if (combatSpecific) MinaraiAngleSmooth(it, interpolationAngleSmooth ?: linearAngleSmooth) else null,
+            if (combatSpecific) TrackAngleSmooth(it) else null,
+            if (combatSpecific) GrimAngleSmooth(it) else null
         ).toTypedArray()
     }
 

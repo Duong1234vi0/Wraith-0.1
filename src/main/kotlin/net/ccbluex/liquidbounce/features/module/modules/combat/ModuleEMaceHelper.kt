@@ -11,35 +11,27 @@
 @file:Suppress("MagicNumber")
 package net.ccbluex.liquidbounce.features.module.modules.combat
 
-import net.ccbluex.liquidbounce.event.EventListener
-import net.ccbluex.liquidbounce.event.events.DisconnectEvent
 import net.ccbluex.liquidbounce.event.events.GameTickEvent
-import net.ccbluex.liquidbounce.event.events.OutgoingPacketSentEvent
-import net.ccbluex.liquidbounce.event.events.ScheduleInventoryActionEvent
-import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
-import net.ccbluex.liquidbounce.features.module.modules.player.offhand.ModuleOffhand
+import net.ccbluex.liquidbounce.utils.aiming.RotationManager
+import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
+import net.ccbluex.liquidbounce.utils.client.interaction
 import net.ccbluex.liquidbounce.utils.client.mc
-import net.ccbluex.liquidbounce.utils.inventory.ClickInventoryAction
-import net.ccbluex.liquidbounce.utils.inventory.ElytraFireworkExecutor
-import net.ccbluex.liquidbounce.utils.inventory.InventoryActionChain
-import net.ccbluex.liquidbounce.utils.inventory.InventoryActionMovementGate
-import net.ccbluex.liquidbounce.utils.inventory.InventoryClickSignature
-import net.ccbluex.liquidbounce.utils.inventory.InventoryManager
+import net.ccbluex.liquidbounce.utils.client.network
+import net.ccbluex.liquidbounce.utils.entity.*
 import net.ccbluex.liquidbounce.utils.inventory.ItemSlot
-import net.ccbluex.liquidbounce.utils.inventory.PlayerInventoryConstraints
+import net.ccbluex.liquidbounce.utils.inventory.OffHandSlot
 import net.ccbluex.liquidbounce.utils.inventory.Slots
-import net.ccbluex.liquidbounce.utils.inventory.inventoryClickSignature
-import net.ccbluex.liquidbounce.utils.kotlin.Priority
-import net.ccbluex.liquidbounce.utils.network.ActionTickBoundary
-import net.minecraft.client.multiplayer.ClientLevel
-import net.minecraft.client.player.LocalPlayer
 import net.minecraft.core.BlockPos
-import net.minecraft.network.protocol.game.ServerboundContainerClickPacket
+import net.minecraft.network.protocol.game.ServerboundContainerClosePacket
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket
+import net.minecraft.network.protocol.game.ServerboundSwingPacket
+import net.minecraft.network.protocol.game.ServerboundUseItemPacket
 import net.minecraft.tags.FluidTags
+import net.minecraft.world.InteractionHand
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.EquipmentSlot
 import net.minecraft.world.entity.LivingEntity
@@ -81,48 +73,25 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
     var peakAssistPostAttackTriggered = false
 
     private var peakAssistFireworkTimerNanos = System.nanoTime()
-    private var observedPlayer: LocalPlayer? = null
-    private var observedLevel: ClientLevel? = null
 
     override fun enable() {
         swapping = false
-        observedPlayer = mc.player
-        observedLevel = mc.level
         resetFireworkFlags()
         resetPeakAssistState()
-        EMaceArmorTransaction.cancelBeforeStart()
     }
 
     override fun disable() {
         swapping = false
         resetFireworkFlags()
         resetPeakAssistState()
-        ElytraFireworkExecutor.cancelOwner(ElytraFireworkExecutor.Owner.PEAK_ASSIST)
-        ElytraFireworkExecutor.cancelOwner(ElytraFireworkExecutor.Owner.FIREWORK_VECTOR)
-        EMaceArmorTransaction.cancelBeforeStart()
-        observedPlayer = null
-        observedLevel = null
     }
 
     @Suppress("unused")
     private val tickHandler = handler<GameTickEvent> {
-        val player = mc.player
-        val level = mc.level
-        if (player == null || level == null) {
+        if (mc.player == null || mc.level == null) {
             resetFireworkFlags()
             resetPeakAssistState()
-            EMaceArmorTransaction.cancelBeforeStart()
-            observedPlayer = null
-            observedLevel = null
             return@handler
-        }
-
-        if (observedPlayer !== player || observedLevel !== level) {
-            resetFireworkFlags()
-            resetPeakAssistState()
-            EMaceArmorTransaction.cancelBeforeStart()
-            observedPlayer = player
-            observedLevel = level
         }
 
         if (peakAssist) {
@@ -133,39 +102,16 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
 
         if (armorSwap) {
             handleArmorSwap()
-        } else {
-            EMaceArmorTransaction.cancelBeforeStart()
         }
 
         if (fireWorkVector) {
-            handleFireworkVector()
+            handleAutoFireWork()
         } else {
             resetFireworkFlags()
         }
     }
 
-    @Suppress("unused")
-    private val worldChangeHandler = handler<WorldChangeEvent> {
-        resetFireworkFlags()
-        resetPeakAssistState()
-        EMaceArmorTransaction.cancelBeforeStart()
-        observedPlayer = null
-        observedLevel = null
-    }
-
-    @Suppress("unused")
-    private val disconnectHandler = handler<DisconnectEvent> {
-        resetFireworkFlags()
-        resetPeakAssistState()
-        EMaceArmorTransaction.cancelBeforeStart()
-        observedPlayer = null
-        observedLevel = null
-    }
-
-    /**
-     * V-Core's Auto Target predicate is intentionally a skip predicate: a true result excludes
-     * the otherwise valid Aura target rather than selecting it.
-     */
+    /** V-Core's Auto Target predicate is a skip predicate, not a target selector. */
     fun shouldSkipAuraTarget(target: Entity?): Boolean {
         if (target == null || target.isRemoved || !canUseAutoTarget()) {
             return false
@@ -173,17 +119,17 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
 
         val livingTarget = target as? LivingEntity ?: return false
         return livingTarget.isFallFlying ||
-            target is Player && target.health == 0.0f ||
+            target is Player && target.armorValue == 0 ||
             livingTarget.isSwimming && isEyeInWater(livingTarget) ||
             isTargetBlockedBySolidBlock(target)
     }
+
+    private fun canUseAutoTarget() = running && autoTarget && canUseMaceAuraSupport()
 
     private fun isEyeInWater(target: LivingEntity): Boolean {
         val level = mc.level ?: return false
         return level.getFluidState(BlockPos.containing(target.eyePosition)).`is`(FluidTags.WATER)
     }
-
-    private fun canUseAutoTarget() = running && autoTarget && canUseMaceAuraSupport()
 
     private fun isTargetBlockedBySolidBlock(target: Entity): Boolean {
         val player = mc.player ?: return false
@@ -197,9 +143,7 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
 
         val step = direction.normalize().scale(0.05)
         repeat(8) {
-            val hit = level.clip(
-                ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player)
-            )
+            val hit = level.clip(ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
             if (hit.type != HitResult.Type.BLOCK) {
                 return false
             }
@@ -236,7 +180,6 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
     fun getElytraAimRangeOverride(defaultRange: Int): Int =
         if (running && extraAimRange && canUseMaceAuraSupport()) aimDistance else defaultRange
 
-    /** Exact Mace Aura support gate, using the current typed Mace item and MaceSwap mode predicate. */
     fun canUseMaceAuraSupport(): Boolean {
         val player = mc.player ?: return false
         if (mc.level == null || !ModuleKillAura.running) {
@@ -253,13 +196,6 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
         peakAssistPostAttackTriggered = true
     }
 
-    internal fun setArmorSwapState(value: Boolean) {
-        swapping = value
-    }
-
-    /** Shared Firework execution must not enter an EMace pickup transaction's packet window. */
-    internal fun isArmorSwapTransactionActive() = EMaceArmorTransaction.isBusy()
-
     private fun handlePeakAssist() {
         if (!canUsePeakAssist()) {
             resetPeakAssistState()
@@ -275,7 +211,6 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
         val target = ModuleKillAura.targetTracker.target
         if (target == null || target.isRemoved) {
             peakOffsetDisabledPendingFirework = false
-            ElytraFireworkExecutor.cancelOwner(ElytraFireworkExecutor.Owner.PEAK_ASSIST)
             return
         }
 
@@ -308,17 +243,13 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
 
     private fun shouldDisablePeakOffset(offset: Vec3): Boolean {
         val player = mc.player ?: return false
-        // V-Core intentionally uses this very high Y offset and strict comparisons.
         return player.y > offset.y || player.position().distanceToSqr(offset) < 1.0
     }
 
     private fun triggerPeakAssistFirework() {
         val player = mc.player ?: return
         if (hasFirework() && !player.cooldowns.isOnCooldown(Items.FIREWORK_ROCKET.defaultInstance)) {
-            ElytraFireworkExecutor.request(
-                owner = ElytraFireworkExecutor.Owner.PEAK_ASSIST,
-                order = ElytraFireworkExecutor.SelectionOrder.INVENTORY_FIRST,
-            )
+            usePeakAssistFirework()
         }
     }
 
@@ -327,45 +258,48 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
         peakOffsetDisabledPendingFirework = false
         peakAssistPostAttackTriggered = false
         peakAssistFireworkTimerNanos = System.nanoTime()
-        ElytraFireworkExecutor.cancelOwner(ElytraFireworkExecutor.Owner.PEAK_ASSIST)
     }
 
     private fun handleArmorSwap() {
-        if (isPeakAssistActive() || ElytraFireworkExecutor.isBusy()) {
-            EMaceArmorTransaction.cancelBeforeStart()
-            return
-        }
-
-        if (swapping || EMaceArmorTransaction.isBusy()) {
+        if (isPeakAssistActive() || swapping) {
             return
         }
 
         val player = mc.player ?: return
-        if (mc.screen != null || InventoryManager.isInventoryOpen || ModuleOffhand.hasActiveInventoryTransaction() ||
-            !canUseMaceAuraSupport() || !ModuleMaceSwap.running ||
+        if (mc.screen != null || !canUseMaceAuraSupport() || !ModuleMaceSwap.running ||
             !ModuleMaceSwap.hasMaceInHotbar()) {
-            EMaceArmorTransaction.cancelBeforeStart()
             return
         }
 
-        val target = ModuleKillAura.targetTracker.target ?: run {
-            EMaceArmorTransaction.cancelBeforeStart()
-            return
-        }
+        val target = ModuleKillAura.targetTracker.target ?: return
         if (target.isRemoved || !isWearingElytra(player) || !player.isFallFlying ||
             player.y <= target.y + 5.0 || armorSwapDistance(player, target) > swapDistance) {
-            EMaceArmorTransaction.cancelBeforeStart()
             return
         }
 
-        val chestplate = getChestPlateSlot() ?: run {
-            EMaceArmorTransaction.cancelBeforeStart()
-            return
-        }
-        EMaceArmorTransaction.request(chestplate)
+        getChestPlateSlot()?.let(::swapToChestplate)
     }
 
-    private fun armorSwapDistance(player: LocalPlayer, target: Entity): Double {
+    private fun swapToChestplate(source: ItemSlot) {
+        val player = mc.player ?: return
+        val sourceId = source.getIdForServer(null) ?: return
+        val chestId = Slots.Armor[2].getIdForServer(null) ?: return
+        if (sourceId !in player.screenHandler.slots.indices || chestId !in player.screenHandler.slots.indices) {
+            return
+        }
+
+        swapping = true
+        try {
+            interaction.clickSlot(player.screenHandler.syncId, sourceId, 0, ContainerInput.PICKUP, player)
+            interaction.clickSlot(player.screenHandler.syncId, chestId, 0, ContainerInput.PICKUP, player)
+            interaction.clickSlot(player.screenHandler.syncId, sourceId, 0, ContainerInput.PICKUP, player)
+            network.sendPacket(ServerboundContainerClosePacket(player.screenHandler.syncId))
+        } finally {
+            swapping = false
+        }
+    }
+
+    private fun armorSwapDistance(player: net.minecraft.client.player.LocalPlayer, target: Entity): Double {
         val point = (target as? LivingEntity)
             ?.takeIf(ModuleElytraTarget::shouldTarget)
             ?.let(ModuleElytraTarget::getElytraTargetVec)
@@ -374,16 +308,12 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
 
     private fun getChestPlateSlot(): ItemSlot? {
         for (item in CHESTPLATE_PRIORITY) {
-            val slot = findInventoryFirst(item)
-            if (slot != null) {
-                return slot
-            }
+            findInventoryFirst(item)?.let { return it }
         }
-
         return null
     }
 
-    private fun handleFireworkVector() {
+    private fun handleAutoFireWork() {
         val player = mc.player ?: return
         val target = ModuleKillAura.targetTracker.target
         if (target == null || target.isRemoved) {
@@ -411,36 +341,169 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
             return
         }
 
-        ElytraFireworkExecutor.request(
-            owner = ElytraFireworkExecutor.Owner.FIREWORK_VECTOR,
-            order = ElytraFireworkExecutor.SelectionOrder.HOTBAR_FIRST,
-            onUseAccepted = { fireworkTriggered = true },
-        )
+        if (useFireWorkSilent()) {
+            fireworkTriggered = true
+        }
     }
 
     private fun resetFireworkFlags() {
         fireworkTriggered = false
         auraPostAttackTriggered = false
-        ElytraFireworkExecutor.cancelOwner(ElytraFireworkExecutor.Owner.FIREWORK_VECTOR)
     }
 
-    private fun hasFirework() = ElytraFireworkExecutor.hasFirework(ElytraFireworkExecutor.SelectionOrder.HOTBAR_FIRST)
+    private fun hasFirework() =
+        mc.player?.offhandItem?.item == Items.FIREWORK_ROCKET ||
+            findHotbarAscending(Items.FIREWORK_ROCKET) != null ||
+            findInventoryDescending(Items.FIREWORK_ROCKET) != null
 
-    private fun isWearingElytra(player: LocalPlayer) = player.getItemBySlot(EquipmentSlot.CHEST).item == Items.ELYTRA
+    /** V-Core ElytraSwap's firework profile used by PeakAssist. */
+    private fun usePeakAssistFirework(): Boolean {
+        val player = mc.player ?: return false
+        if (player.cooldowns.isOnCooldown(Items.FIREWORK_ROCKET.defaultInstance)) {
+            return false
+        }
+
+        if (player.offhandItem.item == Items.FIREWORK_ROCKET) {
+            useRawFirework(InteractionHand.OFF_HAND)
+            return true
+        }
+
+        val firework = findInventoryFirstFirework() ?: return false
+        val currentSlot = player.inventory.selectedSlot
+        if (player.isUsingItem && player.usedItemHand == InteractionHand.MAIN_HAND) {
+            if (!clickSwap(firework.serverSlot, OffHandSlot.hotbarSlotForServer)) return false
+            useRawFirework(InteractionHand.OFF_HAND)
+            clickSwap(firework.serverSlot, OffHandSlot.hotbarSlotForServer)
+            sendCloseContainer()
+            return true
+        }
+
+        when (firework) {
+            is FireworkLocation.Hotbar -> {
+                network.sendPacket(ServerboundSetCarriedItemPacket(firework.hotbarSlot))
+                useRawFirework(InteractionHand.MAIN_HAND)
+                network.sendPacket(ServerboundSetCarriedItemPacket(currentSlot))
+            }
+            is FireworkLocation.Inventory -> {
+                val temporarySlot = currentSlot % 8 + 1
+                if (!clickSwap(firework.serverSlot, temporarySlot)) return false
+                sendCloseContainer()
+                useRawFirework(InteractionHand.MAIN_HAND)
+                selectVisibleSlot(currentSlot)
+                if (!clickSwap(firework.serverSlot, temporarySlot)) return false
+                sendCloseContainer()
+            }
+        }
+        return true
+    }
+
+    /** V-Core EMaceHelper.useFireWorkSilent profile; deliberately differs from PeakAssist. */
+    private fun useFireWorkSilent(): Boolean {
+        val player = mc.player ?: return false
+        if (player.offhandItem.item == Items.FIREWORK_ROCKET) {
+            useRawFirework(InteractionHand.OFF_HAND)
+            network.sendPacket(ServerboundSwingPacket(InteractionHand.OFF_HAND))
+            return true
+        }
+
+        val hotbar = findHotbarAscending(Items.FIREWORK_ROCKET)
+        val inventory = findInventoryDescending(Items.FIREWORK_ROCKET)
+        if (hotbar == null && inventory == null) return false
+
+        val savedSlot = player.inventory.selectedSlot
+        var swappedFromInventory = false
+        val selectedSlot = savedSlot
+        val source = if (hotbar != null) {
+            selectVisibleSlot(hotbar.hotbarSlot)
+            hotbar
+        } else {
+            if (player.screenHandler != player.inventoryMenu) return false
+            swappedFromInventory = true
+            if (!clickSwap(inventory!!.serverSlot, selectedSlot)) return false
+            sendCloseContainer()
+            inventory
+        }
+
+        useRawFirework(InteractionHand.MAIN_HAND)
+        network.sendPacket(ServerboundSwingPacket(InteractionHand.MAIN_HAND))
+        selectVisibleSlot(savedSlot)
+        if (swappedFromInventory) {
+            clickSwap(source.serverSlot, player.inventory.selectedSlot)
+            sendCloseContainer()
+        }
+        return true
+    }
+
+    private fun useRawFirework(hand: InteractionHand) {
+        val level = mc.level ?: return
+        val player = mc.player ?: return
+        val rotation = if (ModuleKillAura.running && ModuleKillAura.targetTracker.target != null) {
+            RotationManager.currentRotation ?: RotationManager.actualServerRotation
+        } else {
+            player.rotation
+        }
+        interaction.sendSequencedPacket(level) { sequence ->
+            ServerboundUseItemPacket(hand, sequence, rotation.yaw, rotation.pitch)
+        }
+    }
+
+    private fun selectVisibleSlot(slot: Int) {
+        val player = mc.player ?: return
+        if (slot !in 0..8) return
+        player.inventory.selectedSlot = slot
+        interaction.ensureHasSentCarriedItem()
+    }
+
+    private fun sendCloseContainer() {
+        val player = mc.player ?: return
+        network.sendPacket(ServerboundContainerClosePacket(player.screenHandler.syncId))
+    }
+
+    private fun clickSwap(slot: Int, button: Int): Boolean {
+        val player = mc.player ?: return false
+        if (slot !in player.screenHandler.slots.indices ||
+            button !in 0..8 && button != OffHandSlot.hotbarSlotForServer) {
+            return false
+        }
+        interaction.clickSlot(player.screenHandler.syncId, slot, button, ContainerInput.SWAP, player)
+        return true
+    }
 
     private fun findInventoryFirst(item: Item): ItemSlot? {
-        for (slot in Slots.Inventory.asReversed()) {
-            if (slot.itemStack.item == item) {
-                return slot
+        Slots.Inventory.asReversed().firstOrNull { it.itemStack.item == item }?.let { return it }
+        return Slots.Hotbar.asReversed().firstOrNull { it.itemStack.item == item }
+    }
+
+    private fun findInventoryFirstFirework(): FireworkLocation? =
+        findInventoryDescending(Items.FIREWORK_ROCKET) ?: findHotbarDescending(Items.FIREWORK_ROCKET)
+
+    private fun findInventoryDescending(item: Item): FireworkLocation.Inventory? {
+        val player = mc.player ?: return null
+        for (slot in 35 downTo 9) {
+            if (player.inventory.getStack(slot).item == item) {
+                return FireworkLocation.Inventory(slot)
             }
         }
+        return null
+    }
 
-        for (slot in Slots.Hotbar.asReversed()) {
-            if (slot.itemStack.item == item) {
-                return slot
+    private fun findHotbarDescending(item: Item): FireworkLocation.Hotbar? {
+        val player = mc.player ?: return null
+        for (slot in 8 downTo 0) {
+            if (player.inventory.getStack(slot).item == item) {
+                return FireworkLocation.Hotbar(slot, 36 + slot)
             }
         }
+        return null
+    }
 
+    private fun findHotbarAscending(item: Item): FireworkLocation.Hotbar? {
+        val player = mc.player ?: return null
+        for (slot in 0..8) {
+            if (player.inventory.getStack(slot).item == item) {
+                return FireworkLocation.Hotbar(slot, 36 + slot)
+            }
+        }
         return null
     }
 
@@ -449,6 +512,14 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
         point.y.coerceIn(box.minY, box.maxY),
         point.z.coerceIn(box.minZ, box.maxZ),
     )
+
+    private fun isWearingElytra(player: net.minecraft.client.player.LocalPlayer) =
+        player.getItemBySlot(EquipmentSlot.CHEST).item == Items.ELYTRA
+
+    private sealed class FireworkLocation(open val serverSlot: Int) {
+        data class Hotbar(val hotbarSlot: Int, override val serverSlot: Int) : FireworkLocation(serverSlot)
+        data class Inventory(override val serverSlot: Int) : FireworkLocation(serverSlot)
+    }
 
     private const val PEAK_FIREWORK_INTERVAL_MS = 500L
     private const val NANOS_PER_MILLISECOND = 1_000_000L
@@ -463,190 +534,4 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
 
     private fun hasPeakFireworkIntervalElapsed() =
         System.nanoTime() - peakAssistFireworkTimerNanos >= PEAK_FIREWORK_INTERVAL_MS * NANOS_PER_MILLISECOND
-}
-
-/**
- * Owns the delayed three-click source armor transaction even after EMaceHelper is toggled off.
- * The user-visible module exposes no inventory settings; this only maps V-Core's pickup chain to
- * Wraith's scheduler and stationary-input gate.
- */
-private object EMaceArmorTransaction : EventListener {
-
-    private data class Pending(
-        val player: LocalPlayer,
-        val level: ClientLevel,
-        val source: ItemSlot,
-        val expectedSourceItem: Item,
-        val actions: List<ClickInventoryAction>,
-        var request: InventoryActionMovementGate.Request? = null,
-        var expectedClicks: MutableList<InventoryClickSignature> = mutableListOf(),
-        var finalBoundarySerial: Long = Long.MIN_VALUE,
-        var createdTick: Int,
-    )
-
-    private val constraints = PlayerInventoryConstraints("EMaceHelperSafeArmorTransaction")
-    private val gate = InventoryActionMovementGate(
-        ownerRunning = { pending != null },
-        diagnosticPrefix = "[EMaceArmorTxnDiag]"
-    )
-    private var pending: Pending? = null
-
-    override val running: Boolean
-        get() = true
-
-    fun isBusy() = pending != null || gate.state != InventoryActionMovementGate.State.IDLE
-
-    fun request(source: ItemSlot): Boolean {
-        if (pending != null || gate.state != InventoryActionMovementGate.State.IDLE || source.itemStack.isEmpty ||
-            mc.screen != null || InventoryManager.isInventoryOpen || ModuleOffhand.hasActiveInventoryTransaction()) {
-            return false
-        }
-
-        val player = mc.player ?: return false
-        val level = mc.level ?: return false
-        val actions = listOf(
-            ClickInventoryAction.performPickup(slot = source).withDetachedPlayerInventoryClickPermit(),
-            ClickInventoryAction.performPickup(slot = Slots.Armor[2]).withDetachedPlayerInventoryClickPermit(),
-            ClickInventoryAction.performPickup(slot = source).withDetachedPlayerInventoryClickPermit(),
-        )
-        pending = Pending(
-            player = player,
-            level = level,
-            source = source,
-            expectedSourceItem = source.itemStack.item,
-            actions = actions,
-            createdTick = player.tickCount,
-        )
-        ModuleEMaceHelper.setArmorSwapState(true)
-        return true
-    }
-
-    fun cancelBeforeStart() {
-        val current = pending ?: run {
-            ModuleEMaceHelper.setArmorSwapState(false)
-            return
-        }
-        val request = current.request
-        if (request == null || !gate.hasStarted(request)) {
-            gate.cancel("EMace armor cancelled before first pickup")
-            pending = null
-            ModuleEMaceHelper.setArmorSwapState(false)
-        }
-    }
-
-    @Suppress("unused")
-    private val scheduleHandler = handler<ScheduleInventoryActionEvent> { event ->
-        val current = pending ?: return@handler
-        if (mc.player !== current.player || mc.level !== current.level) {
-            gate.cancel("EMace armor player or world changed")
-            pending = null
-            ModuleEMaceHelper.setArmorSwapState(false)
-            return@handler
-        }
-
-        val request = current.request ?: InventoryActionMovementGate.Request(
-            mode = "EMaceArmorSwap",
-            sourceSlot = current.source,
-            expectedSourceItem = current.expectedSourceItem,
-            switchMode = "PICKUP",
-            sendDirectly = false,
-            clickSignatures = current.actions.mapNotNull(ClickInventoryAction::inventoryClickSignature),
-            expectsOffhandSwap = false,
-            timeoutTicks = ARMOR_TRANSACTION_TIMEOUT_TICKS,
-            onFirstActionSent = {},
-        ).also {
-            current.request = it
-            current.expectedClicks = it.clickSignatures.toMutableList()
-        }
-
-        if (ModuleOffhand.hasActiveInventoryTransaction() && !gate.hasStarted(request)) {
-            return@handler
-        }
-
-        gate.request(request)
-        if (!gate.isCurrent(request) || !gate.isReady(request) ||
-            !current.actions.all { it.canPerformAction(constraints) } || !gate.beginExecution(request)) {
-            return@handler
-        }
-
-        // #Edit By Codex 2026-07-17: this is V-Core's pickup/chest/pickup result, but the
-        // scheduler and movement gate keep its detached inventory clicks out of a moving window.
-        event.schedule.add(
-            InventoryActionChain(
-                inventoryConstraints = constraints,
-                actions = current.actions.toTypedArray(),
-                priority = Priority.NORMAL,
-                precondition = {
-                    when {
-                        pending !== current || !gate.isCurrent(request) -> false
-                        !current.actions.all { it.canPerformAction(constraints) } -> {
-                            gate.cancel("EMace armor action unavailable")
-                            false
-                        }
-                        gate.hasStarted(request) -> true
-                        else -> gate.isSourceValid(request).also { valid ->
-                            if (!valid) gate.cancel("EMace armor source moved before pickup")
-                        }
-                    }
-                }
-            )
-        )
-    }
-
-    @Suppress("unused")
-    private val packetHandler = handler<OutgoingPacketSentEvent> { event ->
-        val current = pending ?: return@handler
-        val packet = event.packet as? ServerboundContainerClickPacket ?: return@handler
-        val index = current.expectedClicks.indexOfFirst { it.matches(packet) }
-        if (index == -1) {
-            return@handler
-        }
-
-        current.expectedClicks.removeAt(index)
-        if (current.expectedClicks.isEmpty()) {
-            current.finalBoundarySerial = ActionTickBoundary.currentSerial()
-        }
-    }
-
-    @Suppress("unused")
-    private val lifecycleHandler = handler<GameTickEvent>(priority = -1000) {
-        val current = pending ?: return@handler
-        if (mc.player !== current.player || mc.level !== current.level) {
-            gate.cancel("EMace armor player or world changed")
-            pending = null
-            ModuleEMaceHelper.setArmorSwapState(false)
-            return@handler
-        }
-
-        if (current.finalBoundarySerial != Long.MIN_VALUE &&
-            ActionTickBoundary.hasPassed(current.finalBoundarySerial) &&
-            gate.state == InventoryActionMovementGate.State.IDLE) {
-            pending = null
-            ModuleEMaceHelper.setArmorSwapState(false)
-            return@handler
-        }
-
-        if (current.player.tickCount - current.createdTick > ARMOR_TRANSACTION_TIMEOUT_TICKS &&
-            current.finalBoundarySerial == Long.MIN_VALUE) {
-            gate.cancel("EMace armor transaction timed out")
-            pending = null
-            ModuleEMaceHelper.setArmorSwapState(false)
-        }
-    }
-
-    @Suppress("unused")
-    private val worldChangeHandler = handler<WorldChangeEvent> {
-        gate.cancel("EMace armor world changed")
-        pending = null
-        ModuleEMaceHelper.setArmorSwapState(false)
-    }
-
-    @Suppress("unused")
-    private val disconnectHandler = handler<DisconnectEvent> {
-        gate.cancel("EMace armor disconnected")
-        pending = null
-        ModuleEMaceHelper.setArmorSwapState(false)
-    }
-
-    private const val ARMOR_TRANSACTION_TIMEOUT_TICKS = 160
 }

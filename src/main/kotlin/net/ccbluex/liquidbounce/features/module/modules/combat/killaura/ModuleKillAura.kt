@@ -23,7 +23,6 @@ import net.ccbluex.liquidbounce.utils.entity.*
 import com.google.gson.JsonObject
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.event.Sequence
-import net.ccbluex.liquidbounce.event.events.OutgoingPacketSentEvent
 import net.ccbluex.liquidbounce.event.events.RotationUpdateEvent
 import net.ccbluex.liquidbounce.event.events.SprintEvent
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
@@ -71,7 +70,6 @@ import net.ccbluex.liquidbounce.utils.kotlin.random
 import net.ccbluex.liquidbounce.utils.render.WorldTargetRenderer
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import com.mojang.blaze3d.vertex.PoseStack
-import net.minecraft.network.protocol.game.ServerboundAttackPacket
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.phys.AABB
@@ -160,20 +158,6 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         failedHits.clear()
         KillAuraAutoBlock.stopBlocking()
         KillAuraNotifyWhenFail.failedHitsIncrement = 0
-        pendingPostAttackEntityId = null
-    }
-
-    private var pendingPostAttackEntityId: Int? = null
-
-    /** A sent attack packet proves this click escaped Wraith's cancellable attack event. */
-    @Suppress("unused")
-    private val postAttackPacketHandler = handler<OutgoingPacketSentEvent> { event ->
-        val entityId = pendingPostAttackEntityId ?: return@handler
-        val packet = event.packet as? ServerboundAttackPacket ?: return@handler
-        if (packet.entityId() == entityId) {
-            pendingPostAttackEntityId = null
-            ModuleEMaceHelper.markAuraPostAttack()
-        }
     }
 
     @Suppress("unused")
@@ -349,13 +333,10 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
                 }
 
                 // Attack enemy
-                pendingPostAttackEntityId = target.id
                 target.attack(true, keepSprint && !shouldBlockSprinting)
-                // sendPacket dispatches synchronously. A cancelled attack never reaches the
-                // accepted-packet hook and must not leave an old entity id armed for a later click.
-                if (pendingPostAttackEntityId == target.id) {
-                    pendingPostAttackEntityId = null
-                }
+                // V-Core marks EMace at Aura post-action completion even when the attack packet
+                // was cancelled or otherwise not observed on the wire.
+                ModuleEMaceHelper.markAuraPostAttack()
                 currentScanExtraRange = scanExtraRange.random()
                 KillAuraNotifyWhenFail.failedHitsIncrement = 0
 
@@ -565,6 +546,18 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         return criticalHit &&
             !isBreakingBlock &&
             !(isInInventoryScreen && !ignoreOpenInventory && !simulateInventoryClosing)
+    }
+
+    internal fun isTrackAttackReady(target: Entity): Boolean =
+        targetTracker.target === target && clickScheduler.isClickTick && validateAttack(target)
+
+    internal fun isRotationRaytracingTarget(target: Entity, rotation: Rotation): Boolean {
+        if (raycast == TRACE_NONE) {
+            return true
+        }
+
+        val traceRange = if (player.isFallFlying) activeElytraAcquisitionRange() else targetStrafeMaxRange
+        return facingEnemy(toEntity = target, range = traceRange.toDouble(), rotation = rotation)
     }
 
     private fun isActiveKillAuraRotationFor(target: Entity): Boolean {

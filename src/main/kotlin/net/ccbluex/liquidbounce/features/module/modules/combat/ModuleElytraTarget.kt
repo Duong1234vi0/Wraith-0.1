@@ -23,7 +23,6 @@ import net.ccbluex.liquidbounce.render.engine.type.Color4b
 import net.ccbluex.liquidbounce.render.renderEnvironmentForWorld
 import net.ccbluex.liquidbounce.render.withPositionRelativeToCamera
 import net.ccbluex.liquidbounce.utils.client.mc
-import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.FIRST_PRIORITY
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.phys.AABB
 import net.minecraft.world.phys.Vec3
@@ -56,7 +55,7 @@ object ModuleElytraTarget : ClientModule("ElytraTarget", Category.COMBAT) {
     private var hurtTimerNanos = System.nanoTime()
 
     @Suppress("unused")
-    private val syncHandler = handler<RotationUpdateEvent>(priority = FIRST_PRIORITY) {
+    private val syncHandler = handler<RotationUpdateEvent>(priority = AFTER_KILLAURA_PRIORITY) {
         val player = mc.player ?: return@handler
         if (mc.level == null) {
             return@handler
@@ -166,6 +165,7 @@ object ModuleElytraTarget : ClientModule("ElytraTarget", Category.COMBAT) {
     private const val NANOS_PER_MILLISECOND = 1_000_000L
     private const val MINIMUM_PREDICTION_BPS = 20.0
     private const val BOX_RADIUS = 0.2
+    private const val AFTER_KILLAURA_PRIORITY: Short = -1
 
     private fun hasHurtSuppressionElapsed() =
         System.nanoTime() - hurtTimerNanos >= HURT_SUPPRESSION_MS * NANOS_PER_MILLISECOND
