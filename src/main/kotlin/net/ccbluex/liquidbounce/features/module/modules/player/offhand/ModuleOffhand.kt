@@ -633,6 +633,10 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
 
     fun isOperating() = running && activeMode != Mode.NONE
 
+    /** Internal transaction-only state for other safe inventory users; not an Offhand mode gate. */
+    internal fun hasActiveInventoryTransaction() =
+        transactionGate.state != InventoryActionMovementGate.State.IDLE || pendingHotbarRefills.isNotEmpty()
+
     private enum class Mode(val modeName: String, private val item: Item, private val fallBackItem: Item? = null) {
         TOTEM("Totem", Items.TOTEM_OF_UNDYING) {
             override fun shouldEquip() = Totem.shouldEquip()

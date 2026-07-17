@@ -115,6 +115,8 @@ internal class InventoryActionMovementGate(
         val mode: String,
         val sourceSlot: ItemSlot,
         val expectedSourceItem: Item,
+        /** A restoration SWAP can legitimately return an empty consumed source slot. */
+        val allowEmptySource: Boolean = false,
         val switchMode: String,
         val sendDirectly: Boolean,
         val clickSignatures: List<InventoryClickSignature>,
@@ -233,6 +235,10 @@ internal class InventoryActionMovementGate(
     fun isSourceValid(request: Request): Boolean {
         if (!isCurrent(request) || !inGame || mc.player !== requestPlayer) {
             return false
+        }
+
+        if (request.allowEmptySource) {
+            return true
         }
 
         val stack = request.sourceSlot.itemStack
@@ -605,6 +611,7 @@ internal class InventoryActionMovementGate(
         mode == other.mode &&
             sourceSlot == other.sourceSlot &&
             expectedSourceItem === other.expectedSourceItem &&
+            allowEmptySource == other.allowEmptySource &&
             switchMode == other.switchMode &&
             sendDirectly == other.sendDirectly &&
             clickSignatures == other.clickSignatures &&

@@ -211,6 +211,9 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
         return -1
     }
 
+    /** Narrow bridge for Elytra mace support; keeps this module's existing mode predicate authoritative. */
+    fun hasMaceInHotbar() = findMaceInHotbar() != -1
+
     private fun findAxeInHotbar(): Int {
         for (slot in 0..8) {
             if (player.inventory.getStack(slot).item is AxeItem) {

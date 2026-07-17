@@ -20,6 +20,7 @@ package net.ccbluex.liquidbounce.features.module.modules.combat.killaura
 import net.ccbluex.liquidbounce.utils.entity.*
 
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleAutoWeapon
+import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleEMaceHelper
 import net.ccbluex.liquidbounce.utils.client.isOlderThanOrEqual1_8
 import net.ccbluex.liquidbounce.utils.client.player
 import net.ccbluex.liquidbounce.utils.client.world
@@ -44,7 +45,7 @@ object KillAuraTargetTracker : TargetTracker() {
     val lockTarget by boolean("LockTarget", true)
 
     override fun validate(entity: LivingEntity): Boolean {
-        return super.validate(entity) && validateShield(entity)
+        return super.validate(entity) && !ModuleEMaceHelper.shouldSkipAuraTarget(entity) && validateShield(entity)
     }
 
     /**

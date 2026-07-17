@@ -23,6 +23,7 @@ import net.ccbluex.liquidbounce.utils.entity.*
 import com.google.gson.JsonObject
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.event.Sequence
+import net.ccbluex.liquidbounce.event.events.OutgoingPacketSentEvent
 import net.ccbluex.liquidbounce.event.events.RotationUpdateEvent
 import net.ccbluex.liquidbounce.event.events.SprintEvent
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
@@ -32,6 +33,8 @@ import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleAutoCart
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleAutoWeapon
+import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleEMaceHelper
+import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleElytraTarget
 import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.ModuleCriticals.CriticalsSelectionMode
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.KillAuraRotationsConfigurable.KillAuraRotationTiming.SNAP
@@ -68,8 +71,10 @@ import net.ccbluex.liquidbounce.utils.kotlin.random
 import net.ccbluex.liquidbounce.utils.render.WorldTargetRenderer
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import com.mojang.blaze3d.vertex.PoseStack
+import net.minecraft.network.protocol.game.ServerboundAttackPacket
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.phys.AABB
 import kotlin.math.pow
 
 /**
@@ -101,7 +106,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     private var currentScanExtraRange: Float = scanExtraRange.random()
 
     internal val targetStrafeMaxRange: Float
-        get() = range + currentScanExtraRange
+        get() = if (player.isFallFlying) activeElytraAcquisitionRange() else range + currentScanExtraRange
 
     // #Edit By Claude: public enemy-detection range = base Range + the current
     // ScanExtra (RangeExtra) value, i.e. the furthest distance KillAura will
@@ -109,7 +114,12 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     // its appear/disappear animation triggers at the same distance KillAura
     // actually engages, instead of finding targets from across the map.
     val enemyDetectionRange: Float
-        get() = range + currentScanExtraRange
+        get() = if (player.isFallFlying) activeElytraAcquisitionRange() else range + currentScanExtraRange
+
+    // V-Core keeps a small combat range while gliding, but rotates/acquires using the much larger
+    // Elytra aim range and its existing-target +4 allowance.
+    internal val elytraRange by float("ElytraRange", 0.5f, 0.0f..6.0f)
+    internal val elytraAimRange by int("ElytraAimRange", 32, 0..64)
 
     // Target
     val targetTracker = tree(KillAuraTargetTracker)
@@ -150,6 +160,20 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         failedHits.clear()
         KillAuraAutoBlock.stopBlocking()
         KillAuraNotifyWhenFail.failedHitsIncrement = 0
+        pendingPostAttackEntityId = null
+    }
+
+    private var pendingPostAttackEntityId: Int? = null
+
+    /** A sent attack packet proves this click escaped Wraith's cancellable attack event. */
+    @Suppress("unused")
+    private val postAttackPacketHandler = handler<OutgoingPacketSentEvent> { event ->
+        val entityId = pendingPostAttackEntityId ?: return@handler
+        val packet = event.packet as? ServerboundAttackPacket ?: return@handler
+        if (packet.entityId() == entityId) {
+            pendingPostAttackEntityId = null
+            ModuleEMaceHelper.markAuraPostAttack()
+        }
     }
 
     @Suppress("unused")
@@ -224,14 +248,16 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         }
 
         val rotation = (if (rotations.rotationTiming == ON_TICK) {
-            getSpot(target, range.toDouble(), PointTracker.AimSituation.FOR_NOW)?.rotation
+            getSpot(target, activeAimRange().toDouble(), PointTracker.AimSituation.FOR_NOW)?.rotation
         } else {
             null
         } ?: RotationManager.currentRotation ?: player.rotation).normalize()
 
+        val isElytraTarget = target is LivingEntity && ModuleElytraTarget.shouldTarget(target)
         val crosshairTarget = when {
+            isElytraTarget -> target
             raycast != TRACE_NONE -> {
-                raytraceEntity(range.toDouble(), rotation, filter = {
+                raytraceEntity(activeAttackRange().toDouble(), rotation, filter = {
                     when (raycast) {
                         TRACE_ONLYENEMY -> it.shouldBeAttacked()
                         TRACE_ALL -> true
@@ -242,7 +268,8 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
             else -> target
         }
 
-        if (crosshairTarget is LivingEntity && crosshairTarget.shouldBeAttacked() && crosshairTarget != target) {
+        if (crosshairTarget is LivingEntity && crosshairTarget.shouldBeAttacked() &&
+            !ModuleEMaceHelper.shouldSkipAuraTarget(crosshairTarget) && crosshairTarget != target) {
             targetTracker.target = crosshairTarget
         }
 
@@ -265,12 +292,24 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         // Make it seem like we are blocking
         KillAuraAutoBlock.makeSeemBlock()
 
-        // Are we actually facing the [chosenEntity]
-        val isFacingEnemy = facingEnemy(
+        val elytraTarget = target as? LivingEntity
+            ?: run {
+                // Ordinary targets retain Wraith's existing boxed facing/raycast behavior.
+                null
+            }
+        val isSourceElytraTarget = elytraTarget != null && ModuleElytraTarget.shouldTarget(elytraTarget)
+
+        if (isSourceElytraTarget && !canAttackElytraTarget(elytraTarget!!)) {
+            return
+        }
+
+        // An Elytra target uses the source attack-window formula above. Every other target keeps
+        // Wraith's normal facingEnemy validation, including its wall-range and raycast semantics.
+        val isFacingEnemy = isSourceElytraTarget || facingEnemy(
             toEntity = target,
             rotation = rotation,
-            range = range.toDouble(),
-            wallsRange = wallRange.toDouble()
+            range = activeAttackRange().toDouble(),
+            wallsRange = activeWallRange().toDouble()
         )
 
         ModuleDebug.debugParameter(ModuleKillAura, "Is Facing Enemy", isFacingEnemy)
@@ -310,7 +349,13 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
                 }
 
                 // Attack enemy
+                pendingPostAttackEntityId = target.id
                 target.attack(true, keepSprint && !shouldBlockSprinting)
+                // sendPacket dispatches synchronously. A cancelled attack never reaches the
+                // accepted-packet hook and must not leave an old entity id armed for a later click.
+                if (pendingPostAttackEntityId == target.id) {
+                    pendingPostAttackEntityId = null
+                }
                 currentScanExtraRange = scanExtraRange.random()
                 KillAuraNotifyWhenFail.failedHitsIncrement = 0
 
@@ -339,11 +384,18 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         ModuleDebug.debugParameter(ModuleKillAura, "AimSituation", situation)
 
         // Calculate maximum range based on enemy distance
-        val attackRange = range
-        val maximumRange = if (targetTracker.closestSquaredEnemyDistance > attackRange.pow(2)) {
-            targetStrafeMaxRange
+        val attackRange: Float
+        val maximumRange: Float
+        if (player.isFallFlying) {
+            attackRange = elytraRange
+            maximumRange = activeElytraAcquisitionRange()
         } else {
-            attackRange
+            attackRange = range
+            maximumRange = if (targetTracker.closestSquaredEnemyDistance > attackRange.pow(2)) {
+                targetStrafeMaxRange
+            } else {
+                attackRange
+            }
         }
 
         ModuleDebug.debugParameter(ModuleKillAura, "Maximum Range", maximumRange)
@@ -441,6 +493,13 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
      */
     private fun getSpot(entity: LivingEntity, range: Double,
                         situation: PointTracker.AimSituation): RotationWithVector? {
+        if (ModuleElytraTarget.shouldTarget(entity)) {
+            val predicted = ModuleElytraTarget.getElytraTargetVec(entity) ?: return null
+            val aimPoint = ModuleEMaceHelper.applyPeakAssistAimOffset(entity, predicted) ?: return null
+            // Do not pass this point through PointTracker: V-Core's velocity prediction is applied once.
+            return RotationWithVector(Rotation.lookingAt(point = aimPoint, from = player.eyePosition), aimPoint)
+        }
+
         val point = pointTracker.gatherPoint(
             entity,
             situation
@@ -462,16 +521,16 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
             eyes, point.cutOffBox,
             // Since [range] is squared, we need to square root
             range = range,
-            wallsRange = wallRange.toDouble(),
+            wallsRange = activeWallRange().toDouble(),
             rotationPreference = rotationPreference
         ) ?: raytraceBox(
             eyes, point.box,
             range = range,
-            wallsRange = wallRange.toDouble(),
+            wallsRange = activeWallRange().toDouble(),
             rotationPreference = rotationPreference
         )
 
-        return if (spot == null && rotations.aimThroughWalls) {
+        val resolvedSpot = if (spot == null && rotations.aimThroughWalls) {
             val throughSpot = raytraceBox(
                 eyes, point.cutOffBox,
                 // Since [range] is squared, we need to square root
@@ -489,6 +548,10 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         } else {
             spot
         }
+
+        val ordinaryAimPoint = resolvedSpot?.vec ?: return null
+        val aimPoint = ModuleEMaceHelper.applyPeakAssistAimOffset(entity, ordinaryAimPoint) ?: return null
+        return RotationWithVector(Rotation.lookingAt(point = aimPoint, from = eyes), aimPoint)
     }
 
     /**
@@ -525,7 +588,38 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     }
 
     private fun squaredDistanceToTargetPoint(entity: Entity): Double {
+        val living = entity as? LivingEntity
+        if (living != null && ModuleElytraTarget.shouldTarget(living)) {
+            val targetPoint = ModuleElytraTarget.getElytraTargetVec(living)
+            if (targetPoint != null) {
+                return player.eyePosition.distanceToSqr(targetPoint)
+            }
+        }
+
         return entity.squaredBoxedDistanceTo(player)
+    }
+
+    private fun activeAttackRange(): Float = if (player.isFallFlying) elytraRange else range
+
+    private fun activeAimRange(): Float = if (player.isFallFlying) activeElytraAcquisitionRange() else range
+
+    private fun activeWallRange(): Float = if (player.isFallFlying) {
+        activeAttackRange() + ModuleEMaceHelper.getElytraAimRangeOverride(elytraAimRange)
+    } else {
+        wallRange
+    }
+
+    private fun activeElytraAcquisitionRange(): Float {
+        val aimRange = ModuleEMaceHelper.getElytraAimRangeOverride(elytraAimRange).toFloat()
+        return elytraRange + aimRange + if (targetTracker.target != null) 4.0f else 0.0f
+    }
+
+    /** V-Core's intentionally unusual Elytra attack window, measured from the player position. */
+    private fun canAttackElytraTarget(target: LivingEntity): Boolean {
+        val predicted = ModuleElytraTarget.getElytraTargetVec(target) ?: return false
+        val prediction = ModuleElytraTarget.getPrediction(target)
+        return player.position().distanceTo(predicted) <= prediction - 0.5 ||
+            player.boundingBox.intersects(AABB(predicted, predicted))
     }
 
     enum class RaycastMode(override val choiceName: String) : NamedChoice {
