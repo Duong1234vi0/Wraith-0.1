@@ -9066,3 +9066,118 @@ commit records this final commit/push state.
 
 - Documentation commit `b6dc5a603` (`docs(agent1): record second elytra fidelity audit`) pushed successfully:
   `d99ab4989..b6dc5a603  main -> main` on `origin`.
+
+## V-Core Elytra combat stack — third fidelity audit (2026-07-18, Codex)
+
+### Checked
+
+- Read the complete V-Core Aura settings and paths: `auraLogic()`, `attack()`, `shieldBreaker()`,
+  `tryMaceSwapAttack()`, and `getElytraTargetVec()`.
+- Read the complete V-Core `MaceSwap`, `EMaceHelper`, Track, Grim, `AuraRotationManager`,
+  `InventoryUtility`, and `PlayerManager` sources.
+- Read the complete current Wraith `ModuleKillAura`, target tracker, rotation configuration, AutoWeapon,
+  MaceSwap, EMaceHelper, ElytraTarget, Track/Grim processors, WallsBypass, PointTracker, current inventory/raw
+  attack helpers, click scheduler, and `VCoreAuraFidelityTest`.
+- Verified the reference V-Core tree was not modified.
+- Re-verified the accepted post-send/input/AutoDisable, Track raytrace, ThroughWalls alias/default, raw Firework,
+  raw Armor Swap, ElytraTarget, and ElytraMotion paths remain present.
+
+### Third fidelity audit
+
+#### Missing direct Aura ShieldBreaker
+
+- Added KillAura `ShieldBreaker` boolean with source default `true`.
+- The direct path now runs after the Elytra/ordinary attack-window and facing/range checks but before the normal
+  clicker interactive-scene preparation.
+- It does not use AutoWeapon, `wouldBlockHit`, facing direction, AutoWeapon `Prepare`, or a hotbar-only Axe gate.
+- V-Core `InventoryUtility.getAxe()` ordering and score are preserved: inventory slots `9..35` followed by hotbar
+  slots, selecting the first strict best durability-plus-Sharpness score.
+- Main-inventory Axes use raw SWAP -> close -> attack -> swing -> optional MaceStun -> SWAP-back -> close.
+- Hotbar Axes use packet-only held-slot switch -> attack -> swing -> optional MaceStun -> packet-only restore,
+  without changing the visible selected slot for the Axe route.
+- AutoWeapon ownership is suppressed through the raw ShieldBreaker scope, with reset in `finally`.
+- The direct path sets the current Aura hit-delay equivalent to `10`, updates scheduler bookkeeping, and returns
+  before normal Aura EMace/MaceSwap post markers.
+
+#### AutoWeapon ordering risk
+
+- The ordinary Aura path no longer contains the old AutoWeapon-dependent dedicated shield-break branch.
+- AutoWeapon remains unchanged for ordinary attacks and is suppressed only while the raw direct ShieldBreaker path
+  is active.
+
+#### MaceStun no-Mace source quirk
+
+- Direct ShieldBreaker MaceStun checks only MaceSwap enabled plus `Mace Stun=true`.
+- It sets `calledFromAura`, calls `silentSwapToMace()`, and still sends the second attack when no matching Mace is
+  found, preserving V-Core's raw-current-item quirk. The missing-Mace case is intentionally not corrected.
+
+#### Track dynamic aim-point port
+
+- Added KillAura-owned `rotationPoint` and `rotationMotion`, reset on enable.
+- Ported V-Core dynamic Track motion initialization, boundary reversal ranges, ineffective random add, center fallback,
+  full `0.05 / 0.15` AABB scan, source range/raytrace tests, and inner-loop break behavior.
+- Track no longer routes ordinary targets through Wraith PointTracker. Its source branches are dynamic ordinary aim,
+  ElytraTarget prediction, or target eye position, with source PeekHigh and PeakAssist ordering.
+- ElytraPlus remains unported and is treated as disabled in the source branch, as required by the current fork state.
+
+#### Grim PeekHigh/PeakAssist ordering
+
+- Grim ordinary targets now resolve from AABB center; ElytraTarget targets use the authoritative predicted point.
+- The resolver applies PeekHigh first and EMace PeakAssist exactly once before the Grim rotation processor.
+- Grim no longer recomputes a random PeekHigh point after PeakAssist, so PeakAssist Height is retained.
+- Existing absolute Grim GCD, jitter, YawOffset, and special fallback remain unchanged.
+
+#### WallsBypass scope correction
+
+- PeekHigh is now resolved only by the V-Core Track and Grim point resolvers.
+- Ordinary Wraith angle smoothers retain their existing PointTracker path and no longer receive common PeekHigh.
+- ThroughWalls default `true` and `IgoneWall` alias remain unchanged.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/KillAuraClicker.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/KillAuraTargetTracker.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/KillAuraRotationsConfigurable.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleAutoWeapon.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/RotationsConfigurable.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/GrimAngleSmooth.kt`
+- this append-only `Agent1.md` section
+
+### Verification
+
+- `git diff --check` passed.
+- Exactly one KillAura `ShieldBreaker` setting exists with default `true`.
+- Direct ShieldBreaker contains no AutoWeapon, `wouldBlockHit`, or `hasMaceInHotbar()` dependency.
+- Direct main-inventory Axe mapping and raw close/SWAP sequence are present.
+- Direct ShieldBreaker returns before normal Aura post-action markers.
+- Track/Grim source resolvers are selected only for the corresponding angle smoothers; ordinary smoothers still use
+  PointTracker.
+- Grim source order is base/predicted -> PeekHigh -> PeakAssist.
+- The V-Core reference tree has no diff.
+- `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:$PATH sh ./gradlew --no-daemon compileKotlin -x detekt` passed.
+- `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:$PATH sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt` passed.
+- Packaged JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- JAR SHA-256: `940bace72577e60da4b9462e4cc640c5e8a59486c7b473e24dab4481088d0f7c`.
+- JAR inspection contains KillAura ShieldBreaker/Track resolver classes, Grim, AutoWeapon, MaceSwap, and the
+  previously accepted `OutgoingPacketPostSendEvent`/InputTracker classes.
+
+### FCL status
+
+- FCL/in-game packet capture and visual testing were unavailable in this headless Termux workspace.
+- The requested ShieldBreaker matrix (hotbar/main inventory, shield facing, AutoWeapon settings, Mace/MaceStun
+  missing cases), Track matrix, and Grim PeakAssist/PeekHigh runtime matrix remain for FCL.
+- The focused test task was attempted but test compilation remains blocked by the pre-existing unrelated
+  `PointFindingKtTest` mapping errors (`math`/`Vec3d`). This does not affect the successful production compile or
+  assemble result.
+- Grim flags were not generated and were not optimized for.
+
+### ElytraPlus remaining blocker
+
+- Full V-Core ElytraPlus remains intentionally unported. Track treats its source enabled-state branch as false;
+  future ElytraPlus work must revisit that branch and any dependent Aura behavior.
+
+### Commit and push
+
+- Implementation commit and push: pending after this audit record is committed.
+- Documentation commit and push: pending after this append-only record is committed.
