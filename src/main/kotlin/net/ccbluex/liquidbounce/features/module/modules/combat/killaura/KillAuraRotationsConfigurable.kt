@@ -23,6 +23,8 @@ import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.config.types.Value
 import net.ccbluex.liquidbounce.config.types.ValueType
 import net.ccbluex.liquidbounce.utils.aiming.RotationsConfigurable
+import net.ccbluex.liquidbounce.utils.aiming.features.processors.anglesmooth.impl.GrimAngleSmooth
+import net.ccbluex.liquidbounce.utils.aiming.features.processors.anglesmooth.impl.TrackAngleSmooth
 
 object KillAuraRotationsConfigurable : RotationsConfigurable(ModuleKillAura, combatSpecific = true) {
 
@@ -34,6 +36,12 @@ object KillAuraRotationsConfigurable : RotationsConfigurable(ModuleKillAura, com
         valueType = ValueType.BOOLEAN,
     ).also { inner.add(it) }
     val aimThroughWalls get() = aimThroughWallsValue.get()
+
+    internal val usesVCoreTrackAim
+        get() = activeAngleSmooth is TrackAngleSmooth
+
+    internal val usesVCoreGrimAim
+        get() = activeAngleSmooth is GrimAngleSmooth
 
     enum class KillAuraRotationTiming(override val choiceName: String) : NamedChoice {
         NORMAL("Normal"),

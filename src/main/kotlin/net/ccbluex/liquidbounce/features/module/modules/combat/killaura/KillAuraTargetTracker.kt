@@ -59,7 +59,7 @@ object KillAuraTargetTracker : TargetTracker() {
             return false
         }
 
-        if (player.mainHandItem.isAxe || ModuleAutoWeapon.willBreakShield()) {
+        if (ModuleKillAura.canDirectShieldBreak(entity) || player.mainHandItem.isAxe || ModuleAutoWeapon.willBreakShield()) {
             return false
         }
 
@@ -74,7 +74,7 @@ object KillAuraTargetTracker : TargetTracker() {
             return true
         }
 
-        if (player.mainHandItem.isAxe || ModuleAutoWeapon.willBreakShield()) {
+        if (ModuleKillAura.canDirectShieldBreak(entity) || player.mainHandItem.isAxe || ModuleAutoWeapon.willBreakShield()) {
             return true
         }
 

@@ -32,26 +32,16 @@ class GrimAngleSmooth(parent: ChoiceConfigurable<*>) : AngleSmooth("Grim", paren
     ): Rotation {
         val entity = rotationTarget.entity
         val canSeeTarget = entity == null || player.canSee(entity)
-        val highPeekPoint = if (entity != null && KillAuraRotationsConfigurable.aimThroughWalls &&
-            ModuleWallsBypass.running && ModuleWallsBypass.isPeekHigh() && !canSeeTarget) {
-            entity.position().add(
-                (-0.15..0.15).random(),
-                entity.boundingBox.maxY - entity.boundingBox.minY,
-                (-0.15..0.15).random(),
-            )
-        } else {
-            null
-        }
-
-        val aimRotation = highPeekPoint?.let { Rotation.lookingAt(it, player.eyePosition) } ?: targetRotation
-        var shortestYaw = Mth.wrapDegrees(aimRotation.yaw - currentRotation.yaw)
+        // KillAura resolves V-Core's base/predicted -> PeekHigh -> PeakAssist point before this
+        // processor. Recomputing PeekHigh here would discard PeakAssist's height.
+        var shortestYaw = Mth.wrapDegrees(targetRotation.yaw - currentRotation.yaw)
         if (entity != null && !ModuleKillAura.isTrackAttackReady(entity) &&
-            KillAuraRotationsConfigurable.aimThroughWalls && ModuleWallsBypass.running &&
-            ModuleWallsBypass.isYawOffset() && !canSeeTarget) {
+            KillAuraRotationsConfigurable.aimThroughWalls &&
+            ModuleWallsBypass.running && ModuleWallsBypass.isYawOffset() && !canSeeTarget) {
             shortestYaw += 20.0f
         }
         val yaw = currentRotation.yaw + shortestYaw + (-1.0f..1.0f).random()
-        val pitch = (aimRotation.pitch + (-1.0f..1.0f).random()).coerceIn(-90.0f, 90.0f)
+        val pitch = (targetRotation.pitch + (-1.0f..1.0f).random()).coerceIn(-90.0f, 90.0f)
 
         if ((yaw == -90.0f && pitch == 90.0f) || yaw == -180.0f) {
             return Rotation(player.yaw, player.pitch, isNormalized = true)

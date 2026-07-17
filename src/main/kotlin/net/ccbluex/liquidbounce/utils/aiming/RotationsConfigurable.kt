@@ -41,6 +41,13 @@ open class RotationsConfigurable(
         ).toTypedArray()
     }
 
+    /**
+     * The currently selected angle-smoother.  Combat modules use this narrow view to
+     * select source-specific aim-point state without changing ordinary smoothers.
+     */
+    val activeAngleSmooth
+        get() = angleSmooth.activeChoice
+
     private var shortStop = ShortStopRotationProcessor(owner).takeIf { combatSpecific }?.also(::tree)
     private val fail = FailRotationProcessor(owner).takeIf { combatSpecific }?.also(::tree)
 

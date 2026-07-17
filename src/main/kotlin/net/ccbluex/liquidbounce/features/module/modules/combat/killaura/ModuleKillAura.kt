@@ -62,20 +62,31 @@ import net.ccbluex.liquidbounce.utils.aiming.utils.raytraceEntity
 import net.ccbluex.liquidbounce.utils.combat.CombatManager
 import net.ccbluex.liquidbounce.utils.combat.attack
 import net.ccbluex.liquidbounce.utils.combat.shouldBeAttacked
+import net.ccbluex.liquidbounce.utils.client.interaction
+import net.ccbluex.liquidbounce.utils.client.network
+import net.ccbluex.liquidbounce.utils.entity.swingHand
 import net.ccbluex.liquidbounce.utils.entity.rotation
 import net.ccbluex.liquidbounce.utils.entity.squaredBoxedDistanceTo
 import net.ccbluex.liquidbounce.utils.inventory.InventoryManager
 import net.ccbluex.liquidbounce.utils.inventory.InventoryManager.isInventoryOpen
 import net.ccbluex.liquidbounce.utils.inventory.isInContainerScreen
 import net.ccbluex.liquidbounce.utils.item.isAxe
+import net.ccbluex.liquidbounce.utils.item.sharpnessLevel
 import net.ccbluex.liquidbounce.utils.kotlin.Priority
 import net.ccbluex.liquidbounce.utils.kotlin.random
 import net.ccbluex.liquidbounce.utils.render.WorldTargetRenderer
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import com.mojang.blaze3d.vertex.PoseStack
+import net.minecraft.network.protocol.game.ServerboundContainerClosePacket
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.entity.player.Player
+import net.minecraft.world.inventory.ContainerInput
+import net.minecraft.world.InteractionHand
+import net.minecraft.world.item.Items
 import net.minecraft.world.phys.AABB
+import net.minecraft.world.phys.Vec3
 import kotlin.math.pow
 
 /**
@@ -143,6 +154,17 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     // Inventory Handling
     internal val ignoreOpenInventory by boolean("IgnoreOpenInventory", true)
     internal val simulateInventoryClosing by boolean("SimulateInventoryClosing", true)
+    internal val shieldBreaker by boolean("ShieldBreaker", true)
+
+    // V-Core Track owns this mutable point state on Aura and resets it on enable.
+    internal var rotationPoint = Vec3.ZERO
+    internal var rotationMotion = Vec3.ZERO
+
+    private var shieldBreakerHitTicks = 0
+    private var directShieldBreakerAttackInProgress = false
+
+    internal val isDirectShieldBreakerAttackInProgress: Boolean
+        get() = directShieldBreakerAttackInProgress
 
     init {
         tree(KillAuraAutoBlock)
@@ -158,9 +180,20 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
     override fun disable() {
         targetTracker.reset()
+        rotationPoint = Vec3.ZERO
+        rotationMotion = Vec3.ZERO
+        shieldBreakerHitTicks = 0
+        directShieldBreakerAttackInProgress = false
         failedHits.clear()
         KillAuraAutoBlock.stopBlocking()
         KillAuraNotifyWhenFail.failedHitsIncrement = 0
+    }
+
+    override fun enable() {
+        rotationPoint = Vec3.ZERO
+        rotationMotion = Vec3.ZERO
+        shieldBreakerHitTicks = 0
+        directShieldBreakerAttackInProgress = false
     }
 
     @Suppress("unused")
@@ -204,6 +237,10 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
     @Suppress("unused")
     private val gameHandler = tickHandler {
+        if (shieldBreakerHitTicks > 0) {
+            shieldBreakerHitTicks--
+        }
+
         if (player.isDead || player.isSpectator) {
             return@tickHandler
         }
@@ -329,45 +366,32 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
         // Attack enemy, according to the attack scheduler
         if (clickScheduler.isClickTick && validateAttack(target)) {
-            clickScheduler.attack(sequence, rotation) {
+            clickScheduler.attack(sequence, rotation, preAttack = {
+                if (!validateAttack(target)) {
+                    false
+                } else {
+                    performShieldBreaker(target)
+                }
+            }) {
                 // On each click, we check if we are still ready to attack
                 if (!validateAttack(target)) {
                     return@attack false
                 }
 
                 val skipShieldAttack = targetTracker.shouldSkipActualShieldAttack(target)
-                val dedicatedShieldBreak = !skipShieldAttack &&
-                    target is net.minecraft.world.entity.player.Player &&
-                    target.isBlocking && target.wouldBlockHit(player) &&
-                    (player.mainHandItem.isAxe || ModuleAutoWeapon.willBreakShield())
-                val maceStunShieldBreak = dedicatedShieldBreak &&
-                    ModuleMaceSwap.running && ModuleMaceSwap.isMaceStun() &&
-                    ModuleMaceSwap.hasMaceInHotbar()
 
                 if (!skipShieldAttack) {
                     // V-Core sets Aura's MaceSwap source flag immediately before its actual attack.
-                    if (!dedicatedShieldBreak && ModuleMaceSwap.running) {
+                    if (ModuleMaceSwap.running) {
                         ModuleMaceSwap.calledFromAura = true
                         ModuleMaceSwap.silentSwapToMace()
                     }
 
                     target.attack(true, keepSprint && !shouldBlockSprinting)
-
-                    // V-Core's shield-break flow performs the MaceStun attack after the axe hit.
-                    if (maceStunShieldBreak) {
-                        ModuleMaceSwap.calledFromAura = true
-                        ModuleMaceSwap.silentSwapToMace()
-                        ModuleMaceSwap.beginMaceStunAttack()
-                        try {
-                            target.attack(true, keepSprint && !shouldBlockSprinting)
-                        } finally {
-                            ModuleMaceSwap.endMaceStunAttack()
-                        }
-                    }
                 }
 
                 runVCoreAuraPostAction(
-                    dedicatedShieldBreak = dedicatedShieldBreak,
+                    dedicatedShieldBreak = false,
                     attacked = !skipShieldAttack,
                     markEMace = ModuleEMaceHelper::markAuraPostAttack,
                     markMaceSwap = ModuleMaceSwap::markAuraPostAttack,
@@ -509,6 +533,16 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
      */
     private fun getSpot(entity: LivingEntity, range: Double,
                         situation: PointTracker.AimSituation): RotationWithVector? {
+        if (KillAuraRotationsConfigurable.usesVCoreTrackAim) {
+            val aimPoint = resolveVCoreTrackAimPoint(entity) ?: return null
+            return RotationWithVector(Rotation.lookingAt(point = aimPoint, from = player.eyePosition), aimPoint)
+        }
+
+        if (KillAuraRotationsConfigurable.usesVCoreGrimAim) {
+            val aimPoint = resolveVCoreGrimAimPoint(entity) ?: return null
+            return RotationWithVector(Rotation.lookingAt(point = aimPoint, from = player.eyePosition), aimPoint)
+        }
+
         if (ModuleElytraTarget.shouldTarget(entity)) {
             val predicted = ModuleElytraTarget.getElytraTargetVec(entity) ?: return null
             val aimPoint = ModuleEMaceHelper.applyPeakAssistAimOffset(entity, predicted) ?: return null
@@ -566,15 +600,288 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         }
 
         val ordinaryAimPoint = resolvedSpot?.vec ?: return null
-        val wallAimPoint = if (KillAuraRotationsConfigurable.aimThroughWalls &&
-            ModuleWallsBypass.running && ModuleWallsBypass.isPeekHigh() && !player.canSee(entity)) {
-            entity.position().add((-0.15..0.15).random(), entity.boundingBox.maxY - entity.boundingBox.minY, (-0.15..0.15).random())
-        } else {
-            ordinaryAimPoint
-        }
-        val aimPoint = ModuleEMaceHelper.applyPeakAssistAimOffset(entity, wallAimPoint) ?: return null
+        val aimPoint = ModuleEMaceHelper.applyPeakAssistAimOffset(entity, ordinaryAimPoint) ?: return null
         return RotationWithVector(Rotation.lookingAt(point = aimPoint, from = eyes), aimPoint)
     }
+
+    /**
+     * V-Core Track's authoritative point selection.  ElytraPlus is intentionally absent from
+     * this fork, so the source's first branch is equivalent to its disabled state here.
+     */
+    internal fun resolveVCoreTrackAimPoint(entity: LivingEntity): Vec3? {
+        val dynamic = !player.isFallFlying
+        val base = if (dynamic) {
+            getDynamicTrackLookPoint(entity, activeAttackRange().toDouble())
+        } else if (ModuleElytraTarget.shouldTarget(entity)) {
+            ModuleElytraTarget.getElytraTargetVec(entity)
+        } else {
+            entity.eyePosition
+        } ?: return null
+
+        val withPeekHigh = if (dynamic) {
+            // getDynamicTrackLookPoint contains V-Core's own PeekHigh branch.
+            base
+        } else if (KillAuraRotationsConfigurable.aimThroughWalls && ModuleWallsBypass.running &&
+            ModuleWallsBypass.isPeekHigh() && !player.canSee(entity)) {
+            entity.position().add((-0.15..0.15).random(), entity.boundingBox.maxY - entity.boundingBox.minY, (-0.15..0.15).random())
+        } else {
+            base
+        }
+
+        return ModuleEMaceHelper.applyPeakAssistAimOffset(entity, withPeekHigh)
+    }
+
+    /** V-Core Grim's base/prediction -> PeekHigh -> PeakAssist point order. */
+    internal fun resolveVCoreGrimAimPoint(entity: LivingEntity): Vec3? {
+        val predicted = ModuleElytraTarget.shouldTarget(entity)
+        val base = if (predicted) {
+            ModuleElytraTarget.getElytraTargetVec(entity) ?: return null
+        } else {
+            entity.boundingBox.center
+        }
+
+        val withPeekHigh = if (KillAuraRotationsConfigurable.aimThroughWalls && ModuleWallsBypass.running &&
+            ModuleWallsBypass.isPeekHigh() && !player.canSee(entity)) {
+            entity.position().add((-0.15..0.15).random(), entity.boundingBox.maxY - entity.boundingBox.minY, (-0.15..0.15).random())
+        } else {
+            base
+        }
+
+        return ModuleEMaceHelper.applyPeakAssistAimOffset(entity, withPeekHigh)
+    }
+
+    /** Exact V-Core Track dynamic point state and scan, adapted to current Vec/AABB names. */
+    private fun getDynamicTrackLookPoint(target: LivingEntity, attackRange: Double): Vec3 {
+        val minMotionXZ = 0.003f
+        val maxMotionXZ = 0.03f
+        val minMotionY = 0.001f
+        val maxMotionY = 0.03f
+        val lengthX = target.boundingBox.maxX - target.boundingBox.minX
+        val lengthY = target.boundingBox.maxY - target.boundingBox.minY
+        val lengthZ = target.boundingBox.maxZ - target.boundingBox.minZ
+
+        if (rotationMotion == Vec3.ZERO) {
+            rotationMotion = Vec3(
+                (-0.05f..0.05f).random().toDouble(),
+                (-0.05f..0.05f).random().toDouble(),
+                (-0.05f..0.05f).random().toDouble(),
+            )
+        }
+
+        rotationPoint = rotationPoint.add(rotationMotion)
+        if (rotationPoint.x >= (lengthX - 0.05) / 2.0) {
+            rotationMotion = Vec3((-minMotionXZ..maxMotionXZ).random().toDouble(), rotationMotion.y, rotationMotion.z)
+        }
+        if (rotationPoint.y >= lengthY) {
+            rotationMotion = Vec3(rotationMotion.x, (-minMotionY..maxMotionY).random().toDouble(), rotationMotion.z)
+        }
+        if (rotationPoint.z >= (lengthZ - 0.05) / 2.0) {
+            rotationMotion = Vec3(rotationMotion.x, rotationMotion.y, (-minMotionXZ..maxMotionXZ).random().toDouble())
+        }
+        if (rotationPoint.x <= -(lengthX - 0.05) / 2.0) {
+            rotationMotion = Vec3((minMotionXZ..0.03f).random().toDouble(), rotationMotion.y, rotationMotion.z)
+        }
+        if (rotationPoint.y <= 0.05) {
+            rotationMotion = Vec3(rotationMotion.x, (minMotionY..maxMotionY).random().toDouble(), rotationMotion.z)
+        }
+        if (rotationPoint.z <= -(lengthZ - 0.05) / 2.0) {
+            rotationMotion = Vec3(rotationMotion.x, rotationMotion.y, (minMotionXZ..maxMotionXZ).random().toDouble())
+        }
+
+        // Preserve V-Core's non-assigned random add exactly; it is intentionally ineffective.
+        rotationPoint.add((-0.03f..0.03f).random().toDouble(), 0.0, (-0.03f..0.03f).random().toDouble())
+
+        if (KillAuraRotationsConfigurable.aimThroughWalls && ModuleWallsBypass.running &&
+            ModuleWallsBypass.isPeekHigh() && !player.canSee(target)) {
+            return target.position().add((-0.15..0.15).random(), lengthY, (-0.15..0.15).random())
+        }
+
+        val currentRotation = RotationManager.currentRotation ?: player.rotation
+        if (!trackSourceFacingEnemy(
+                toEntity = target,
+                rotation = currentRotation,
+                range = attackRange,
+                wallsRange = 0.0,
+            )) {
+            val center = target.position().add(0.0, target.eyeHeight / 2.0, 0.0)
+            if (player.eyePosition.distanceToSqr(center) <= attackRange.pow(2) &&
+                trackSourceFacingEnemy(toEntity = target, rotation = Rotation.lookingAt(point = center, from = player.eyePosition), range = attackRange, wallsRange = 0.0)
+            ) {
+                rotationPoint = Vec3(
+                    (-0.1f..0.1f).random().toDouble(),
+                    target.eyeHeight.toDouble() / (1.8f..2.5f).random().toDouble(),
+                    (-0.1f..0.1f).random().toDouble(),
+                )
+            } else {
+                val halfBox = (lengthX / 2.0).toFloat()
+                for (x in sequence {
+                    var value = -halfBox
+                    while (value <= halfBox) {
+                        yield(value)
+                        value += 0.05f
+                    }
+                }) {
+                    for (z in sequence {
+                        var value = -halfBox
+                        while (value <= halfBox) {
+                            yield(value)
+                            value += 0.05f
+                        }
+                    }) {
+                        for (y in sequence {
+                            var value = 0.05f
+                            while (value <= lengthY) {
+                                yield(value)
+                                value += 0.15f
+                            }
+                        }) {
+                            val point = Vec3(target.x + x, target.y + y, target.z + z)
+                            if (player.eyePosition.distanceToSqr(point) <= attackRange.pow(2) &&
+                                trackSourceFacingEnemy(toEntity = target, rotation = Rotation.lookingAt(point = point, from = player.eyePosition), range = attackRange, wallsRange = 0.0)
+                            ) {
+                                rotationPoint = Vec3(x.toDouble(), y.toDouble(), z.toDouble())
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return target.position().add(rotationPoint)
+    }
+
+    private fun trackSourceFacingEnemy(
+        toEntity: Entity,
+        rotation: Rotation,
+        range: Double,
+        wallsRange: Double,
+    ): Boolean = raycast == TRACE_NONE || facingEnemy(
+        toEntity = toEntity,
+        rotation = rotation,
+        range = range,
+        wallsRange = wallsRange,
+    )
+
+    /** True when the source ShieldBreaker would own this target before normal Aura preparation. */
+    internal fun canDirectShieldBreak(entity: Entity): Boolean {
+        val target = entity as? Player ?: return false
+        return shieldBreaker && target.isUsingItem &&
+            (target.useItem.item == Items.SHIELD || target.mainHandItem.item == Items.SHIELD) &&
+            findVCoreAxe() != null
+    }
+
+    /** V-Core Aura shield-break flow, including its raw same-update inventory sequence. */
+    private fun performShieldBreaker(entity: Entity): Boolean {
+        if (!canDirectShieldBreak(entity)) {
+            return false
+        }
+
+        val axe = findVCoreAxe() ?: return false
+        val target = entity as Player
+        val originalSelectedSlot = player.inventory.selectedSlot
+        directShieldBreakerAttackInProgress = true
+
+        try {
+            if (axe.hotbarSlot != null) {
+                // Preserve the visible selected slot: this route is packet-only for the Axe.
+                network.sendPacket(ServerboundSetCarriedItemPacket(axe.hotbarSlot))
+                rawShieldBreakerAttack(target)
+                tryMaceStunShieldBreaker(target)
+                network.sendPacket(ServerboundSetCarriedItemPacket(originalSelectedSlot))
+            } else {
+                // V-Core swaps a main-inventory Axe into the selected hotbar slot, attacks in
+                // the same update, and swaps the exact source slot back before closing again.
+                val sourceSlot = axe.inventoryServerSlot ?: return false
+                interaction.clickSlot(
+                    player.screenHandler.syncId,
+                    sourceSlot,
+                    originalSelectedSlot,
+                    ContainerInput.SWAP,
+                    player,
+                )
+                sendShieldBreakerClose()
+                rawShieldBreakerAttack(target)
+                tryMaceStunShieldBreaker(target)
+                interaction.clickSlot(
+                    player.screenHandler.syncId,
+                    sourceSlot,
+                    player.inventory.selectedSlot,
+                    ContainerInput.SWAP,
+                    player,
+                )
+                sendShieldBreakerClose()
+            }
+
+            shieldBreakerHitTicks = 10
+            currentScanExtraRange = scanExtraRange.random()
+            KillAuraNotifyWhenFail.failedHitsIncrement = 0
+            return true
+        } finally {
+            directShieldBreakerAttackInProgress = false
+        }
+    }
+
+    private fun rawShieldBreakerAttack(target: Entity) {
+        interaction.attackEntity(player, target)
+        player.swingHand(InteractionHand.MAIN_HAND)
+    }
+
+    private fun tryMaceStunShieldBreaker(target: Entity) {
+        if (!ModuleMaceSwap.running || !ModuleMaceSwap.isMaceStun()) {
+            return
+        }
+
+        // Source quirk: no hasMaceInHotbar() guard. If silentSwapToMace() returns -1,
+        // V-Core still sends this second attack using the current item.
+        ModuleMaceSwap.calledFromAura = true
+        ModuleMaceSwap.beginMaceStunAttack()
+        try {
+            ModuleMaceSwap.silentSwapToMace()
+            rawShieldBreakerAttack(target)
+        } finally {
+            ModuleMaceSwap.endMaceStunAttack()
+        }
+    }
+
+    private fun sendShieldBreakerClose() {
+        network.sendPacket(ServerboundContainerClosePacket(player.screenHandler.syncId))
+    }
+
+    /** InventoryUtility.getAxe() port: durability plus Sharpness, strict first-best scan order. */
+    private fun findVCoreAxe(): ShieldBreakerAxe? {
+        var bestScore = 1.0f
+        var bestRawSlot = -1
+
+        for (rawSlot in 9..44) {
+            val inventorySlot = if (rawSlot >= 36) rawSlot - 36 else rawSlot
+            val stack = player.inventory.getStack(inventorySlot)
+            if (!stack.isAxe) {
+                continue
+            }
+
+            val score = stack.maxDamage.toFloat() + stack.sharpnessLevel
+            if (score > bestScore) {
+                bestScore = score
+                bestRawSlot = rawSlot
+            }
+        }
+
+        if (bestRawSlot == -1) {
+            return null
+        }
+
+        return if (bestRawSlot >= 36) {
+            ShieldBreakerAxe(hotbarSlot = bestRawSlot - 36, inventoryServerSlot = null)
+        } else {
+            ShieldBreakerAxe(hotbarSlot = null, inventoryServerSlot = bestRawSlot)
+        }
+    }
+
+    private data class ShieldBreakerAxe(
+        val hotbarSlot: Int?,
+        val inventoryServerSlot: Int?,
+    )
 
     /**
      * Check if we can attack the target at the current moment
@@ -585,6 +892,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         val isBreakingBlock = mc.gameMode?.isDestroying == true
 
         return criticalHit &&
+            shieldBreakerHitTicks <= 0 &&
             !isBreakingBlock &&
             !(isInInventoryScreen && !ignoreOpenInventory && !simulateInventoryClosing)
     }

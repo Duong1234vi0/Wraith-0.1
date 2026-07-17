@@ -50,10 +50,34 @@ object KillAuraClicker : Clicker<ModuleKillAura>(
      * This means, we make sure we are not blocking, we are not using another item,
      * and we are not in an inventory screen depending on the configuration.
      */
-    suspend fun attack(sequence: Sequence, rotation: Rotation? = null, attack: () -> Boolean) {
+    suspend fun attack(
+        sequence: Sequence,
+        rotation: Rotation? = null,
+        preAttack: (() -> Boolean)? = null,
+        attack: () -> Boolean,
+    ) {
         if (!isClickTick) {
             // If we are not going to click, we don't need to prepare the environment
             return
+        }
+
+        // V-Core Aura performs its raw ShieldBreaker action before Aura's normal
+        // pre-attack preparation.  Run that one-shot action through the clicker so
+        // successful direct hits still consume the scheduler click without opening
+        // the normal interactive scene first.
+        if (preAttack != null) {
+            var handled = false
+            click {
+                if (handled) {
+                    false
+                } else {
+                    handled = preAttack()
+                    handled
+                }
+            }
+            if (handled) {
+                return
+            }
         }
 
         val interactiveScene = InteractiveScene(sequence = sequence, rotation = rotation)
