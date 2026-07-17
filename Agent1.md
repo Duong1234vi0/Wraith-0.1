@@ -8545,3 +8545,151 @@ with the Minecraft 1.21.4 behavior; no second Offhand module was added.
 - Implementation push succeeded: `f58124aec..6bf7d2e3d  main -> main` on `origin`
   (`https://github.com/Duong1234vi0/Wraith-0.1.git`). This append-only history record is committed separately after
   the implementation so it can truthfully record the already-created commit and push result.
+
+## V-Core ElytraTarget / ElytraMotion / EMaceHelper port — 2026-07-17, Codex
+
+### Checked
+
+- Read the mandatory Skill workflow/rules, the relevant Agent1 history (including the 2026-07-15 removal,
+  rollback, PacketOrderE, ActionTickBoundary, movement gate, KeyPearl, AutoCrystal, MaceSwap and ElytraSwap
+  entries), and the required V-Core 0.8 and Grim 2.0 source files completely.
+- Completed private port evidence notes before editing. Inspected the current Wraith callers and event dispatches
+  before accepting a historical path or API.
+
+### Current-state confirmation
+
+- This task intentionally reintroduces ElytraTarget and ElytraMotion after their 2026-07-15 removal.
+- The deleted Wraith implementations were reviewed as historical evidence and were not restored blindly. The port
+  maps the inspected V-Core decisions into the current Wraith rotation, action-boundary, inventory-scheduler and
+  movement-gate architecture.
+
+### V-Core source behavior
+
+- Preserved ElytraTarget's eye-to-live-AABB closest point, horizontal BPS threshold (`>= 20`), `sqrt(bps) / 2`
+  auto scale/cap, null-target reset, and local-hurt 500 ms suppression.
+- Preserved ElytraMotion's freeze conditions, exact local/full-XYZ BPS test for AutoFirework, 500 ms timing, and
+  PeakAssist freeze release.
+- Preserved EMaceHelper's Mace/MaceSwap gate, counterintuitive Auto Target skip filter, grass raycast retry,
+  high-Y PeakAssist offset, Armor Swap chestplate priority, FireWork Vector thresholds, and Extra AimRange gate.
+
+### Dependency graph
+
+`ModuleElytraTarget -> ModuleKillAura target distance/aim/attack -> ModuleEMaceHelper peak offset`
+`ModuleEMaceHelper -> ModuleMaceSwap bridge / safe armor transaction / shared Firework executor`
+`ModuleElytraMotion -> ModuleElytraTarget + ModuleEMaceHelper -> shared Firework executor`
+`shared Firework executor -> ActionTickBoundary + InventoryActionMovementGate + inventory scheduler`
+
+### Old deleted implementations reviewed
+
+- Later deletion/rollback records superseded earlier implementation notes. No Track, Grim, HumanizedTrack,
+  VCoreAuraRotationController, or VCoreAuraRotationsConfigurable choice/controller was reintroduced.
+- ElytraBoost, EventFireworkMotion, and ElytraPlus were not ported because no direct dependency remained after
+  mapping the requested behavior.
+
+### Port mapping and exact settings/defaults/ranges
+
+- `ElytraTarget`: `Prediction=true`, `Visual=true`, `Color=#FFA000`/`16752640`, `Mode=Auto`, `Predict Range=2.6`
+  (`1.5..6.0`), and `Predict Max=10.0` (`1.5..10.0`) with the V-Core visibility rules.
+- `ElytraMotion`: `AttackDistance=3.0` (`0.1..5.0`), `AutoFirework=false`, and `MatrixBypass=false`.
+- `EMaceHelper`: `Auto Target=false`, `PeakAssist=false`, `Height=100` (`25..1000`), `Armor Swap=false`,
+  `FireWork Vector=false`, `Extra AimRange=false`, `Swap Distance=10` (`5..16`), `FireWork Distance=30`
+  (`16..64`), and `Aim Distance=900` (`800..1000`), with the V-Core visibility rules.
+
+### KillAura integration
+
+- Gliding uses `ElytraRange=0.5` and `ElytraAimRange=32`; EMaceHelper can override only the active Elytra aim
+  range through `Extra AimRange`.
+- Elytra candidates use the authoritative prediction exactly once. The resolved aim point bypasses the normal
+  enemy-motion PointTracker offset and receives PeakAssist exactly once.
+- The V-Core Elytra attack window is retained: local-position distance to predicted point is at most
+  `prediction - 0.5`, or the local AABB intersects the zero-size predicted-point AABB. Non-Elytra targets retain
+  Wraith's ordinary distance, raycast/facing, range, and wall-range path.
+- EMace Auto Target filtering runs in target validation only under its exact gate. The accepted outgoing attack
+  packet marks the single V-Core-equivalent post-attack transition.
+
+### EMace behavior
+
+- Added `ModuleMaceSwap.hasMaceInHotbar()` using its existing current mode predicate; no MaceSwap defaults,
+  MaceStun, silent behavior, or switch-back behavior was redesigned.
+- PeakAssist derives its base from ElytraTarget when applicable, otherwise the target eye, retains its 500 ms
+  firework lifecycle/final firework behavior, and makes ElytraMotion release freeze while active.
+
+### Firework packet-order adaptation
+
+- The shared non-configurable executor preserves V-Core offhand/hotbar/main-inventory search and temporary-slot
+  decisions, including `currentSlot % 8 + 1`, selected rotation choice, and one swing after accepted use.
+- Raw V-Core same-window `HELD_ITEM_CHANGE -> USE_ITEM -> restore` is intentionally not reproduced. Restoration
+  waits for observed use, `ActionTickBoundary.hasPassed(actionSerial)`,
+  `expectHeldItemChange`, and `canSendPostActionHeldItemChange` at a natural tick boundary. No manual client
+  tick-end packet or duplicate carried-slot packet is sent.
+
+### Inventory transaction adaptation
+
+- Firework main-inventory/offhand routes and Armor Swap use the existing inventory scheduler and
+  `InventoryActionMovementGate`; they defer while another action owns the window, unsafe movement/sprint state,
+  Offhand transaction, or armor transaction is active.
+- Armor Swap maps V-Core's pickup/pickup/pickup outcome through a detached safe transaction: the chosen chestplate
+  equips and the Elytra returns to the source slot without opening a visible GUI. Lifecycle, target/item failure,
+  timeout, world, disconnect, and player replacement clear bounded pending state.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleElytraTarget.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleEMaceHelper.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleMaceSwap.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/KillAuraTargetTracker.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/player/offhand/ModuleOffhand.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/inventory/ElytraFireworkExecutor.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/inventory/InventoryActionMovementGate.kt`
+- `src/main/resources/resources/liquidbounce/lang/en_us.json`
+- `Agent1.md` (this append-only record)
+
+### Static verification
+
+- `git diff --check` passed. V-Core/Grim reference trees were not modified; registration count is exactly one for
+  each new module; there is no duplicate ElytraSwap/MaceSwap registration.
+- Verified no forbidden old controllers/smoothers or stale symbols remain, no V-Core source was restored wholesale,
+  no Firework velocity mixin was added, and the packaged JAR has the three new modules plus changed KillAura and
+  MaceSwap classes without unwanted ElytraBoost/ElytraPlus/EventFireworkMotion/controller classes.
+- Confirmed ordinary grounded target paths remain conditional on non-gliding/non-Elytra behavior; prediction is
+  resolved once and PeakAssist releases ElytraMotion freeze.
+
+### Build command/result
+
+- Ran exactly:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL` in `2m 42s` (`10 actionable tasks: 7 executed, 3 up-to-date`). Compilation/package
+  verification does not establish server-side Grim acceptance.
+
+### JAR SHA-256
+
+- `build/libs/liquidbounce-0.31.2.jar`:
+  `6cb238588b8d52d100a1fd1f07604d072813c48e0aa52c53acad0ed0fd4a5ce4`
+
+### FCL/Grim test status
+
+- Not run in FCL in this workspace. Required manual captures remain for every supplied ElytraTarget, KillAura,
+  ElytraMotion, Firework item-location, EMace Auto Target/PeakAssist/Armor Swap/FireWork Vector/Extra AimRange
+  scenario, including the listed PacketOrderE/G/I, BadPacketsA/J, MultiActionsC/D, and Post observations.
+- The supplied Grim audit informed the boundary/scheduler mapping only; it is not claimed as runtime success.
+
+### Deviations
+
+- Source decision semantics, settings, state transitions, target conditions, formulas, search order, and visible
+  outcomes are source-equivalent. The only intentional deviations are current-protocol safety mappings: deferred
+  natural-boundary held-slot restoration, scheduler/gate-deferred inventory transactions, and cancellation of a
+  previously deferred ElytraMotion use when PeakAssist takes ownership of the tick.
+
+### Commit
+
+- Implementation commit: `286b710a` — `feat(elytra): port vcore targeting motion and mace support`.
+- Follow-up safety commit: `1b02f309` — `fix(elytra): cancel deferred motion rocket for peak assist`.
+
+### Push
+
+- Implementation push succeeded: `3daa52d85..286b710a5  main -> main` on `origin`
+  (`https://github.com/Duong1234vi0/Wraith-0.1.git`). Follow-up push succeeded:
+  `286b710a5..1b02f309e  main -> main`. This append-only record is committed and pushed separately.
