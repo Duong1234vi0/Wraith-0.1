@@ -8935,8 +8935,9 @@ pre-write `OutgoingPacketSentEvent` is the closest available hook for V-Core's p
 
 ### Commit
 
-Pending focused commit after final staging.
+Implementation commit: `4607763a` — `fix(elytra): complete vcore dependency fidelity`.
 
 ### Push
 
-Pending push to the current `origin/main` branch.
+Implementation commit pushed successfully to the current `origin/main` branch. A documentation-only follow-up
+commit records this final commit/push state.
