@@ -27,6 +27,7 @@ import net.ccbluex.liquidbounce.utils.client.world
 import net.ccbluex.liquidbounce.utils.combat.TargetTracker
 import net.ccbluex.liquidbounce.utils.entity.wouldBlockHit
 import net.ccbluex.liquidbounce.utils.item.isAxe
+import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.player.Player
 
@@ -49,6 +50,23 @@ object KillAuraTargetTracker : TargetTracker() {
     }
 
     /**
+     * V-Core keeps a shield-blocking target through Aura's ready/post-action path when no axe can
+     * break it, so EMaceHelper still receives its post-attack transition. This is scoped to the
+     * helper and does not change the ordinary KillAura shield filter.
+     */
+    fun shouldSkipActualShieldAttack(entity: Entity): Boolean {
+        if (!ModuleEMaceHelper.running || ignoreShield || entity !is Player || isOlderThanOrEqual1_8) {
+            return false
+        }
+
+        if (player.mainHandItem.isAxe || ModuleAutoWeapon.willBreakShield()) {
+            return false
+        }
+
+        return entity.isBlocking && entity.wouldBlockHit(player)
+    }
+
+    /**
      * Check if the entity is holding a shield and if the shield would block the attack.
      */
     private fun validateShield(entity: LivingEntity): Boolean {
@@ -60,7 +78,8 @@ object KillAuraTargetTracker : TargetTracker() {
             return true
         }
 
-        return !entity.isBlocking || !entity.wouldBlockHit(player)
+        return !entity.isBlocking || !entity.wouldBlockHit(player) ||
+            ModuleEMaceHelper.running && !player.mainHandItem.isAxe && !ModuleAutoWeapon.willBreakShield()
     }
 
 }

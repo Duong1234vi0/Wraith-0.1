@@ -18,7 +18,6 @@ import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleEMaceHelper
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleElytraTarget
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
-import net.ccbluex.liquidbounce.utils.aiming.RotationManager
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.entity.*
@@ -157,12 +156,9 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
     }
 
     private fun useRotation(): Rotation {
-        val player = mc.player ?: return Rotation.ZERO
-        return if (ModuleKillAura.running && ModuleKillAura.targetTracker.target != null) {
-            RotationManager.currentRotation ?: RotationManager.actualServerRotation
-        } else {
-            player.rotation
-        }
+        return ModuleKillAura.activeServerFacingRotationForCurrentTarget()
+            ?: mc.player?.rotation
+            ?: Rotation.ZERO
     }
 
     private fun findFireworkInventoryFirst(): FireworkSlot? {

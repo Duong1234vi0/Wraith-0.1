@@ -184,6 +184,7 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleElytraTarget,
             ModuleEMaceHelper,
             ModuleKillAura,
+            ModuleWallsBypass,
             ModuleTargetStrafe,
             ModuleVelocity,
             ModuleBacktrack,

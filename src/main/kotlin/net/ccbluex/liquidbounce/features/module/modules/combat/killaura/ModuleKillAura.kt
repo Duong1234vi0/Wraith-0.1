@@ -34,6 +34,8 @@ import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleAutoCart
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleAutoWeapon
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleEMaceHelper
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleElytraTarget
+import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleMaceSwap
+import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleWallsBypass
 import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.ModuleCriticals.CriticalsSelectionMode
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.KillAuraRotationsConfigurable.KillAuraRotationTiming.SNAP
@@ -332,11 +334,39 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
                     return@attack false
                 }
 
-                // Attack enemy
-                target.attack(true, keepSprint && !shouldBlockSprinting)
+                val skipShieldAttack = targetTracker.shouldSkipActualShieldAttack(target)
+                val maceStunShieldBreak = !skipShieldAttack &&
+                    target is net.minecraft.world.entity.player.Player &&
+                    target.isBlocking && target.wouldBlockHit(player) &&
+                    ModuleMaceSwap.running && ModuleMaceSwap.isMaceStun() &&
+                    ModuleAutoWeapon.willBreakShield() && ModuleMaceSwap.hasMaceInHotbar()
+
+                if (!skipShieldAttack) {
+                    // V-Core sets Aura's MaceSwap source flag immediately before its actual attack.
+                    if (!maceStunShieldBreak && ModuleMaceSwap.running) {
+                        ModuleMaceSwap.calledFromAura = true
+                        ModuleMaceSwap.silentSwapToMace()
+                    }
+
+                    target.attack(true, keepSprint && !shouldBlockSprinting)
+
+                    // V-Core's shield-break flow performs the MaceStun attack after the axe hit.
+                    if (maceStunShieldBreak) {
+                        ModuleMaceSwap.calledFromAura = true
+                        ModuleMaceSwap.silentSwapToMace()
+                        ModuleMaceSwap.beginMaceStunAttack()
+                        try {
+                            target.attack(true, keepSprint && !shouldBlockSprinting)
+                        } finally {
+                            ModuleMaceSwap.endMaceStunAttack()
+                        }
+                    }
+                }
+
                 // V-Core marks EMace at Aura post-action completion even when the attack packet
                 // was cancelled or otherwise not observed on the wire.
                 ModuleEMaceHelper.markAuraPostAttack()
+                ModuleMaceSwap.markAuraPostAttack(!skipShieldAttack)
                 currentScanExtraRange = scanExtraRange.random()
                 KillAuraNotifyWhenFail.failedHitsIncrement = 0
 
@@ -531,7 +561,13 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         }
 
         val ordinaryAimPoint = resolvedSpot?.vec ?: return null
-        val aimPoint = ModuleEMaceHelper.applyPeakAssistAimOffset(entity, ordinaryAimPoint) ?: return null
+        val wallAimPoint = if (KillAuraRotationsConfigurable.aimThroughWalls &&
+            ModuleWallsBypass.running && ModuleWallsBypass.isPeekHigh() && !player.canSee(entity)) {
+            entity.position().add((-0.15..0.15).random(), entity.boundingBox.maxY - entity.boundingBox.minY, (-0.15..0.15).random())
+        } else {
+            ordinaryAimPoint
+        }
+        val aimPoint = ModuleEMaceHelper.applyPeakAssistAimOffset(entity, wallAimPoint) ?: return null
         return RotationWithVector(Rotation.lookingAt(point = aimPoint, from = eyes), aimPoint)
     }
 
@@ -560,9 +596,34 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         return facingEnemy(toEntity = target, range = traceRange.toDouble(), rotation = rotation)
     }
 
+    /** V-Core Track pitch acceleration range: attack range plus aim range, without Aura's +4 acquisition allowance. */
+    internal fun isTrackPitchRaytracingTarget(target: Entity, rotation: Rotation): Boolean {
+        if (targetTracker.target !== target) {
+            return false
+        }
+
+        return facingEnemy(
+            toEntity = target,
+            range = trackPitchRaytraceRange().toDouble(),
+            rotation = rotation,
+        )
+    }
+
     private fun isActiveKillAuraRotationFor(target: Entity): Boolean {
         val rotationTarget = RotationManager.activeRotationTarget ?: return false
         return rotationTarget.provider === this && rotationTarget.entity === target
+    }
+
+    /** Returns Aura's active server-facing rotation only while Aura owns the current target. */
+    @JvmStatic
+    fun activeServerFacingRotationForCurrentTarget(): Rotation? {
+        val target = targetTracker.target ?: return null
+        val rotation = RotationManager.currentRotation ?: return null
+        return rotation.takeIf {
+            running && !target.isRemoved &&
+                it.yaw.isFinite() && it.pitch.isFinite() &&
+                isActiveKillAuraRotationFor(target)
+        }
     }
 
     @JvmStatic
@@ -595,6 +656,13 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     private fun activeAttackRange(): Float = if (player.isFallFlying) elytraRange else range
 
     private fun activeAimRange(): Float = if (player.isFallFlying) activeElytraAcquisitionRange() else range
+
+    private fun trackPitchRaytraceRange(): Float = activeAttackRange() +
+        if (player.isFallFlying) {
+            ModuleEMaceHelper.getElytraAimRangeOverride(elytraAimRange).toFloat()
+        } else {
+            range
+        }
 
     private fun activeWallRange(): Float = if (player.isFallFlying) {
         activeAttackRange() + ModuleEMaceHelper.getElytraAimRangeOverride(elytraAimRange)

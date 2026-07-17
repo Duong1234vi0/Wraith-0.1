@@ -16,8 +16,7 @@ import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
-import net.ccbluex.liquidbounce.utils.aiming.RotationManager
-import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
+import net.ccbluex.liquidbounce.features.module.modules.misc.ModuleElytraSwap
 import net.ccbluex.liquidbounce.utils.client.interaction
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.client.network
@@ -249,7 +248,8 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
     private fun triggerPeakAssistFirework() {
         val player = mc.player ?: return
         if (hasFirework() && !player.cooldowns.isOnCooldown(Items.FIREWORK_ROCKET.defaultInstance)) {
-            usePeakAssistFirework()
+            // V-Core delegates this profile to ElytraSwap even when that module is disabled.
+            ModuleElytraSwap.useFireworkForPeakAssist()
         }
     }
 
@@ -356,47 +356,6 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
             findHotbarAscending(Items.FIREWORK_ROCKET) != null ||
             findInventoryDescending(Items.FIREWORK_ROCKET) != null
 
-    /** V-Core ElytraSwap's firework profile used by PeakAssist. */
-    private fun usePeakAssistFirework(): Boolean {
-        val player = mc.player ?: return false
-        if (player.cooldowns.isOnCooldown(Items.FIREWORK_ROCKET.defaultInstance)) {
-            return false
-        }
-
-        if (player.offhandItem.item == Items.FIREWORK_ROCKET) {
-            useRawFirework(InteractionHand.OFF_HAND)
-            return true
-        }
-
-        val firework = findInventoryFirstFirework() ?: return false
-        val currentSlot = player.inventory.selectedSlot
-        if (player.isUsingItem && player.usedItemHand == InteractionHand.MAIN_HAND) {
-            if (!clickSwap(firework.serverSlot, OffHandSlot.hotbarSlotForServer)) return false
-            useRawFirework(InteractionHand.OFF_HAND)
-            clickSwap(firework.serverSlot, OffHandSlot.hotbarSlotForServer)
-            sendCloseContainer()
-            return true
-        }
-
-        when (firework) {
-            is FireworkLocation.Hotbar -> {
-                network.sendPacket(ServerboundSetCarriedItemPacket(firework.hotbarSlot))
-                useRawFirework(InteractionHand.MAIN_HAND)
-                network.sendPacket(ServerboundSetCarriedItemPacket(currentSlot))
-            }
-            is FireworkLocation.Inventory -> {
-                val temporarySlot = currentSlot % 8 + 1
-                if (!clickSwap(firework.serverSlot, temporarySlot)) return false
-                sendCloseContainer()
-                useRawFirework(InteractionHand.MAIN_HAND)
-                selectVisibleSlot(currentSlot)
-                if (!clickSwap(firework.serverSlot, temporarySlot)) return false
-                sendCloseContainer()
-            }
-        }
-        return true
-    }
-
     /** V-Core EMaceHelper.useFireWorkSilent profile; deliberately differs from PeakAssist. */
     private fun useFireWorkSilent(): Boolean {
         val player = mc.player ?: return false
@@ -436,12 +395,7 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
 
     private fun useRawFirework(hand: InteractionHand) {
         val level = mc.level ?: return
-        val player = mc.player ?: return
-        val rotation = if (ModuleKillAura.running && ModuleKillAura.targetTracker.target != null) {
-            RotationManager.currentRotation ?: RotationManager.actualServerRotation
-        } else {
-            player.rotation
-        }
+        val rotation = ModuleKillAura.activeServerFacingRotationForCurrentTarget() ?: mc.player?.rotation ?: return
         interaction.sendSequencedPacket(level) { sequence ->
             ServerboundUseItemPacket(hand, sequence, rotation.yaw, rotation.pitch)
         }
@@ -473,9 +427,6 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
         Slots.Inventory.asReversed().firstOrNull { it.itemStack.item == item }?.let { return it }
         return Slots.Hotbar.asReversed().firstOrNull { it.itemStack.item == item }
     }
-
-    private fun findInventoryFirstFirework(): FireworkLocation? =
-        findInventoryDescending(Items.FIREWORK_ROCKET) ?: findHotbarDescending(Items.FIREWORK_ROCKET)
 
     private fun findInventoryDescending(item: Item): FireworkLocation.Inventory? {
         val player = mc.player ?: return null

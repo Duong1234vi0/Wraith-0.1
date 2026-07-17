@@ -1,252 +1,220 @@
 /*
  * This file is part of LiquidBounce (https://github.com/CCBlueX/LiquidBounce)
  *
- * Copyright (c) 2015 - 2025 CCBlueX
+ * Copyright (c) 2015 - 2026 CCBlueX
  *
  * LiquidBounce is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- *
- * LiquidBounce is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
  */
 package net.ccbluex.liquidbounce.features.module.modules.combat
-import net.ccbluex.liquidbounce.utils.entity.*
 
+import net.ccbluex.liquidbounce.config.types.ChooseListValue
 import net.ccbluex.liquidbounce.config.types.NamedChoice
-import net.ccbluex.liquidbounce.event.events.AttackEntityEvent
-import net.ccbluex.liquidbounce.event.events.GameTickEvent
+import net.ccbluex.liquidbounce.config.types.Value
+import net.ccbluex.liquidbounce.config.types.ValueType
+import net.ccbluex.liquidbounce.event.events.RotationUpdateEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
-import net.ccbluex.liquidbounce.utils.client.SilentHotbar
 import net.ccbluex.liquidbounce.utils.client.interaction
-import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.FINAL_DECISION
+import net.ccbluex.liquidbounce.utils.client.mc
+import net.ccbluex.liquidbounce.utils.entity.*
 import net.ccbluex.liquidbounce.utils.item.getEnchantment
-import net.ccbluex.liquidbounce.utils.client.world
-import net.ccbluex.liquidbounce.utils.entity.wouldBlockHit
-import net.minecraft.world.item.enchantment.Enchantments
-import net.minecraft.world.entity.LivingEntity
-import net.minecraft.world.item.AxeItem
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
+import net.minecraft.world.item.enchantment.Enchantments
 
-/**
- * ThunderHack MaceSwap port.
- *
- * Swaps to a matching mace before an attack and optionally switches back afterwards.
- */
+/** Source-faithful V-Core MaceSwap dependency for Aura and EMaceHelper. */
 object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
 
-    private val mode by enumChoice("Mode", Mode.NONE)
-    private val maceStun by boolean("MaceStun", false)
-    private val switchBack by boolean("SwitchBack", true)
-    private val silent by boolean("Silent", false)
+    private val modeValue = ChooseListValue(
+        "Mode",
+        defaultValue = Mode.NORMAL,
+        choices = enumValues<Mode>(),
+        legacyChoiceMapper = { if (it == "None") Mode.NORMAL else null },
+    ).also { inner.add(it) }
+    private val mode get() = modeValue.get()
 
-    private var isSwitching = false
-    private var previousSlot = -1
-    private var currentSwitchDelay = -1
-    private var forcedAttackSlot = -1
+    private val maceStunValue = Value(
+        "Mace Stun",
+        aliases = arrayOf("MaceStun"),
+        defaultValue = true,
+        valueType = ValueType.BOOLEAN,
+    ).also { inner.add(it) }
+    private val switchBackValue = Value(
+        "Switch Back",
+        aliases = arrayOf("SwitchBack"),
+        defaultValue = true,
+        valueType = ValueType.BOOLEAN,
+    ).also { inner.add(it) }
+    private val silentValue = Value(
+        "Silent",
+        defaultValue = false,
+        valueType = ValueType.BOOLEAN,
+    ).also {
+        it.visibleWhen { switchBackValue.get() }
+        inner.add(it)
+    }
+    private val autoDisableValue = Value(
+        "AutoDisable",
+        defaultValue = false,
+        valueType = ValueType.BOOLEAN,
+    ).also { inner.add(it) }
+
+    private val maceStun get() = maceStunValue.get()
+    private val switchBack get() = switchBackValue.get()
+    private val silent get() = silentValue.get()
+    private val autoDisable get() = autoDisableValue.get()
+
+    var isSwitching = false
+        private set
+    var previousSlot = -1
+        private set
+    var currentSwitchDelay = -1
+        private set
+
+    @JvmField
+    var calledFromAura = false
+
+    var auraPostAttackTriggered = false
+        private set
+
+    private var maceStunAttackInProgress = false
 
     override fun enable() {
         resetState()
+        auraPostAttackTriggered = false
+        calledFromAura = false
+        maceStunAttackInProgress = false
     }
 
     override fun disable() {
-        SilentHotbar.resetSlot(this)
         resetState()
+        auraPostAttackTriggered = false
+        calledFromAura = false
+        maceStunAttackInProgress = false
     }
 
     @Suppress("unused")
-    private val attackHandler = handler<AttackEntityEvent>(priority = FINAL_DECISION) { event ->
-        if (forcedAttackSlot != -1) {
-            selectSlotForAttack(forcedAttackSlot)
-            return@handler
-        }
-
-        if (maceStun && tryMaceStun(event)) {
-            return@handler
-        }
-
-        swapToMace()
+    private val syncHandler = handler<RotationUpdateEvent> {
+        processSwitchBack(manual = false)
+        processAutoDisable()
     }
 
-    @Suppress("unused")
-    private val tickHandler = handler<GameTickEvent> {
-        handleSwitchBack()
-    }
+    fun isMaceStun() = maceStun
 
-    private fun swapToMace(): Int {
+    fun isSilent() = silent
+
+    fun hasMaceInHotbar() = findMaceInHotbar() != -1
+
+    /** V-Core's source method; Aura owns the call immediately before its attack. */
+    fun silentSwapToMace(): Int {
+        val player = mc.player ?: return -1
         if (isSwitching) {
             return previousSlot
         }
 
         val currentSlot = player.inventory.selectedSlot
         val maceSlot = findMaceInHotbar()
-
         if (maceSlot == -1 || maceSlot == currentSlot) {
             return -1
         }
 
         previousSlot = currentSlot
-
-        if (switchBack && silent) {
-            SilentHotbar.selectSlotSilently(this, maceSlot, 1)
-            interaction.ensureHasSentCarriedItem()
-            isSwitching = true
-            currentSwitchDelay = 0
-            return currentSlot
-        }
-
-        swapToSlot(maceSlot)
+        player.inventory.selectedSlot = maceSlot
         interaction.ensureHasSentCarriedItem()
+        isSwitching = true
+        currentSwitchDelay = -1
 
-        if (switchBack) {
-            isSwitching = true
-            currentSwitchDelay = -1
-        } else {
+        if (!switchBack) {
             resetState()
         }
 
         return currentSlot
     }
 
-    private fun tryMaceStun(event: AttackEntityEvent): Boolean {
-        val target = event.entity as? LivingEntity ?: return false
-        if (!target.isBlockingPlayerHit()) {
-            return false
-        }
+    fun handleSwitchBackManual() = processSwitchBack(manual = true)
 
-        val axeSlot = findAxeInHotbar()
-        val maceSlot = findMaceInHotbar()
-        val currentSlot = player.inventory.selectedSlot
+    fun beginMaceStunAttack() {
+        maceStunAttackInProgress = true
+    }
 
-        if (axeSlot == -1 || maceSlot == -1) {
-            return false
-        }
+    fun endMaceStunAttack() {
+        maceStunAttackInProgress = false
+    }
 
-        previousSlot = currentSlot
-        event.cancelEvent()
+    fun isMaceStunAttackInProgress() = maceStunAttackInProgress
 
-        runForcedAttack(axeSlot, event)
-        runForcedAttack(maceSlot, event)
-
-        when {
-            !switchBack -> resetState()
-            silent -> {
-                isSwitching = true
-                currentSwitchDelay = 0
-            }
-            else -> {
-                isSwitching = true
-                currentSwitchDelay = -1
+    private fun processAutoDisable() {
+        if (!autoDisable) {
+            auraPostAttackTriggered = false
+        } else if (auraPostAttackTriggered) {
+            if (!isSwitching || !switchBack) {
+                auraPostAttackTriggered = false
+                calledFromAura = false
+                disable()
             }
         }
-
-        return true
     }
 
-    private fun runForcedAttack(slot: Int, event: AttackEntityEvent) {
-        forcedAttackSlot = slot
-        selectSlotForAttack(slot)
-        event.caller()
-        forcedAttackSlot = -1
-    }
-
-    private fun handleSwitchBack() {
-        if (!isSwitching || !switchBack) {
-            return
+    private fun processSwitchBack(manual: Boolean) {
+        if (isSwitching && switchBack) {
+            val switchDelay = if (silent) -1 else 2
+            if (currentSwitchDelay < switchDelay) {
+                currentSwitchDelay++
+            } else {
+                mc.player?.let { player ->
+                    if (previousSlot in 0..8) {
+                        player.inventory.selectedSlot = previousSlot
+                        interaction.ensureHasSentCarriedItem()
+                    }
+                }
+                resetState()
+                if (manual) {
+                    calledFromAura = false
+                }
+            }
+        } else if (manual) {
+            calledFromAura = false
         }
-
-        val switchDelay = if (silent) 1 else 2
-        if (currentSwitchDelay < switchDelay) {
-            currentSwitchDelay++
-            return
-        }
-
-        if (silent) {
-            restoreSilentSlot()
-        } else {
-            swapToSlot(previousSlot)
-            interaction.ensureHasSentCarriedItem()
-        }
-        resetState()
-    }
-
-    private fun swapToSlot(slot: Int) {
-        if (slot in 0..8) {
-            player.inventory.selectedSlot = slot
-        }
-    }
-
-    private fun selectSlotForAttack(slot: Int) {
-        if (silent && switchBack) {
-            SilentHotbar.selectSlotSilently(this, slot, 1)
-        } else {
-            swapToSlot(slot)
-        }
-
-        interaction.ensureHasSentCarriedItem()
-    }
-
-    private fun restoreSilentSlot() {
-        SilentHotbar.resetSlot(this)
-        interaction.ensureHasSentCarriedItem()
     }
 
     private fun findMaceInHotbar(): Int {
+        val player = mc.player ?: return -1
         for (slot in 0..8) {
             val stack = player.inventory.getStack(slot)
-            if (stack.item == Items.MACE && stack.matchesMode()) {
+            if (stack.item == Items.MACE && matchesMode(stack)) {
                 return slot
             }
         }
-
         return -1
     }
 
-    /** Narrow bridge for Elytra mace support; keeps this module's existing mode predicate authoritative. */
-    fun hasMaceInHotbar() = findMaceInHotbar() != -1
-
-    private fun findAxeInHotbar(): Int {
-        for (slot in 0..8) {
-            if (player.inventory.getStack(slot).item is AxeItem) {
-                return slot
-            }
-        }
-
-        return -1
-    }
-
-    private fun LivingEntity.isBlockingPlayerHit(): Boolean {
-        return isBlocking && wouldBlockHit(player)
-    }
-
-    private fun ItemStack.matchesMode(): Boolean {
-        return when (mode) {
-            Mode.NONE -> true
-            Mode.BREACH -> getEnchantment(Enchantments.BREACH) > 0
-            Mode.WIND_BURST -> getEnchantment(Enchantments.WIND_BURST) > 0
-        }
+    private fun matchesMode(stack: ItemStack): Boolean = when (mode) {
+        Mode.NORMAL -> true
+        Mode.BREACH -> stack.getEnchantment(Enchantments.BREACH) > 0
+        Mode.WIND_BURST -> stack.getEnchantment(Enchantments.WIND_BURST) > 0
     }
 
     private fun resetState() {
         previousSlot = -1
         currentSwitchDelay = -1
         isSwitching = false
-        forcedAttackSlot = -1
     }
 
-    private enum class Mode(override val choiceName: String) : NamedChoice {
-        NONE("None"),
+    @JvmStatic
+    fun markAuraPostAttack(attacked: Boolean) {
+        if (attacked) {
+            auraPostAttackTriggered = true
+        }
+    }
+
+    enum class Mode(override val choiceName: String) : NamedChoice {
+        NORMAL("Normal"),
         BREACH("Breach"),
         WIND_BURST("WindBurst"),
     }
-
 }

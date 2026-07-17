@@ -13,9 +13,13 @@ package net.ccbluex.liquidbounce.utils.aiming.features.processors.anglesmooth.im
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.config.types.nesting.ChoiceConfigurable
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
+import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleWallsBypass
+import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.KillAuraRotationsConfigurable
 import net.ccbluex.liquidbounce.utils.aiming.RotationTarget
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
 import net.ccbluex.liquidbounce.utils.aiming.features.processors.anglesmooth.AngleSmooth
+import net.ccbluex.liquidbounce.utils.client.mc
+import net.ccbluex.liquidbounce.utils.entity.*
 import net.ccbluex.liquidbounce.utils.kotlin.random
 import net.minecraft.util.Mth
 import kotlin.math.abs
@@ -42,7 +46,7 @@ class TrackAngleSmooth(parent: ChoiceConfigurable<*>) : AngleSmooth("Track", par
         val entity = rotationTarget.entity
         val ready = entity != null && ModuleKillAura.isTrackAttackReady(entity)
         val alreadyRaytracing = entity != null &&
-            ModuleKillAura.isRotationRaytracingTarget(entity, currentRotation)
+            ModuleKillAura.isTrackPitchRaytracingTarget(entity, currentRotation)
 
         pitchAcceleration = if (alreadyRaytracing) {
             aimedPitchStep
@@ -70,6 +74,10 @@ class TrackAngleSmooth(parent: ChoiceConfigurable<*>) : AngleSmooth("Track", par
         }
 
         var deltaYawRaw = Mth.wrapDegrees(targetRotation.yaw - currentRotation.yaw)
+        if (entity != null && !ready && KillAuraRotationsConfigurable.aimThroughWalls &&
+            ModuleWallsBypass.running && ModuleWallsBypass.isYawOffset() && !player.canSee(entity)) {
+            deltaYawRaw += 20.0f
+        }
         if (deltaYawRaw > 180.0f) {
             deltaYawRaw -= 180.0f
         }
@@ -78,10 +86,14 @@ class TrackAngleSmooth(parent: ChoiceConfigurable<*>) : AngleSmooth("Track", par
         val deltaPitch = targetRotation.pitch - currentRotation.pitch
         val clampedPitch = Mth.clamp(deltaPitch, -pitchStep, pitchStep)
         val newYaw = currentRotation.yaw + if (deltaYawRaw > 0.0f) deltaYaw else -deltaYaw
+        val newPitch = (currentRotation.pitch + clampedPitch).coerceIn(-90.0f, 90.0f)
+        val sensitivity = mc.options.sensitivity().get().toDouble()
+        val gcd = Math.pow(sensitivity * 0.6 + 0.2, 3.0) * 1.2
 
         return Rotation(
-            yaw = newYaw,
-            pitch = (currentRotation.pitch + clampedPitch).coerceIn(-90.0f, 90.0f)
+            yaw = (newYaw - (newYaw - currentRotation.yaw) % gcd).toFloat(),
+            pitch = (newPitch - (newPitch - currentRotation.pitch) % gcd).toFloat(),
+            isNormalized = true,
         )
     }
 

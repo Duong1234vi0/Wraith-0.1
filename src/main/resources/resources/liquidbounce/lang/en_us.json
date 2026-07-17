@@ -563,6 +563,7 @@
   "liquidbounce.module.elytraTarget.description": "Predicts elytra target movement for Aura.",
   "liquidbounce.module.elytraFly.description": "Makes controlling an elytra easier.",
   "liquidbounce.module.eMaceHelper.description": "Elytra mace helper automation.",
+  "liquidbounce.module.wallsBypass.description": "Bypasses wall rotations for Aura.",
   "liquidbounce.module.targets.description": "Allows you to manage which entities are considered to be your target.",
   "liquidbounce.module.extendedFirework.description": "Extends the velocity of firework rocket boost.",
   "liquidbounce.module.esp.description": "Highlights all targets allowing you to see them through walls.",

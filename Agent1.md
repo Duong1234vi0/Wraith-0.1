@@ -8815,3 +8815,128 @@ Focused implementation commit: `2f8527ecb994357552b05296a2aac463abf3facb` —
 ### Push
 
 Push succeeded: `79e4e4a8f..2f8527ecb  main -> main` on the current `origin/main` branch.
+
+## 2026-07-17 — final V-Core Elytra combat-stack fidelity correction
+
+### Checked
+
+Re-read the mandatory V-Core sources and the live Wraith implementations, including ElytraTarget,
+ElytraMotion, EMaceHelper, Aura, MaceSwap, ElytraSwap, WallsBypass, ElytraPlus, Aura rotation Track/Grim,
+InventoryUtility/SearchInvResult, the current packet/input helpers, registrations, and translations. No file under
+`WorkSpace/Client/VCore-0.8` was modified.
+
+### PeakAssist inventory and offhand corrections
+
+PeakAssist no longer owns a copied ElytraSwap Firework routine. It delegates to `ModuleElytraSwap`'s authoritative
+`useFireworkForPeakAssist()` implementation. The main-inventory route is now exactly
+`SWAP -> CLOSE -> HELD(temp = selected % 8 + 1) -> USE MAIN_HAND -> HELD(original) -> SWAP_BACK -> CLOSE`.
+The main-hand-use route is exactly `SWAP offhand -> CLOSE -> USE OFF_HAND -> SWAP original -> CLOSE`, with no
+explicit swing. Hotbar use is packet-only held-slot switching and restores the saved slot.
+
+The focused `ModuleElytraSwapFireworkPlanTest` asserts the temporary held-slot packet precedes `USE` and that both
+offhand close actions exist. The repository-wide test task is currently blocked by the pre-existing
+`PointFindingKtTest` (`math`/`Vec3d` mapping errors); the production compile and assemble succeed.
+
+### Grim/Track GCD correction
+
+Grim now uses V-Core's shortest-yaw path, ±1 jitter, absolute `pow(sensitivity * 0.6 + 0.2, 1.5) * 0.8 * 0.15`
+remainder GCD, `(-90, 90)`/`-180` fallback, pitch clamp, one calculation tick, and a normalized-result marker.
+It does not call `RotationUtil.gcd`. Track now uses V-Core's remainder-based delta GCD
+`pow(sensitivity * 0.6 + 0.2, 3) * 1.2`, marks the result normalized, and its pitch raytrace range is
+`activeAttackRange + activeAimRange` without the existing-target `+4` acquisition allowance.
+
+### V-Core MaceSwap replacement
+
+The ThunderHack implementation was replaced by V-Core settings and state: `Mode` (Normal default, Breach,
+WindBurst), `Mace Stun=true`, `Switch Back=true`, `Silent=false` visible only with Switch Back, and
+`AutoDisable=false`. `isSwitching`, previous/current delay, Aura flags, post-action marking, hotbar mode matching,
+silent swap, source switch-back delays (`-1` silent/`2` visible), MaceStun shield-break flow, and AutoDisable are
+present. Config migration maps legacy `Mode=None` to `Normal` and accepts legacy no-space names for the renamed
+settings. ThunderHack recursive attack-event forcing is removed.
+
+### V-Core ElytraSwap replacement and migration
+
+The former one-shot scheduled-inventory module was fully replaced under the single public name `ElytraSwap` (with
+the existing `ChestSwap` alias only for identity compatibility). V-Core settings/defaults are exact:
+`SwitchButton` and `FireWorkButton` current key type (unbound), `Delay=false`, `GrimStop=false`, and
+`StartFireWork=false`. The port includes 500 ms/200 ms key timers, delayed swap state, chestplate priority,
+60 ms GrimStop scheduling/input suppression, START_FALL_FLYING start-firework handling, lifecycle reset on disable,
+world change, disconnect, and player replacement, packet profiles for offhand/hotbar/main inventory, and shared
+Firework use while the module is disabled.
+
+The old one-shot `ScheduleInventoryActionEvent`, `PlayerInventoryConstraints`, implicit auto-disable, and hidden
+legacy behavior were removed. The enabled/key module identity is preserved; no old setting had a semantic V-Core
+equivalent, so no fabricated setting mapping was added. Newly introduced V-Core settings use the defaults above.
+
+### WallsBypass and ElytraPlus status
+
+Added one registered `WallsBypass` compatibility module with V-Core `Mode=YawOffset` (plus `PeekHigh`) and wired
+the +20 yaw and high-target peek branches into KillAura/Track/Grim. The full V-Core `ElytraPlus` movement exploit is
+not ported in this focused task. Its remaining Aura/Track dependencies are documented: ElytraPlus affects Aura's
+auto-crit exclusion, the rotation distance +4 branch, and Track's grounded dynamic look-point choice. Enabled-state
+compatibility therefore remains an explicit dependency blocker rather than a false claim of closure.
+
+### Firework rotation ownership and shield semantics
+
+ElytraSwap, ElytraMotion, and EMace raw Firework packets now use a narrow KillAura-owned server-facing rotation only
+when Aura owns the active current target; otherwise they use the player rotation. Global rotations from unrelated
+providers cannot leak into these packets. KillAura now marks EMace post-action state even when the shield-blocking
+target's actual attack is skipped, while retaining the existing shield configuration outside that narrow EMace path.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/misc/ModuleElytraSwap.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleMaceSwap.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleEMaceHelper.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleAutoWeapon.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleWallsBypass.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/KillAuraTargetTracker.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/GrimAngleSmooth.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/TrackAngleSmooth.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt`
+- `src/main/resources/resources/liquidbounce/lang/en_us.json`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/misc/ModuleElytraSwapFireworkPlanTest.kt`
+- this append-only `Agent1.md` section
+
+### Verification
+
+- `git diff --check` passed.
+- Exactly one `ModuleElytraSwap` registration remains, with public name `ElytraSwap`.
+- PeakAssist contains no duplicated ElytraSwap packet sequence.
+- Main-inventory temporary held-slot selection and both offhand close packets are present.
+- Grim has no `RotationUtil.gcd`; Grim/Track results are marked normalized.
+- Track pitch-raytrace excludes the `+4` acquisition allowance.
+- V-Core MaceSwap settings, state, AutoDisable, and post-attack API are present.
+- V-Core ElytraSwap settings, key timing, lifecycle, delayed swap, StartFireWork, GrimStop, input state, chestplate
+  priority, and all Firework routes are present.
+- ElytraTarget and ElytraMotion formulas were not changed by this correction.
+- `clean assemble -x detekt` passed; packaged classes include ElytraSwap, MaceSwap, WallsBypass, EMaceHelper,
+  Track, and Grim.
+
+### Build/JAR hash
+
+Command:
+`env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+
+Result: `BUILD SUCCESSFUL`.
+
+`build/libs/liquidbounce-0.31.2.jar` SHA-256: `8fc1aff36647526156ae319ed11999cb69ab5243f71b98fca0ee3ef27fb1eef3`.
+
+### Runtime/FCL status and remaining deviations
+
+The requested live runtime matrix (PeakAssist inventory/offhand, Track/Grim packet angles, MaceSwap modes/MaceStun/
+switch-back/AutoDisable, ElytraSwap keys/StartFireWork, unrelated rotation ownership, and shield post-action) was
+not executable in this headless workspace. No runtime Grim flags were generated; any future flags must remain
+observations. FCL comparison was not run. The repository-wide test task remains blocked by the unrelated existing
+`PointFindingKtTest` mapping errors. Remaining fidelity deviation is the explicit absence of full ElytraPlus; Wraith's
+pre-write `OutgoingPacketSentEvent` is the closest available hook for V-Core's post-send START_FALL_FLYING event.
+
+### Commit
+
+Pending focused commit after final staging.
+
+### Push
+
+Pending push to the current `origin/main` branch.

@@ -119,6 +119,10 @@ object ModuleAutoWeapon : ClientModule("AutoWeapon", Category.COMBAT) {
 
     @Suppress("unused")
     private val attackHandler = sequenceHandler<AttackEntityEvent> { event ->
+        if (ModuleMaceSwap.isMaceStunAttackInProgress()) {
+            return@sequenceHandler
+        }
+
         val entity = event.entity as? LivingEntity ?: return@sequenceHandler
         val weaponSlot = determineWeaponSlot(entity)?.hotbarSlot ?: return@sequenceHandler
         val isOnSwitch = SilentHotbar.serversideSlot != weaponSlot

@@ -11,13 +11,18 @@
 package net.ccbluex.liquidbounce.utils.aiming.features.processors.anglesmooth.impl
 
 import net.ccbluex.liquidbounce.config.types.nesting.ChoiceConfigurable
+import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleWallsBypass
+import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
+import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.KillAuraRotationsConfigurable
 import net.ccbluex.liquidbounce.utils.aiming.RotationTarget
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
 import net.ccbluex.liquidbounce.utils.aiming.features.processors.anglesmooth.AngleSmooth
+import net.ccbluex.liquidbounce.utils.client.mc
+import net.ccbluex.liquidbounce.utils.entity.*
 import net.ccbluex.liquidbounce.utils.kotlin.random
 import net.minecraft.util.Mth
 
-/** V-Core Aura Grim rotation using Wraith's single downstream GCD normalization. */
+/** V-Core Grim rotation with its absolute GCD and normalized-result contract. */
 class GrimAngleSmooth(parent: ChoiceConfigurable<*>) : AngleSmooth("Grim", parent) {
 
     override fun process(
@@ -25,10 +30,40 @@ class GrimAngleSmooth(parent: ChoiceConfigurable<*>) : AngleSmooth("Grim", paren
         currentRotation: Rotation,
         targetRotation: Rotation
     ): Rotation {
-        val shortestYaw = Mth.wrapDegrees(targetRotation.yaw - currentRotation.yaw)
+        val entity = rotationTarget.entity
+        val canSeeTarget = entity == null || player.canSee(entity)
+        val highPeekPoint = if (entity != null && KillAuraRotationsConfigurable.aimThroughWalls &&
+            ModuleWallsBypass.running && ModuleWallsBypass.isPeekHigh() && !canSeeTarget) {
+            entity.position().add(
+                (-0.15..0.15).random(),
+                entity.boundingBox.maxY - entity.boundingBox.minY,
+                (-0.15..0.15).random(),
+            )
+        } else {
+            null
+        }
+
+        val aimRotation = highPeekPoint?.let { Rotation.lookingAt(it, player.eyePosition) } ?: targetRotation
+        var shortestYaw = Mth.wrapDegrees(aimRotation.yaw - currentRotation.yaw)
+        if (entity != null && !ModuleKillAura.isTrackAttackReady(entity) &&
+            KillAuraRotationsConfigurable.aimThroughWalls && ModuleWallsBypass.running &&
+            ModuleWallsBypass.isYawOffset() && !canSeeTarget) {
+            shortestYaw += 20.0f
+        }
+        val yaw = currentRotation.yaw + shortestYaw + (-1.0f..1.0f).random()
+        val pitch = (aimRotation.pitch + (-1.0f..1.0f).random()).coerceIn(-90.0f, 90.0f)
+
+        if ((yaw == -90.0f && pitch == 90.0f) || yaw == -180.0f) {
+            return Rotation(player.yaw, player.pitch, isNormalized = true)
+        }
+
+        val sensitivity = mc.options.sensitivity().get().toDouble()
+        val value = sensitivity * 0.6 + 0.2
+        val gcd = Math.pow(value, 1.5) * 0.8 * 0.15
         return Rotation(
-            yaw = currentRotation.yaw + shortestYaw + (-1.0f..1.0f).random(),
-            pitch = targetRotation.pitch + (-1.0f..1.0f).random()
+            yaw = (yaw - yaw % gcd).toFloat(),
+            pitch = (pitch - pitch % gcd).toFloat().coerceIn(-90.0f, 90.0f),
+            isNormalized = true,
         )
     }
 
