@@ -46,6 +46,7 @@ import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.client.usesViaFabricPlus
 import net.ccbluex.liquidbounce.utils.inventory.*
 import net.ccbluex.liquidbounce.utils.kotlin.Priority
+import net.ccbluex.liquidbounce.utils.network.ActionTickBoundary
 import net.minecraft.core.component.DataComponents
 import net.minecraft.world.item.alchemy.PotionContents
 import net.minecraft.world.effect.MobEffects
@@ -57,9 +58,11 @@ import net.minecraft.network.protocol.game.ServerboundContainerClickPacket
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
+import net.minecraft.client.multiplayer.ClientLevel
 import org.lwjgl.glfw.GLFW
 import net.minecraft.client.player.LocalPlayer
 import net.minecraft.world.inventory.ContainerInput
+import java.util.ArrayDeque
 
 internal fun isModuleRunningByExactName(name: String): Boolean {
     return ModuleManager.firstOrNull { module ->
@@ -128,15 +131,29 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
         ownerRunning = { running },
         diagnosticPrefix = "[OffhandTxnDiag]"
     )
-    private val refillHotbarChronometer = Chronometer()
-    private var pendingHotbarRefill: PendingHotbarRefill? = null
+
+    private enum class HotbarRefillState {
+        WAITING_FOR_POST_POP_SETTLE,
+        WAITING_FOR_CLICK,
+        WAITING_FOR_POST_CLICK_BOUNDARY,
+    }
 
     private data class PendingHotbarRefill(
         val player: LocalPlayer,
+        val level: ClientLevel,
         val delayMs: Int,
+        val targetHotbarIndex: Int,
+        val targetSlot: HotbarItemSlot,
+        val popBoundarySerial: Long,
+        val delayTimer: Chronometer = Chronometer().also { it.reset() },
         var sourceSlot: InventoryItemSlot? = null,
-        var targetSlot: HotbarItemSlot? = null,
+        var state: HotbarRefillState = HotbarRefillState.WAITING_FOR_POST_POP_SETTLE,
+        var clickDeadlineTick: Int = Int.MIN_VALUE,
+        var clickBoundarySerial: Long = Long.MIN_VALUE,
+        var validationTicksRemaining: Int = REFILL_TARGET_VALIDATION_TICKS,
     )
+
+    private val pendingHotbarRefills = ArrayDeque<PendingHotbarRefill>()
 
     override val tag: String
         get() = activeMode.modeName
@@ -151,19 +168,33 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
     }
 
     override fun disable() {
-        clearPendingHotbarRefill()
+        clearPendingHotbarRefills()
         transactionGate.cancel("Offhand disabled")
     }
 
     @Suppress("unused")
     private val refillHotbarPopHandler = handler<TotemPopEvent> { event ->
         val localPlayer = mc.player ?: return@handler
+        val level = mc.level ?: return@handler
         if (event.entity !== localPlayer || !Totem.enabled || !Totem.RefillHotbar.enabled) {
             return@handler
         }
 
-        pendingHotbarRefill = PendingHotbarRefill(localPlayer, Totem.RefillHotbar.delay.random())
-        refillHotbarChronometer.reset()
+        val targetHotbarIndex = Totem.RefillHotbar.totemSlot - 1
+        if (targetHotbarIndex !in 0..8) {
+            return@handler
+        }
+
+        pendingHotbarRefills.addLast(
+            PendingHotbarRefill(
+                player = localPlayer,
+                level = level,
+                delayMs = Totem.RefillHotbar.delay.random(),
+                targetHotbarIndex = targetHotbarIndex,
+                targetSlot = HotbarItemSlot(targetHotbarIndex),
+                popBoundarySerial = ActionTickBoundary.currentSerial()
+            )
+        )
     }
 
     /**
@@ -172,25 +203,39 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
      */
     @Suppress("unused")
     private val refillHotbarScheduleHandler = handler<ScheduleInventoryActionEvent>(priority = 99) { event ->
-        val pending = pendingHotbarRefill ?: return@handler
-        val localPlayer = mc.player
-        if (localPlayer !== pending.player || !Totem.enabled || !Totem.RefillHotbar.enabled) {
-            clearPendingHotbarRefill()
+        val pending = currentHotbarRefill() ?: return@handler
+        val localPlayer = mc.player ?: run {
+            clearPendingHotbarRefills()
+            return@handler
+        }
+        val level = mc.level ?: run {
+            clearPendingHotbarRefills()
+            return@handler
+        }
+        if (!isRefillLifecycleValid(pending, localPlayer, level)) {
+            clearPendingHotbarRefills()
             return@handler
         }
 
-        if (Slots.Hotbar.any { it.itemStack.item == Items.TOTEM_OF_UNDYING }) {
-            clearPendingHotbarRefill()
+        if (pending.state != HotbarRefillState.WAITING_FOR_POST_POP_SETTLE) {
             return@handler
         }
 
-        if (pending.sourceSlot == null && Slots.Inventory.none { it.itemStack.item == Items.TOTEM_OF_UNDYING }) {
-            clearPendingHotbarRefill()
-            return@handler
-        }
-
-        if (!refillHotbarChronometer.hasElapsed(pending.delayMs.toLong()) ||
+        // #Edit By Codex 2026-07-17: status-35 arrives before vanilla and Offhand settle inventory,
+        // so never decide from the stale pre-pop hotbar snapshot.
+        if (!pending.delayTimer.hasElapsed(pending.delayMs.toLong()) ||
+            !ActionTickBoundary.hasPassed(pending.popBoundarySerial) ||
             transactionGate.state != InventoryActionMovementGate.State.IDLE) {
+            return@handler
+        }
+
+        val targetSlot = pending.targetSlot
+        if (pending.targetHotbarIndex !in 0..8) {
+            completeHotbarRefill(pending)
+            return@handler
+        }
+        if (targetSlot.itemStack.item == Items.TOTEM_OF_UNDYING) {
+            completeHotbarRefill(pending)
             return@handler
         }
 
@@ -199,14 +244,12 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
             .randomOrNull()
             ?.also { pending.sourceSlot = it }
             ?: run {
-                clearPendingHotbarRefill()
+                completeHotbarRefill(pending)
                 return@handler
             }
-        val targetSlot = pending.targetSlot ?: HotbarItemSlot(Totem.RefillHotbar.totemSlot - 1)
-            .also { pending.targetSlot = it }
 
         if (sourceSlot.itemStack.item != Items.TOTEM_OF_UNDYING) {
-            clearPendingHotbarRefill()
+            completeHotbarRefill(pending)
             return@handler
         }
 
@@ -216,6 +259,8 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
             return@handler
         }
 
+        pending.state = HotbarRefillState.WAITING_FOR_CLICK
+        pending.clickDeadlineTick = localPlayer.tickCount + refillClickTimeoutTicks()
         event.schedule.add(
             InventoryActionChain(
                 inventoryConstraints = inventoryConstraints,
@@ -223,18 +268,19 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
                 priority = Priority.NORMAL,
                 precondition = {
                     when {
-                        pendingHotbarRefill !== pending -> false
-                        mc.player !== pending.player || !Totem.enabled || !Totem.RefillHotbar.enabled -> {
-                            clearPendingHotbarRefill()
+                        currentHotbarRefill() !== pending -> false
+                        !isRefillLifecycleValid(pending, mc.player, mc.level) -> {
+                            clearPendingHotbarRefills()
                             false
                         }
+                        pending.state != HotbarRefillState.WAITING_FOR_CLICK -> false
                         transactionGate.state != InventoryActionMovementGate.State.IDLE -> false
-                        Slots.Hotbar.any { it.itemStack.item == Items.TOTEM_OF_UNDYING } -> {
-                            clearPendingHotbarRefill()
+                        targetSlot.itemStack.item == Items.TOTEM_OF_UNDYING -> {
+                            completeHotbarRefill(pending)
                             false
                         }
                         sourceSlot.itemStack.item != Items.TOTEM_OF_UNDYING -> {
-                            clearPendingHotbarRefill()
+                            completeHotbarRefill(pending)
                             false
                         }
                         else -> action.canPerformAction(inventoryConstraints)
@@ -246,38 +292,135 @@ object ModuleOffhand : ClientModule("Offhand", Category.PLAYER, aliases = arrayO
 
     @Suppress("unused")
     private val refillHotbarSentHandler = handler<OutgoingPacketSentEvent> { event ->
-        val pending = pendingHotbarRefill ?: return@handler
+        val pending = currentHotbarRefill() ?: return@handler
+        if (pending.state != HotbarRefillState.WAITING_FOR_CLICK) {
+            return@handler
+        }
         val sourceSlot = pending.sourceSlot ?: return@handler
-        val targetSlot = pending.targetSlot ?: return@handler
+        val targetSlot = pending.targetSlot
         val packet = event.packet as? ServerboundContainerClickPacket ?: return@handler
 
         if (packet.containerId == 0 && packet.slotNum.toInt() == sourceSlot.getIdForServer(null) &&
             packet.buttonNum.toInt() == targetSlot.hotbarSlotForServer && packet.containerInput == ContainerInput.SWAP) {
-            clearPendingHotbarRefill()
+            // Connection.send HEAD observes this before the outer click returns. Keep the cycle alive
+            // until a later natural boundary proves that a post-click held-slot packet is safe.
+            pending.state = HotbarRefillState.WAITING_FOR_POST_CLICK_BOUNDARY
+            pending.clickBoundarySerial = ActionTickBoundary.currentSerial()
+            pending.validationTicksRemaining = REFILL_TARGET_VALIDATION_TICKS
         }
     }
 
     @Suppress("unused")
-    private val refillHotbarPlayerReplacementHandler = handler<GameTickEvent> {
-        val pending = pendingHotbarRefill ?: return@handler
-        if (pending.player !== mc.player || !Totem.enabled || !Totem.RefillHotbar.enabled) {
-            clearPendingHotbarRefill()
+    private val refillHotbarLifecycleHandler = handler<GameTickEvent> {
+        val pending = currentHotbarRefill() ?: return@handler
+        val localPlayer = mc.player
+        val level = mc.level
+        if (!isRefillLifecycleValid(pending, localPlayer, level)) {
+            clearPendingHotbarRefills()
+            return@handler
+        }
+
+        when (pending.state) {
+            HotbarRefillState.WAITING_FOR_POST_POP_SETTLE -> Unit
+
+            HotbarRefillState.WAITING_FOR_CLICK -> {
+                if (localPlayer!!.tickCount >= pending.clickDeadlineTick) {
+                    completeHotbarRefill(pending)
+                }
+            }
+
+            HotbarRefillState.WAITING_FOR_POST_CLICK_BOUNDARY -> {
+                completeRefillAfterClickBoundary(pending, localPlayer!!)
+            }
         }
     }
 
     @Suppress("unused")
     private val refillHotbarWorldChangeHandler = handler<WorldChangeEvent> {
-        clearPendingHotbarRefill()
+        clearPendingHotbarRefills()
     }
 
     @Suppress("unused")
     private val refillHotbarDisconnectHandler = handler<DisconnectEvent> {
-        clearPendingHotbarRefill()
+        clearPendingHotbarRefills()
     }
 
-    private fun clearPendingHotbarRefill() {
-        pendingHotbarRefill = null
+    private fun completeRefillAfterClickBoundary(pending: PendingHotbarRefill, localPlayer: LocalPlayer) {
+        if (!ActionTickBoundary.hasPassed(pending.clickBoundarySerial)) {
+            return
+        }
+
+        if (pending.targetHotbarIndex !in 0..8 ||
+            pending.targetSlot.itemStack.item != Items.TOTEM_OF_UNDYING) {
+            if (pending.validationTicksRemaining-- <= 0) {
+                completeHotbarRefill(pending)
+            }
+            return
+        }
+
+        if (!ActionTickBoundary.canSendPostActionHeldItemChange(
+                owner = "Offhand RefillHotbar",
+                actionBoundarySerial = pending.clickBoundarySerial,
+                diagnosticsEnabled = false
+            )
+        ) {
+            return
+        }
+
+        if (localPlayer.inventory.selectedSlot == pending.targetHotbarIndex) {
+            completeHotbarRefill(pending)
+            return
+        }
+
+        val gameMode = mc.gameMode ?: run {
+            completeHotbarRefill(pending)
+            return
+        }
+        val expectation = ActionTickBoundary.expectHeldItemChange(
+            owner = "Offhand RefillHotbar",
+            purpose = "select refilled TotemSlot",
+            postActionBoundarySerial = pending.clickBoundarySerial,
+            diagnosticsEnabled = false
+        )
+        if (!expectation.allowed) {
+            return
+        }
+
+        // #Edit By Codex 2026-07-17: synchronizing selection in Connection.send HEAD could overtake
+        // the refill click. Only select TotemSlot after the observed click's CLIENT_TICK_END boundary.
+        localPlayer.inventory.selectedSlot = pending.targetHotbarIndex
+        gameMode.ensureHasSentCarriedItem()
+        ActionTickBoundary.completeHeldItemChangeAttempt(expectation)
+        completeHotbarRefill(pending)
     }
+
+    private fun currentHotbarRefill(): PendingHotbarRefill? = pendingHotbarRefills.peekFirst()
+
+    private fun isRefillLifecycleValid(
+        pending: PendingHotbarRefill,
+        localPlayer: LocalPlayer?,
+        level: ClientLevel?,
+    ) = running && Totem.enabled && Totem.RefillHotbar.enabled &&
+        localPlayer === pending.player && level === pending.level
+
+    private fun completeHotbarRefill(pending: PendingHotbarRefill) {
+        if (pendingHotbarRefills.peekFirst() === pending) {
+            pendingHotbarRefills.removeFirst()
+        } else {
+            pendingHotbarRefills.remove(pending)
+        }
+    }
+
+    private fun clearPendingHotbarRefills() {
+        pendingHotbarRefills.clear()
+    }
+
+    private fun refillClickTimeoutTicks() = (
+        inventoryConstraints.startDelay.last + inventoryConstraints.clickDelay.last +
+            inventoryConstraints.closeDelay.last + 4
+        ).coerceAtLeast(20)
+
+    private const val REFILL_TARGET_VALIDATION_TICKS = 5
 
     @Suppress("unused")
     val keyHandler = handler<KeyEvent> {
