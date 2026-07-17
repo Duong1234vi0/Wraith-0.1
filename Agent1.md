@@ -8292,3 +8292,129 @@ with the Minecraft 1.21.4 behavior; no second Offhand module was added.
 - Final static checks before handoff: `git diff --check` clean; compile and clean assemble succeeded. The final
   commit/push was explicitly requested after this append; the terminal handoff records its resulting hash and push
   status.
+
+## Prestige combat ports — 2026-07-17, Codex
+
+### Checked
+
+- Completed the mandatory workflow documents: `Skill/README.md`, `Skill/Agen.md`,
+  `Skill/CLAUDE_PORT_SKID_MODULE_GUIDE.md`, `Skill/PORT_EVIDENCE_TEMPLATE.md`,
+  `Skill/PORT_REVIEW_CHECKLIST.md`, `Skill/CODEBASE_RULES.md`, and `Skill/AGENT1_USAGE.md`. The completed
+  evidence template is retained only in private work notes, outside the staged task files.
+- Read the exact Prestige files: `module/impl/combat/TotemHit.java`, `AutoTotem.java`,
+  `AutoShieldBreaker.java`, and `PredictDoubleHand.java`; `util/impl/InventoryUtil.java`, `PacketUtil.java`,
+  `EntityUtil.java`, `BlockUtil.java`, and `TimerUtil.java`; `setting/impl/DragSetting.java`;
+  `managers/DamageManager.java`; `api/mixin/IPlayerInteractEntityC2SPacket.java`, `IHandledScreen.java`, and
+  `MixinClientConnection.java`; and `ui/drawables/gui/screens/impl/AutoTotemScreen.java`.
+- Read the exact current Wraith paths: `ModuleOffhand.kt`, `offhand/Totem.kt`, `ModuleManager.kt`,
+  `InventoryManager.kt`, `InventoryUtils.kt`, `InventoryActionMovementGate.kt`, `ItemSlot.kt`, `Slots.kt`,
+  `SilentHotbar.kt`, `Chronometer.kt`, `EntityExtensions.kt`, `MojangCompatExtensions.kt`,
+  `BlockExtensions.kt`, `CombatManager.kt`, `CombatExtensions.kt`, `ActionTickBoundary.kt`, `EntityEvents.kt`,
+  `NetworkEvents.kt`, `PlayerEvents.kt`, `DrawEvents.kt`, `MixinClientConnection.java`,
+  `MixinClientPlayerInteractionManager.java`, `MixinClientPlayerEntity.java`, `ModuleAutoWeapon.kt`,
+  `ModuleMaceSwap.kt`, `ModuleLegitHelper.kt`, `ModuleTriggerBot.kt`, and `en_us.json`.
+- Searched current code and later chronological history for the requested attack/use/carried-slot packets,
+  packet handlers, Totem pop/movement/overlay events, inventory scheduling, `ContainerInput.SWAP`, Offhand
+  transaction-gate users, ActionTickBoundary, AutoWeapon, TriggerBot, AutoCrystal, and selected/server hotbar
+  behavior. Historical claims were checked against the live implementation rather than carried forward.
+- Read the current 26.1.2 merged mappings/source for `ClientLevel`, `ServerExplosion`, and `CombatRules` while
+  validating entity iteration, exposure sampling, and armor reduction. No Prestige source/archive was modified.
+
+### Source behavior and current mapping
+
+- `TotemHit`: Prestige's outgoing attack replay maps from `PacketSendEvent`/
+  `PlayerInteractEntityC2SPacket` to outgoing `PacketEvent`/`ServerboundAttackPacket`. If the packet entity is a
+  Player and the visible main hand is a Totem, Wraith picks the first hotbar Sword, visibly selects and synchronizes
+  it, sends the same attack packet once through the normal connection path, restores/synchronizes the original slot,
+  and lets the original packet continue. The nested send naturally stops recursion because the visible hand is then
+  the Sword; no `AttackEntityEvent.caller()` or extra swing is used.
+- `RefillHotbar`: Prestige status-35 handling maps to live `TotemPopEvent` from `CombatManager`. The new enabled
+  `Offhand -> Totem -> RefillHotbar` group has `Delay` `30..50 ms` (allowed `0..300`) and one-based `TotemSlot`
+  default `8` (allowed `1..9`). One local-pop attempt samples its delay once, waits for the existing primary
+  Offhand action to finish and `InventoryActionMovementGate.State.IDLE` to be fully released, then selects a random
+  Totem only from `Slots.Inventory` and schedules one detached player-inventory `ContainerInput.SWAP` to
+  `HotbarItemSlot(TotemSlot - 1)`. It clears on an existing hotbar Totem, no inventory Totem, completed click,
+  disable, player replacement, world change, or disconnect. It never opens/closes a screen and never touches the
+  Offhand slot itself.
+- `AutoShieldBreaker`: Prestige `MoveEvent` maps to `PlayerMovementTickEvent`, verified at the local player's
+  `aiStep` dispatch. Every eligible tick uses only the exact crosshair Player, active Shield use, and first hotbar
+  Axe; it visibly switches, synchronizes with `ensureHasSentCarriedItem()`, calls the normal interaction attack,
+  and swings the main hand. It has no cooldown/filter/rotation/silent switch/switch-back.
+- `PredictDoubleHand`: Prestige `Render2DEvent` maps to live per-frame `OverlayRenderEvent`; its separate Pearl
+  listener maps to outgoing `PacketEvent`/`ServerboundUseItemPacket`. The timer samples the initial lower delay,
+  then samples/resets before each source check with no enable-time reset. Periodic branches visibly select the first
+  hotbar Totem without forcing a carried-slot packet. Pearl intentionally only changes the selected slot inside the
+  outgoing callback so the Pearl packet leaves before normal selected-slot synchronization.
+- Predictor target selection intentionally preserves `EntityUtil.getPlayer()`: normal `level.players()` iteration,
+  retain the final alive non-local Player, then a 10-block local distance gate. It does not use nearest/crosshair/
+  KillAura/friend/team/bot/visibility selection. Anchor and Obsidian scans are exact `-5..5` cubes; Crystal scans
+  normal live world entity iteration. Trigger order remains Anchors, Crystals, Obsidian, then SwordPop.
+
+### Source defects corrected and preserved quirks
+
+- Corrected the three approved sentinels only: a missing hotbar Totem is nullable rather than false slot `0`, so
+  RefillHotbar can detect no hotbar Totem and PredictDoubleHand returns without switching; and a missing Axe returns
+  without assigning Prestige's invalid `-1` slot. The excluded Prestige Legit refill branch, including its one-based
+  button defect, was not ported.
+- Excluded AutoTotem behavior: no standalone AutoTotem/InventoryTotem module, no Legit, DoubleHand, OpenInventory,
+  CloseInventory, AutoTotem screen, notification, sound, preview, extra timeout, or GUI operation.
+- Preserved PredictDoubleHand's intentional oddities: final world-list Player selection; local-main-hand-only
+  IgnoreWhenShield check while using; source trigger order; strict cube/distance comparisons; no switch-back or
+  silent hotbar; and all thresholds retain `selectedTarget.health + localPlayer.absorptionAmount - damage`, including
+  SwordPop's target-health-plus-local-absorption test.
+
+### Damage evidence
+
+- PredictDoubleHand damage calculation is **fully source-equivalent for the inspected Prestige `DamageManager`
+  semantics on current 26.1.2; it is not blocked.** The module deliberately does not call Wraith's non-equivalent
+  generic explosion helper. It privately reproduces crystal range 12/power 6, anchor/bed range 10/power 5,
+  sampled bounding-box exposure raycasts, vanilla raw explosion math, difficulty, armor/toughness, Resistance,
+  Blast/Protection cap, non-negative clamp, and Prestige's crystal-versus-anchor reduction order.
+- Anchor exposure excludes the anchor block through the inspected current `BlockGetter.raycast` support, replacing
+  Prestige's temporary world mutation without changing the world. Current `CombatRules.getDamageAfterAbsorb` was
+  verified to retain the needed armor/toughness formula; current enchantment levels are summed with the inspected
+  Prestige explosion Protection/Blast Protection semantics.
+
+### Changed
+
+- Added `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleTotemHit.kt`,
+  `ModuleAutoShieldBreaker.kt`, and `ModulePredictDoubleHand.kt`.
+- Updated `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/player/offhand/ModuleOffhand.kt` and
+  `Totem.kt` for the one-shot RefillHotbar branch; `ModuleManager.kt` for exactly one registration of each new
+  combat module; and `src/main/resources/resources/liquidbounce/lang/en_us.json` for only the three required
+  English descriptions.
+- No mixin, access widener, global entity-extension rewrite, action-boundary, movement suppression, manual
+  client-tick packet, packet queue, reference file, ZIP, or unrelated dirty file was changed.
+
+### Verification
+
+- Final static audit: `git diff --check` passed; registrations are exactly one each; no standalone
+  AutoTotem/InventoryTotem was added; RefillHotbar has no GUI calls; TotemHit has no `AttackEntityEvent.caller()`;
+  Pearl has no pre-use carried-slot synchronization; AutoShieldBreaker has no restoration; and the predictor has no
+  nearest-player or invalid `-1`/false-slot-0 fallback.
+- Required Termux/FCL build command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+  completed `BUILD SUCCESSFUL` in `1m 59s`.
+- `build/libs/liquidbounce-0.31.2.jar` SHA-256:
+  `aea2629dfec9d5c0d9ba6e4a50565156d9987c0c334a1e34db4c0b7d5a07d89c`. `jar tf` confirms all three new combat
+  classes plus changed `ModuleOffhand`/`Totem` classes, including `Totem$RefillHotbar`, are packaged.
+
+### FCL test plan/status
+
+- Pending user gameplay execution: TotemHit with a hotbar Sword, no Sword, and non-Player target; verify
+  Sword replay then restored Totem/original packet order.
+- Pending: local Totem pop with no hotbar Totem/inventory Totems and occupied or empty configured target;
+  hotbar-Totem/no-inventory-Totem clears; and no inventory screen opens/closes.
+- Pending: shield-blocking crosshair Player with Axe, stopped/non-Player target, and no-Axe cases; verify one
+  movement-tick attack/swing and no restoration.
+- Pending every predictor trigger: uncharged Anchor, existing Crystal, Obsidian-above hypothetical Crystal,
+  low-health Sword/Axe target, and outgoing main-hand Pearl. Also test multiple Players/final-list choice, no hotbar
+  Totem, local-main-hand Shield use versus offhand-only Shield, Pearl packet order, toggle timing, and no switch-back.
+- Compilation/package checks are complete only; no in-game FCL runtime success or anti-cheat outcome is claimed.
+
+### Commit / push
+
+- Feature commit: `f9e620f6` — `feat(combat): port Prestige totem prediction and shield modules`.
+- Pushed successfully to `origin/main`: `772ece39f..f9e620f6c  main -> main`.
+- The append-only history record itself is committed separately immediately after this entry so it can truthfully
+  record the already-created feature hash and push result without rewriting prior history.
