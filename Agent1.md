@@ -8693,3 +8693,125 @@ with the Minecraft 1.21.4 behavior; no second Offhand module was added.
 - Implementation push succeeded: `3daa52d85..286b710a5  main -> main` on `origin`
   (`https://github.com/Duong1234vi0/Wraith-0.1.git`). Follow-up push succeeded:
   `286b710a5..1b02f309e  main -> main`. This append-only record is committed and pushed separately.
+
+## V-Core raw Elytra combat timing restoration — 2026-07-17
+
+### Checked
+
+- Read the later ElytraTarget, ElytraMotion, TrackAngleSmooth, GrimAngleSmooth, sustained-Elytra pitch snap,
+  EMaceHelper, raw-reset, PacketOrderE, 2026-07-15 removal, and current 2026-07-17 re-port history.
+- Read the mandatory V-Core and live Wraith sources, current 26.1.2 mappings/APIs, and local Skill guidance.
+- V-Core reference sources under `WorkSpace/Client/VCore-0.8` remain untouched.
+
+### Fidelity audit
+
+The current port had introduced Grim-safe boundary scheduling, shared Firework serialization, deferred inventory
+transactions, extra gates, and omitted direct Track/Grim rotation dependencies. This correction reimplemented the
+current Wraith equivalents from V-Core instead of restoring an old commit wholesale.
+
+### Previous conservative adaptations removed
+
+Removed the shared `ElytraFireworkExecutor`, ActionTickBoundary/inventory movement gates, global pending Firework
+state, delayed restoration, extra Offhand/armor transaction interlocks, and the deferred EMace armor transaction.
+
+The previous 2026-07-17 port intentionally prioritized current Grim-safe packet and inventory boundaries. This correction restores V-Core’s raw same-update action timing and direct rotation dependencies at the user’s request. Runtime flags are accepted for later diagnosis.
+
+### Auto Target mapping correction
+
+EMace naked-player filtering now uses `target is Player && target.armorValue == 0`; the incorrect zero-health check is
+gone.
+
+### Track/Grim restoration
+
+Added combat-only `TrackAngleSmooth` and `GrimAngleSmooth`, registered once. Track preserves the V-Core settings,
+wrapped yaw direction, readiness acceleration, raytrace-aware pitch, sustained Elytra pitch snap after five glide
+ticks, and one engine GCD normalization. Grim uses the authoritative target point, shortest yaw path, ±1° jitter,
+and one-tick full snap. Fresh combat configurations default to Grim without overwriting saved choices.
+
+### ElytraTarget event-order correction
+
+ElytraTarget now runs after KillAura's target/process handler in the same rotation-update phase, so status, BPS,
+scale, and hurt suppression read the resulting target. Source formulas and the exact BPS >= 20 prediction threshold
+are unchanged.
+
+### Three Firework profiles
+
+- ElytraMotion uses its direct same-update V-Core route, including inventory-first descending search, the
+  main-hand-use offhand route, packet-only hotbar switching, temporary-slot `% 8 + 1`, no close packet, and no
+  explicit swing.
+- PeakAssist uses the ElytraSwap source profile, including inventory-first search, same-update swaps, source close
+  packets, silent hotbar use, and no explicit swing; it does not require the Wraith ElytraSwap module to be enabled.
+- FireWork Vector retains its distinct hotbar-first ascending search, visible switching, player-inventory-only
+  inventory route, close packets, explicit hand swing, and saved-slot restoration.
+
+### Raw Armor Swap
+
+EMace Armor Swap now performs source-slot pickup, chest-slot pickup, source-slot pickup, and close-container
+immediately, with current player-menu slot mapping and a `try/finally` swapping state. Only V-Core guards remain;
+there is no automatic Elytra switch-back or deferred scheduler.
+
+### KillAura post-attack correction
+
+Aura action completion now calls `ModuleEMaceHelper.markAuraPostAttack()` unconditionally. The old accepted-outgoing-
+attack packet gate and pending entity state were removed. Existing Elytra range, prediction, PeakAssist offset, and
+attack-window formulas were otherwise retained.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleEMaceHelper.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleElytraTarget.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/RotationsConfigurable.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/TrackAngleSmooth.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/GrimAngleSmooth.kt`
+- deleted `src/main/kotlin/net/ccbluex/liquidbounce/utils/inventory/ElytraFireworkExecutor.kt`
+- this append-only `Agent1.md` section
+
+### Static verification
+
+- `git diff --check` passed.
+- No `target.health == 0.0f`, `pendingPostAttackEntityId`, EMace outgoing-packet marker gate, or removed executor/
+  armor-transaction symbols remain in the corrected modules.
+- Track and Grim each register exactly once for combat rotations; sustained Track pitch contains `180` after
+  `fallFlyingTicks > 5`; fresh combat default resolves to Grim.
+- ElytraTarget retains horizontal BPS `hypot(x,z) * 20`, exact threshold `20.0`, Auto `sqrt(BPS)/2` cap, and no
+  multiplier/new prediction setting.
+- The three raw Firework routes contain no ActionTickBoundary, InventoryActionMovementGate, shared pending request,
+  or movement-stop inventory gate. Their search order, offhand-main-use behavior, close packets, swing behavior,
+  and visible versus packet-only switching remain distinct.
+- Packaged JAR contains ModuleElytraTarget, ModuleElytraMotion, ModuleEMaceHelper, TrackAngleSmooth, GrimAngleSmooth,
+  and ModuleKillAura; ElytraFireworkExecutor and EMaceArmorTransaction classes are absent.
+- Unrelated pre-existing worktree changes were not staged.
+
+### Build command/result
+
+Ran:
+`env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+
+Result: `BUILD SUCCESSFUL`; compilation/package success is not a runtime or Grim acceptance claim.
+
+### JAR SHA-256
+
+`build/libs/liquidbounce-0.31.2.jar` — `87a972f3d7e8bb48971f769f698fe0a742cd445875b32f181878b9ccffd260bd`
+
+### FCL comparison status
+
+The required safe-build versus corrected-raw FCL capture was not run in this workspace. The pending comparison
+matrix covers ElytraTarget at 10/19/20/40/high BPS, Grim predicted-cube snap, Track after more than five glide ticks,
+all ElytraMotion Firework locations including main-hand use, MatrixBypass/AutoFirework overlap, EMace naked-player,
+PeakAssist post-action and source Firework profile, FireWork Vector, and immediate Armor Swap packet order.
+
+### Observed flags
+
+Any Grim flags from the raw same-update routes are observations only and are intentionally deferred to a later
+diagnosis task.
+
+### Commit
+
+Focused implementation commit: `2f8527ecb994357552b05296a2aac463abf3facb` —
+`refactor(elytra): restore raw vcore combat timing`.
+
+### Push
+
+Push succeeded: `79e4e4a8f..2f8527ecb  main -> main` on the current `origin/main` branch.
