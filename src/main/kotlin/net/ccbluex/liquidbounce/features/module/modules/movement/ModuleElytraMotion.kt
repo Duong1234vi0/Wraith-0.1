@@ -53,6 +53,9 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
 
         if (ModuleEMaceHelper.running && ModuleEMaceHelper.isPeakAssistActive()) {
             freeze = false
+            // #Edit By Codex 2026-07-17: deferred work has no V-Core equivalent once
+            // PeakAssist takes this tick over.
+            ElytraFireworkExecutor.cancelOwner(ElytraFireworkExecutor.Owner.ELYTRA_MOTION)
             return@handler
         }
 
