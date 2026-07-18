@@ -10616,4 +10616,5 @@ and cleanup. Compilation and focused source tests do not prove visual movement o
 ### Commits and push result
 
 - Implementation commit: `2ee4546a` — `fix(popchams): restore cumulative vertical movement`.
-- Documentation commit: this entry; exact hash and push result are reported in the final handoff after commit/push.
+- Documentation commit: `085dac32` — `docs(agent1): record popchams motion correction`.
+- Push result: succeeded, `f31c82c68..085dac32c main -> main`, to `https://github.com/Duong1234vi0/Wraith-0.1.git`.
