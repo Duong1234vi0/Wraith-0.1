@@ -38,7 +38,6 @@ import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleEMaceHelper
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleElytraTarget
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleMaceSwap
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleWallsBypass
-import net.ccbluex.liquidbounce.features.module.modules.movement.ModuleElytraMotion
 import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.ModuleCriticals.CriticalsSelectionMode
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.KillAuraRotationsConfigurable.KillAuraRotationTiming.SNAP
@@ -250,9 +249,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         updateTarget()
 
         // Update Auto Weapon
-        if (elytraMotionAllowsKillAuraMainHandAction(ModuleElytraMotion.isFireworkActionWindowActive)) {
-            ModuleAutoWeapon.prepare(targetTracker.target)
-        }
+        ModuleAutoWeapon.prepare(targetTracker.target)
     }
 
     @Suppress("unused")
@@ -288,12 +285,6 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
         // Check if the module should (not) continue after the blocking state is updated
         if (!requirementsMet) {
-            return@tickHandler
-        }
-
-        // Grim retains Firework USE_ITEM state until the natural client tick boundary. Keep the
-        // target/rotation state, but do not let Aura start AutoWeapon, ShieldBreaker, MaceSwap, or ATTACK in it.
-        if (!elytraMotionAllowsKillAuraMainHandAction(ModuleElytraMotion.isFireworkActionWindowActive)) {
             return@tickHandler
         }
 
@@ -936,7 +927,6 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
         return criticalHit &&
             shieldBreakerHitTicks <= 0 &&
-            elytraMotionAllowsKillAuraMainHandAction(ModuleElytraMotion.isFireworkActionWindowActive) &&
             !isBreakingBlock &&
             !(isInInventoryScreen && !ignoreOpenInventory && !simulateInventoryClosing)
     }
@@ -1061,9 +1051,6 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     }
 
 }
-
-internal fun elytraMotionAllowsKillAuraMainHandAction(fireworkActionWindowActive: Boolean): Boolean =
-    !fireworkActionWindowActive
 
 internal inline fun evaluateTrackPitchRaytrace(
     isCurrentTarget: Boolean,

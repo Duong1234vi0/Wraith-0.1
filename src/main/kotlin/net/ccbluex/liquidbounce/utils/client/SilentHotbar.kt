@@ -40,12 +40,7 @@ object SilentHotbar : EventListener {
      * Returns the slot that interactions would take place with
      */
     val serversideSlot: Int
-        get() = resolveServerSlot(mc.player?.inventory?.selectedSlot ?: 0)
-
-    fun resolveServerSlot(visibleSlot: Int): Int = resolveSilentHotbarServerSlot(
-        enforcedSlot = hotbarState?.enforcedHotbarSlot,
-        visibleSlot = visibleSlot,
-    )
+        get() = hotbarState?.enforcedHotbarSlot ?: mc.player?.inventory?.selectedSlot ?: 0
 
     val clientsideSlot: Int
         get() = hotbarState?.clientsideSlot ?: mc.player?.inventory?.selectedSlot ?: 0
@@ -53,18 +48,20 @@ object SilentHotbar : EventListener {
     /**
      * If [slot] is not [OffHandSlot], select it silently for duration of [ticksUntilReset].
      */
-    fun selectSlotSilently(requester: Any?, slot: HotbarItemSlot, ticksUntilReset: Int): Boolean =
-        slot is OffHandSlot || selectSlotSilently(requester, slot.hotbarSlot, ticksUntilReset)
+    fun selectSlotSilently(requester: Any?, slot: HotbarItemSlot, ticksUntilReset: Int) {
+        if (slot !is OffHandSlot) {
+            selectSlotSilently(requester, slot.hotbarSlot, ticksUntilReset)
+        }
+    }
 
-    fun selectSlotSilently(requester: Any?, slot: Int, ticksUntilReset: Int): Boolean {
+    fun selectSlotSilently(requester: Any?, slot: Int, ticksUntilReset: Int) {
         val event = EventManager.callEvent(SelectHotbarSlotSilentlyEvent(requester, slot))
         if (event.isCancelled) {
-            return false
+            return
         }
 
         hotbarState = SilentHotbarState(slot, requester, ticksUntilReset, clientsideSlot)
         ticksSinceLastUpdate = 0
-        return true
     }
 
     fun resetSlot(requester: Any?) {
@@ -92,9 +89,6 @@ object SilentHotbar : EventListener {
         ticksSinceLastUpdate++
     }
 }
-
-internal fun resolveSilentHotbarServerSlot(enforcedSlot: Int?, visibleSlot: Int): Int =
-    enforcedSlot ?: visibleSlot
 
 private class SilentHotbarState(
     val enforcedHotbarSlot: Int,
