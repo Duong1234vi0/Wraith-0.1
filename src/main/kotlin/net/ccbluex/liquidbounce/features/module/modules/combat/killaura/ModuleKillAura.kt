@@ -669,24 +669,15 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         }
 
         rotationPoint = rotationPoint.add(rotationMotion)
-        if (rotationPoint.x >= (lengthX - 0.05) / 2.0) {
-            rotationMotion = Vec3((-minMotionXZ..maxMotionXZ).random().toDouble(), rotationMotion.y, rotationMotion.z)
-        }
-        if (rotationPoint.y >= lengthY) {
-            rotationMotion = Vec3(rotationMotion.x, (-minMotionY..maxMotionY).random().toDouble(), rotationMotion.z)
-        }
-        if (rotationPoint.z >= (lengthZ - 0.05) / 2.0) {
-            rotationMotion = Vec3(rotationMotion.x, rotationMotion.y, (-minMotionXZ..maxMotionXZ).random().toDouble())
-        }
-        if (rotationPoint.x <= -(lengthX - 0.05) / 2.0) {
-            rotationMotion = Vec3((minMotionXZ..0.03f).random().toDouble(), rotationMotion.y, rotationMotion.z)
-        }
-        if (rotationPoint.y <= 0.05) {
-            rotationMotion = Vec3(rotationMotion.x, (minMotionY..maxMotionY).random().toDouble(), rotationMotion.z)
-        }
-        if (rotationPoint.z <= -(lengthZ - 0.05) / 2.0) {
-            rotationMotion = Vec3(rotationMotion.x, rotationMotion.y, (minMotionXZ..maxMotionXZ).random().toDouble())
-        }
+        rotationMotion = updateVCoreTrackBoundaryMotion(
+            rotationPoint = rotationPoint,
+            rotationMotion = rotationMotion,
+            lengthX = lengthX,
+            lengthY = lengthY,
+            lengthZ = lengthZ,
+            randomMotionXZ = { (minMotionXZ..maxMotionXZ).random().toDouble() },
+            randomMotionY = { (minMotionY..maxMotionY).random().toDouble() },
+        )
 
         // Preserve V-Core's non-assigned random add exactly; it is intentionally ineffective.
         rotationPoint.add((-0.03f..0.03f).random().toDouble(), 0.0, (-0.03f..0.03f).random().toDouble())
@@ -696,13 +687,27 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
             return target.position().add((-0.15..0.15).random(), lengthY, (-0.15..0.15).random())
         }
 
-        val currentRotation = RotationManager.currentRotation ?: player.rotation
-        if (!trackSourceFacingEnemy(
-                toEntity = target,
-                rotation = currentRotation,
-                range = attackRange,
-                wallsRange = 0.0,
-            )) {
+        val initialRotation = selectVCoreTrackInitialRotation(
+            killAuraOwnedRotation = activeServerFacingRotationFor(target),
+            playerRotation = player.rotation,
+        )
+        val initialWallRange = if (KillAuraRotationsConfigurable.aimThroughWalls) {
+            activeWallRange().toDouble()
+        } else {
+            0.0
+        }
+        if (!evaluateVCoreTrackInitialRaytrace(
+                raytraceEnabled = raycast != TRACE_NONE,
+                attackRange = attackRange,
+                wallRange = initialWallRange,
+            ) { range, wallsRange ->
+                facingEnemy(
+                    toEntity = target,
+                    rotation = initialRotation,
+                    range = range,
+                    wallsRange = wallsRange,
+                )
+            }) {
             val center = target.position().add(0.0, target.eyeHeight / 2.0, 0.0)
             if (player.eyePosition.distanceToSqr(center) <= attackRange.pow(2) &&
                 trackSourceFacingEnemy(toEntity = target, rotation = Rotation.lookingAt(point = center, from = player.eyePosition), range = attackRange, wallsRange = 0.0)
@@ -788,7 +793,9 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
                 network.sendPacket(ServerboundSetCarriedItemPacket(axe.hotbarSlot))
                 rawShieldBreakerAttack(target)
                 tryMaceStunShieldBreaker(target)
-                network.sendPacket(ServerboundSetCarriedItemPacket(originalSelectedSlot))
+                vCoreShieldBreakerReturnSlot(player.inventory.selectedSlot)?.let { sourceReturnSlot ->
+                    network.sendPacket(ServerboundSetCarriedItemPacket(sourceReturnSlot))
+                }
             } else {
                 // V-Core swaps a main-inventory Axe into the selected hotbar slot, attacks in
                 // the same update, and swaps the exact source slot back before closing again.
@@ -931,16 +938,24 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         return rotationTarget.provider === this && rotationTarget.entity === target
     }
 
-    /** Returns Aura's active server-facing rotation only while Aura owns the current target. */
-    @JvmStatic
-    fun activeServerFacingRotationForCurrentTarget(): Rotation? {
-        val target = targetTracker.target ?: return null
+    private fun activeServerFacingRotationFor(target: Entity): Rotation? {
+        if (targetTracker.target !== target) {
+            return null
+        }
+
         val rotation = RotationManager.currentRotation ?: return null
         return rotation.takeIf {
             running && !target.isRemoved &&
                 it.yaw.isFinite() && it.pitch.isFinite() &&
                 isActiveKillAuraRotationFor(target)
         }
+    }
+
+    /** Returns Aura's active server-facing rotation only while Aura owns the current target. */
+    @JvmStatic
+    fun activeServerFacingRotationForCurrentTarget(): Rotation? {
+        val target = targetTracker.target ?: return null
+        return activeServerFacingRotationFor(target)
     }
 
     @JvmStatic
@@ -1023,6 +1038,54 @@ internal inline fun evaluateTrackPitchRaytrace(
 
     return facingTarget(traceRange, traceRange)
 }
+
+internal inline fun evaluateVCoreTrackInitialRaytrace(
+    raytraceEnabled: Boolean,
+    attackRange: Double,
+    wallRange: Double,
+    facingTarget: (range: Double, wallsRange: Double) -> Boolean,
+): Boolean = !raytraceEnabled || facingTarget(attackRange, wallRange)
+
+internal fun selectVCoreTrackInitialRotation(
+    killAuraOwnedRotation: Rotation?,
+    playerRotation: Rotation,
+): Rotation = killAuraOwnedRotation ?: playerRotation
+
+internal inline fun updateVCoreTrackBoundaryMotion(
+    rotationPoint: Vec3,
+    rotationMotion: Vec3,
+    lengthX: Double,
+    lengthY: Double,
+    lengthZ: Double,
+    randomMotionXZ: () -> Double,
+    randomMotionY: () -> Double,
+): Vec3 {
+    var motion = rotationMotion
+
+    if (rotationPoint.x >= (lengthX - 0.05) / 2.0) {
+        motion = Vec3(-randomMotionXZ(), motion.y, motion.z)
+    }
+    if (rotationPoint.y >= lengthY) {
+        motion = Vec3(motion.x, -randomMotionY(), motion.z)
+    }
+    if (rotationPoint.z >= (lengthZ - 0.05) / 2.0) {
+        motion = Vec3(motion.x, motion.y, -randomMotionXZ())
+    }
+    if (rotationPoint.x <= -(lengthX - 0.05) / 2.0) {
+        motion = Vec3(randomMotionXZ(), motion.y, motion.z)
+    }
+    if (rotationPoint.y <= 0.05) {
+        motion = Vec3(motion.x, randomMotionY(), motion.z)
+    }
+    if (rotationPoint.z <= -(lengthZ - 0.05) / 2.0) {
+        motion = Vec3(motion.x, motion.y, randomMotionXZ())
+    }
+
+    return motion
+}
+
+internal fun vCoreShieldBreakerReturnSlot(currentSelectedSlot: Int): Int? =
+    currentSelectedSlot.takeIf { it in 0..8 }
 
 internal inline fun runVCoreAuraPostAction(
     dedicatedShieldBreak: Boolean,

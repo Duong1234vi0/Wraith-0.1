@@ -14,7 +14,7 @@ import net.ccbluex.liquidbounce.config.types.ChooseListValue
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.config.types.Value
 import net.ccbluex.liquidbounce.config.types.ValueType
-import net.ccbluex.liquidbounce.event.events.RotationUpdateEvent
+import net.ccbluex.liquidbounce.event.events.GameTickEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
@@ -22,6 +22,7 @@ import net.ccbluex.liquidbounce.utils.client.interaction
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.entity.*
 import net.ccbluex.liquidbounce.utils.item.getEnchantment
+import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
 import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
@@ -99,9 +100,11 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
     }
 
     @Suppress("unused")
-    private val syncHandler = handler<RotationUpdateEvent> {
-        processSwitchBack(manual = false)
-        processAutoDisable()
+    private val syncHandler = handler<GameTickEvent>(priority = MACE_SWAP_POST_AURA_PRIORITY) {
+        runVCoreMaceSwapPostAuraSync(
+            processSwitchBack = { processSwitchBack(manual = false) },
+            processAutoDisable = ::processAutoDisable,
+        )
     }
 
     fun isMaceStun() = maceStun
@@ -217,6 +220,16 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
         BREACH("Breach"),
         WIND_BURST("WindBurst"),
     }
+}
+
+internal const val MACE_SWAP_POST_AURA_PRIORITY: Short = READ_FINAL_STATE
+
+internal inline fun runVCoreMaceSwapPostAuraSync(
+    processSwitchBack: () -> Unit,
+    processAutoDisable: () -> Unit,
+) {
+    processSwitchBack()
+    processAutoDisable()
 }
 
 internal enum class MaceSwapAutoDisableAction {
