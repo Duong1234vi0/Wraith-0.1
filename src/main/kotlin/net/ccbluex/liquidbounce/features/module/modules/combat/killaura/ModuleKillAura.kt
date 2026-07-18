@@ -404,7 +404,9 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
                         ModuleMaceSwap.silentSwapToMace()
                     }
 
-                    target.attack(true, keepSprint && !shouldBlockSprinting)
+                    ModuleMaceSwap.withMaceAttackBoundary {
+                        target.attack(true, keepSprint && !shouldBlockSprinting)
+                    }
                 }
 
                 runVCoreAuraPostAction(
@@ -872,7 +874,9 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         ModuleMaceSwap.beginMaceStunAttack()
         try {
             ModuleMaceSwap.silentSwapToMace()
-            rawShieldBreakerAttack(target)
+            ModuleMaceSwap.withMaceAttackBoundary {
+                rawShieldBreakerAttack(target)
+            }
         } finally {
             ModuleMaceSwap.endMaceStunAttack()
         }

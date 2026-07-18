@@ -23,6 +23,8 @@ import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.entity.*
 import net.ccbluex.liquidbounce.utils.item.getEnchantment
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
+import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.FIRST_PRIORITY
+import net.ccbluex.liquidbounce.utils.network.ActionTickBoundary
 import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
@@ -77,6 +79,11 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
     var currentSwitchDelay = -1
         private set
 
+    private var restoreReady = false
+    private var lastMaceAttackBoundarySerial = Long.MIN_VALUE
+    private var diagnosticsEnabled = false
+    private var restoreWaitLogged = false
+
     @JvmField
     var calledFromAura = false
 
@@ -97,6 +104,15 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
         auraPostAttackTriggered = false
         calledFromAura = false
         maceStunAttackInProgress = false
+    }
+
+    /**
+     * Restore emission must happen before Aura's next attack, but after the previous Mace-owned
+     * attack has crossed Grim's natural client-tick boundary.
+     */
+    @Suppress("unused")
+    private val preAuraRestoreHandler = handler<GameTickEvent>(priority = MACE_SWAP_PRE_AURA_PRIORITY) {
+        emitReadySwitchBack()
     }
 
     @Suppress("unused")
@@ -131,6 +147,15 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
         interaction.ensureHasSentCarriedItem()
         isSwitching = true
         currentSwitchDelay = -1
+        restoreReady = false
+        lastMaceAttackBoundarySerial = Long.MIN_VALUE
+        restoreWaitLogged = false
+        diagnosticsEnabled = switchBack && ActionTickBoundary.claimDiagnosticCycle()
+        ActionTickBoundary.diagnostic(
+            diagnosticsEnabled,
+            "MaceSwap selected mace previousSlot=$previousSlot maceSlot=$maceSlot " +
+                "silent=$silent switchDelay=${if (silent) -1 else 2} currentSwitchDelay=$currentSwitchDelay",
+        )
 
         if (!switchBack) {
             resetState()
@@ -151,6 +176,48 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
 
     fun isMaceStunAttackInProgress() = maceStunAttackInProgress
 
+    /**
+     * Own the natural action boundary only when this attack is part of an active MaceSwap switch.
+     * The attack itself is never delayed or suppressed.
+     */
+    internal inline fun <T> withMaceAttackBoundary(block: () -> T): T {
+        if (!isSwitching || !switchBack) {
+            return block()
+        }
+
+        val action = ActionTickBoundary.beginAction(
+            owner = "MaceSwap",
+            kind = ActionTickBoundary.ActionKind.ATTACK,
+            diagnosticsEnabled = diagnosticsEnabled,
+        )
+        ActionTickBoundary.diagnostic(
+            diagnosticsEnabled,
+            "MaceSwap attack boundary begin previousSlot=$previousSlot " +
+                "currentSwitchDelay=$currentSwitchDelay restoreReady=$restoreReady",
+        )
+
+        return try {
+            block()
+        } finally {
+            ActionTickBoundary.actionCallCompleted(action)
+            if (ActionTickBoundary.wasActionObserved(action)) {
+                lastMaceAttackBoundarySerial = ActionTickBoundary.currentSerial()
+                restoreReady = false
+                restoreWaitLogged = false
+                ActionTickBoundary.diagnostic(
+                    diagnosticsEnabled,
+                    "MaceSwap attack observed boundarySerial=$lastMaceAttackBoundarySerial",
+                )
+            } else {
+                ActionTickBoundary.cancelAction(action)
+                ActionTickBoundary.diagnostic(
+                    diagnosticsEnabled,
+                    "MaceSwap attack not observed; restore uses next pre-Aura phase",
+                )
+            }
+        }
+    }
+
     private fun processAutoDisable() {
         when (maceSwapAutoDisableAction(autoDisable, auraPostAttackTriggered, isSwitching, switchBack)) {
             MaceSwapAutoDisableAction.CLEAR_TRIGGER -> auraPostAttackTriggered = false
@@ -165,24 +232,81 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
 
     private fun processSwitchBack(manual: Boolean) {
         if (isSwitching && switchBack) {
-            val switchDelay = if (silent) -1 else 2
-            if (currentSwitchDelay < switchDelay) {
-                currentSwitchDelay++
-            } else {
-                mc.player?.let { player ->
-                    if (previousSlot in 0..8) {
-                        player.inventory.selectedSlot = previousSlot
-                        interaction.ensureHasSentCarriedItem()
-                    }
+            if (!restoreReady) {
+                val switchDelay = if (silent) -1 else 2
+                if (currentSwitchDelay < switchDelay) {
+                    currentSwitchDelay++
+                } else {
+                    restoreReady = true
+                    ActionTickBoundary.diagnostic(
+                        diagnosticsEnabled,
+                        "MaceSwap restoreReady tick=${mc.player?.tickCount ?: -1} " +
+                            "previousSlot=$previousSlot maceSlot=${mc.player?.inventory?.selectedSlot ?: -1} " +
+                            "silent=$silent currentSwitchDelay=$currentSwitchDelay " +
+                            "attackBoundarySerial=$lastMaceAttackBoundarySerial",
+                    )
                 }
-                resetState()
-                if (manual) {
-                    calledFromAura = false
-                }
+            }
+            if (manual && restoreReady) {
+                calledFromAura = false
             }
         } else if (manual) {
             calledFromAura = false
         }
+    }
+
+    private fun emitReadySwitchBack() {
+        if (!restoreReady || !isSwitching || !switchBack) {
+            return
+        }
+
+        val player = mc.player ?: return
+        if (previousSlot !in 0..8) {
+            ActionTickBoundary.diagnostic(
+                diagnosticsEnabled,
+                "MaceSwap cleared stale restore previousSlot=$previousSlot reason=invalid-slot",
+            )
+            resetState()
+            return
+        }
+
+        if (lastMaceAttackBoundarySerial != Long.MIN_VALUE &&
+            !ActionTickBoundary.hasPassed(lastMaceAttackBoundarySerial)
+        ) {
+            if (!restoreWaitLogged) {
+                restoreWaitLogged = true
+                ActionTickBoundary.diagnostic(
+                    diagnosticsEnabled,
+                    "MaceSwap restore waiting for natural boundary serial=$lastMaceAttackBoundarySerial " +
+                        "currentSerial=${ActionTickBoundary.currentSerial()}",
+                )
+            }
+            return
+        }
+
+        val expectation = ActionTickBoundary.expectHeldItemChange(
+            owner = "MaceSwap",
+            purpose = "switch-back",
+            postActionBoundarySerial = lastMaceAttackBoundarySerial.takeIf { it != Long.MIN_VALUE },
+            diagnosticsEnabled = diagnosticsEnabled,
+        )
+        if (!expectation.allowed) {
+            return
+        }
+
+        try {
+            player.inventory.selectedSlot = previousSlot
+            interaction.ensureHasSentCarriedItem()
+        } finally {
+            ActionTickBoundary.completeHeldItemChangeAttempt(expectation)
+        }
+
+        ActionTickBoundary.diagnostic(
+            diagnosticsEnabled,
+            "MaceSwap pre-Aura restored slot=$previousSlot " +
+                "boundarySerial=$lastMaceAttackBoundarySerial auraMayReselectMace=true",
+        )
+        resetState()
     }
 
     private fun findMaceInHotbar(): Int {
@@ -206,6 +330,10 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
         previousSlot = -1
         currentSwitchDelay = -1
         isSwitching = false
+        restoreReady = false
+        lastMaceAttackBoundarySerial = Long.MIN_VALUE
+        diagnosticsEnabled = false
+        restoreWaitLogged = false
     }
 
     @JvmStatic
@@ -223,6 +351,7 @@ object ModuleMaceSwap : ClientModule("MaceSwap", Category.COMBAT) {
 }
 
 internal const val MACE_SWAP_POST_AURA_PRIORITY: Short = READ_FINAL_STATE
+internal val MACE_SWAP_PRE_AURA_PRIORITY: Short = (FIRST_PRIORITY + 2).toShort()
 
 internal inline fun runVCoreMaceSwapPostAuraSync(
     processSwitchBack: () -> Unit,

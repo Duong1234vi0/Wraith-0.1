@@ -24,14 +24,14 @@ class ModuleMaceSwapAutoDisableTest {
     }
 
     @Test
-    fun correctedMaceSyncRunsAfterAuraInSourceInternalOrder() {
+    fun postAuraSyncOnlyMarksRestoreReadyAfterAura() {
         val oldOrder = mutableListOf("switchBack", "autoDisable", "attack")
         val correctedOrder = mutableListOf<String>()
         val handlers = listOf(
             FIRST_PRIORITY to { correctedOrder += "attack" },
             MACE_SWAP_POST_AURA_PRIORITY to {
                 runVCoreMaceSwapPostAuraSync(
-                    processSwitchBack = { correctedOrder += "switchBack" },
+                    processSwitchBack = { correctedOrder += "restoreReady" },
                     processAutoDisable = { correctedOrder += "autoDisable" },
                 )
             },
@@ -41,7 +41,25 @@ class ModuleMaceSwapAutoDisableTest {
 
         assertEquals(listOf("switchBack", "autoDisable", "attack"), oldOrder)
         assertTrue(MACE_SWAP_POST_AURA_PRIORITY < FIRST_PRIORITY)
-        assertEquals(listOf("attack", "switchBack", "autoDisable"), correctedOrder)
+        assertEquals(listOf("attack", "restoreReady", "autoDisable"), correctedOrder)
+    }
+
+    @Test
+    fun preAuraRestoreRunsBeforeSequencesAndAura() {
+        val order = mutableListOf<String>()
+        val handlers = listOf(
+            MACE_SWAP_PRE_AURA_PRIORITY to { order += "restore" },
+            FIRST_PRIORITY to { order += "aura" },
+            MACE_SWAP_POST_AURA_PRIORITY to { order += "restoreReady" },
+        )
+
+        handlers.sortedByDescending { it.first }.forEach { it.second() }
+
+        assertTrue(MACE_SWAP_PRE_AURA_PRIORITY > FIRST_PRIORITY)
+        assertEquals(
+            listOf("restore", "aura", "restoreReady"),
+            order,
+        )
     }
 
     @Test
