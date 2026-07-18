@@ -20,7 +20,6 @@ package net.ccbluex.liquidbounce.features.module.modules.render.popchams
 
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.math.Axis
-import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.event.events.GameTickEvent
 import net.ccbluex.liquidbounce.event.events.TotemPopEvent
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
@@ -33,7 +32,6 @@ import net.ccbluex.liquidbounce.utils.client.logger
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.client.player
 import net.ccbluex.liquidbounce.utils.client.registerDynamicImageFromResources
-import net.ccbluex.liquidbounce.utils.entity.skinTextures
 import net.minecraft.client.model.geom.ModelLayers
 import net.minecraft.client.model.geom.PartPose
 import net.minecraft.client.model.player.PlayerModel
@@ -63,7 +61,7 @@ import kotlin.math.min
 @Suppress("MagicNumber", "TooManyFunctions")
 object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
 
-    private val mode by enumChoice("Mode", Mode.SIMPLE)
+    private val mode by enumChoice("Mode", PopChamsMode.SIMPLE)
     private val secondLayer by boolean("SecondLayer", false)
     private val ySpeed by int("YSpeed", 1, -10..10)
     private val aSpeed by int("AlphaSpeed", 35, 1..100)
@@ -71,8 +69,6 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
 
     private val popList = CopyOnWriteArrayList<Person>()
 
-    private const val VCORE_MODEL_LIGHT = 10
-    private const val SHADER_FULL_BRIGHT = 0xF000F0
     private const val INITIAL_ALPHA = 255
     private const val MODEL_ROOT_SCALE_OFFSET = -0.3f
 
@@ -90,6 +86,19 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
 
         val level = mc.level ?: return@handler
         val clone = RemotePlayer(level, popped.gameProfile)
+        val skin = popped.skin
+        val snapshot = PopChamsSkinSnapshot(
+            texture = skin.body().texturePath(),
+            modelType = skin.model(),
+            position = Vec3(popped.x, popped.y, popped.z),
+            bodyYaw = popped.yBodyRot,
+            headYaw = popped.yHeadRot,
+            pitch = popped.xRot,
+            crouching = popped.isShiftKeyDown,
+            limbPosition = popped.walkAnimation.position(),
+            limbSpeed = popped.walkAnimation.speed(),
+        )
+
         clone.copyPosition(popped)
         clone.yRotO = popped.yRotO
         clone.setYRot(popped.yRot)
@@ -99,11 +108,11 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
         clone.setYBodyRot(popped.yBodyRot)
         clone.yHeadRotO = popped.yHeadRotO
         clone.setYHeadRot(popped.yHeadRot)
-        clone.isShiftKeyDown = popped.isShiftKeyDown
-        clone.walkAnimation.setSpeed(popped.walkAnimation.speed())
-        clone.walkAnimation.position = popped.walkAnimation.position()
+        clone.isShiftKeyDown = snapshot.crouching
+        clone.walkAnimation.setSpeed(snapshot.limbSpeed)
+        clone.walkAnimation.position = snapshot.limbPosition
 
-        popList.add(Person(clone, popped.skinTextures.texture))
+        popList.add(Person(clone, snapshot))
     }
 
     @Suppress("unused")
@@ -194,37 +203,45 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
         val clone = person.clone
         val renderer = mc.entityRenderDispatcher.getRenderer(clone) as? AvatarRenderer<RemotePlayer> ?: return
 
+        clone.setPos(
+            person.snapshot.position.x,
+            person.snapshot.position.y + ySpeed / 50.0,
+            person.snapshot.position.z
+        )
         val renderX = clone.x - cam.x
         val renderY = clone.y - cam.y
         val renderZ = clone.z - cam.z
-        clone.setPos(clone.x, clone.y + ySpeed / 50.0, clone.z)
 
         val state = renderer.createRenderState()
         renderer.extractRenderState(clone, state, partialTicks)
-        applyFrozenState(state, clone, person)
+        applyFrozenState(state, person)
         person.model.setupAnim(state)
 
         matrices.pushPose()
         matrices.translate(renderX, renderY, renderZ)
-        matrices.mulPose(Axis.YP.rotation(Math.toRadians((180.0f - clone.yBodyRot + yRotation(renderAlpha, partialTicks)).toDouble()).toFloat()))
+        matrices.mulPose(
+            Axis.YP.rotation(
+                Math.toRadians((180.0f - person.snapshot.bodyYaw + yRotation(renderAlpha, partialTicks)).toDouble()).toFloat()
+            )
+        )
         prepareScale(matrices)
 
         val renderType = shaderRenderType ?: renderTypeFor(person)
         val consumer = provider.getBuffer(renderType)
-        val light = if (shaderRenderType != null) SHADER_FULL_BRIGHT else VCORE_MODEL_LIGHT
-        person.model.renderToBuffer(matrices, consumer, light, OverlayTexture.NO_OVERLAY, themeColorWithAlpha(renderAlpha))
+        val light = PopChamsRenderDecisions.light(mode, shaderRenderType != null)
+        person.model.renderToBuffer(matrices, consumer, light, OverlayTexture.NO_OVERLAY, renderColor(renderAlpha))
         matrices.popPose()
     }
 
-    private fun applyFrozenState(state: AvatarRenderState, clone: RemotePlayer, person: Person) {
-        state.bodyRot = clone.yBodyRot
-        state.yRot = clone.yHeadRot - clone.yBodyRot
-        state.xRot = clone.xRot
-        state.walkAnimationPos = person.limbPosition
-        state.walkAnimationSpeed = min(person.limbSpeed, 1.0f)
-        state.wornHeadAnimationPos = person.limbPosition
-        state.isCrouching = clone.isShiftKeyDown
-        state.pose = if (clone.isShiftKeyDown) Pose.CROUCHING else Pose.STANDING
+    private fun applyFrozenState(state: AvatarRenderState, person: Person) {
+        state.bodyRot = person.snapshot.bodyYaw
+        state.yRot = person.snapshot.headYaw - person.snapshot.bodyYaw
+        state.xRot = person.snapshot.pitch
+        state.walkAnimationPos = person.snapshot.limbPosition
+        state.walkAnimationSpeed = min(person.snapshot.limbSpeed, 1.0f)
+        state.wornHeadAnimationPos = person.snapshot.limbPosition
+        state.isCrouching = person.snapshot.crouching
+        state.pose = if (person.snapshot.crouching) Pose.CROUCHING else Pose.STANDING
         state.isFallFlying = false
         state.isVisuallySwimming = false
         state.isPassenger = false
@@ -234,7 +251,7 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
         state.isSpectator = false
         state.showCape = false
 
-        val outerVisible = secondLayer
+        val outerVisible = PopChamsRenderDecisions.overlayVisible(secondLayer)
         state.showHat = outerVisible
         state.showJacket = outerVisible
         state.showLeftSleeve = outerVisible
@@ -263,32 +280,28 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
     }
 
     private fun renderTypeFor(person: Person): RenderType = when (mode) {
-        Mode.SIMPLE -> PopChamsPipelines.simple
-        Mode.TEXTURED -> PopChamsPipelines.texturedAdditive(person.texture)
+        PopChamsMode.SIMPLE -> PopChamsPipelines.simple
+        PopChamsMode.TEXTURED -> PopChamsPipelines.texturedAdditive(person.texture)
+        PopChamsMode.SKIN -> PopChamsPipelines.skinTranslucent(person.texture)
     }
 
     private fun shaderTextureFor(person: Person): Identifier = when (mode) {
-        Mode.SIMPLE -> shaderSimpleTexture() ?: person.texture
-        Mode.TEXTURED -> person.texture
+        PopChamsMode.SIMPLE -> shaderSimpleTexture() ?: person.texture
+        PopChamsMode.TEXTURED, PopChamsMode.SKIN -> person.texture
     }
 
-    private fun themeColorWithAlpha(alpha: Int): Int =
-        withAlpha(ClientTheme.accentA, alpha)
-
-    private fun withAlpha(color: Int, alpha: Int): Int =
-        (color and 0x00FFFFFF) or (alpha.coerceIn(0, 255) shl 24)
+    private fun renderColor(alpha: Int): Int =
+        PopChamsRenderDecisions.color(mode, ClientTheme.accentA, alpha)
 
     private fun interpolateFloat(oldValue: Float, newValue: Float, delta: Float): Float =
         oldValue + (newValue - oldValue) * delta
 
-    @Suppress("unused")
-    private enum class Mode(override val choiceName: String) : NamedChoice {
-        SIMPLE("Simple"),
-        TEXTURED("Textured")
-    }
-
-    private class Person(val clone: RemotePlayer, val texture: Identifier) {
-        val model: PlayerModel = PlayerModel(mc.entityModels.bakeLayer(ModelLayers.PLAYER), false).apply {
+    private class Person(val clone: RemotePlayer, val snapshot: PopChamsSkinSnapshot) {
+        val texture: Identifier get() = snapshot.texture
+        val model: PlayerModel = PlayerModel(
+            mc.entityModels.bakeLayer(PopChamsRenderDecisions.modelLayer(snapshot.modelType)),
+            PopChamsRenderDecisions.isSlim(snapshot.modelType)
+        ).apply {
             val root = root()
             val initialPose = root.initialPose
             root.setInitialPose(
@@ -306,8 +319,6 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
             )
             root.resetPose()
         }
-        val limbPosition: Float = clone.walkAnimation.position()
-        val limbSpeed: Float = clone.walkAnimation.speed()
         var alpha: Int = INITIAL_ALPHA
 
         fun renderAlpha(): Int = alpha.coerceIn(0, 255)

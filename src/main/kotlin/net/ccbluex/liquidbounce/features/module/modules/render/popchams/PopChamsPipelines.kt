@@ -81,6 +81,16 @@ object PopChamsPipelines : ShaderSource {
         )
     }
 
+    private val SKIN_PIPELINE: RenderPipeline by lazy(LazyThreadSafetyMode.NONE) {
+        entityPipeline(
+            "popchams_skin",
+            texturedVertexId,
+            texturedFragmentId,
+            BlendFunction.TRANSLUCENT,
+            textured = true
+        )
+    }
+
     val simple: RenderType by lazy(LazyThreadSafetyMode.NONE) {
         RenderType.create(
             "popchams_simple",
@@ -94,6 +104,18 @@ object PopChamsPipelines : ShaderSource {
         RenderType.create(
             "popchams_textured_additive",
             RenderSetup.builder(TEXTURED_PIPELINE)
+                .withTexture("Sampler0", texture)
+                .bufferSize(BUFFER_SIZE)
+                .createRenderSetup()
+        )
+    }
+
+    private val skinCache = HashMap<Identifier, RenderType>()
+
+    fun skinTranslucent(texture: Identifier): RenderType = skinCache.getOrPut(texture) {
+        RenderType.create(
+            "popchams_skin_translucent",
+            RenderSetup.builder(SKIN_PIPELINE)
                 .withTexture("Sampler0", texture)
                 .bufferSize(BUFFER_SIZE)
                 .createRenderSetup()
@@ -141,6 +163,7 @@ object PopChamsPipelines : ShaderSource {
             val device = RenderSystem.getDevice()
             device.precompilePipeline(SIMPLE_PIPELINE, this)
             device.precompilePipeline(TEXTURED_PIPELINE, this)
+            device.precompilePipeline(SKIN_PIPELINE, this)
         }.onFailure { throwable ->
             LiquidBounce.logger.error("Failed to precompile PopChams pipelines", throwable)
         }
