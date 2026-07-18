@@ -1,7 +1,6 @@
 package net.ccbluex.liquidbounce.features.module.modules.movement
 
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.elytraMotionAllowsKillAuraMainHandAction
-import net.ccbluex.liquidbounce.utils.client.isSilentHotbarSelectionCompatible
 import net.ccbluex.liquidbounce.utils.client.resolveSilentHotbarServerSlot
 import net.minecraft.world.InteractionHand
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -14,20 +13,19 @@ import org.junit.jupiter.api.Test
 class ModuleElytraMotionFireworkCycleTest {
 
     @Test
-    fun hotbarLeaseKeepsLocalResolutionAndAuraAlignedUntilOneBoundaryRestore() {
+    fun rawHotbarCycleKeepsAuraBlockedUntilOneBoundaryRestore() {
         assertEquals(
             listOf(ElytraMotionFireworkPacketStep.HELD_FIREWORK, ElytraMotionFireworkPacketStep.USE_ITEM),
             elytraMotionHotbarStartSteps(fireworkSlot = 6, visibleSlot = 2),
         )
-        assertEquals(6, resolveSilentHotbarServerSlot(enforcedSlot = 6, visibleSlot = 2))
+        assertEquals(2, resolveSilentHotbarServerSlot(enforcedSlot = null, visibleSlot = 2))
 
         val player = Any()
         val level = Any()
         val state = stateWithPending(player, level, fireworkSlot = 6, returnSlot = 2)
-        state.completeUse(boundarySerial = 10, observed = true, accepted = true)
+        state.completeUse(boundarySerial = 10, observed = true)
 
         assertTrue(state.pending!!.usePacketObserved)
-        assertTrue(state.pending!!.interactionAccepted)
         assertTrue(state.isMainHandActionActive(currentSerial = 10))
         assertFalse(elytraMotionAllowsKillAuraMainHandAction(state.isMainHandActionActive(10)))
         assertSame(
@@ -39,7 +37,7 @@ class ModuleElytraMotionFireworkCycleTest {
             state.resolveRestore(player, level, 2, currentSerial = 11, expectedServerSlot = 6),
         )
 
-        state.pending!!.leaseOwned = false
+        state.pending!!.serverLeaseOwned = false
         assertFalse(state.isMainHandActionActive(currentSerial = 11))
         assertTrue(elytraMotionAllowsKillAuraMainHandAction(state.isMainHandActionActive(11)))
     }
@@ -54,35 +52,7 @@ class ModuleElytraMotionFireworkCycleTest {
     }
 
     @Test
-    fun anotherSilentHotbarOwnerCannotBeOverwrittenByFireworkLease() {
-        val otherOwner = Any()
-        val fireworkOwner = Any()
-
-        assertFalse(
-            isSilentHotbarSelectionCompatible(
-                currentRequester = otherOwner,
-                leaseRequester = null,
-                requestedBy = fireworkOwner,
-            )
-        )
-        assertFalse(
-            isSilentHotbarSelectionCompatible(
-                currentRequester = otherOwner,
-                leaseRequester = otherOwner,
-                requestedBy = fireworkOwner,
-            )
-        )
-        assertTrue(
-            isSilentHotbarSelectionCompatible(
-                currentRequester = fireworkOwner,
-                leaseRequester = fireworkOwner,
-                requestedBy = fireworkOwner,
-            )
-        )
-    }
-
-    @Test
-    fun timerOnlyConsumesAcceptedObservedUseResult() {
+    fun timerConsumesRawUseAttemptWithoutLocalAcceptance() {
         val timer = ElytraMotionFireworkTimer(initialSuccessfulUseNanos = 0L)
         val elapsed = 600_000_000L
 
@@ -128,7 +98,7 @@ class ModuleElytraMotionFireworkCycleTest {
     }
 
     @Test
-    fun mainInventoryOrderIsSwapInLeaseUseBoundaryHeldRestoreThenSwapBack() {
+    fun mainInventoryOrderIsSwapInServerLeaseUseBoundaryHeldRestoreThenSwapBack() {
         val player = Any()
         val level = Any()
         val cycle = pending(
@@ -138,15 +108,15 @@ class ModuleElytraMotionFireworkCycleTest {
             returnSlot = 1,
             inventorySourceSlot = 20,
             stage = ElytraMotionFireworkCycleStage.WAITING_FOR_SWAP_IN,
-            leaseOwned = false,
+            serverLeaseOwned = false,
             source = FireworkSource.MAIN_INVENTORY,
         )
         val state = ElytraMotionFireworkCycleState()
         assertTrue(state.begin(cycle))
 
         cycle.inventorySwapObserved = true
-        cycle.leaseOwned = true
-        state.completeUse(boundarySerial = 80, observed = true, accepted = true)
+        cycle.serverLeaseOwned = true
+        state.completeUse(boundarySerial = 80, observed = true)
         assertEquals(ElytraMotionFireworkCycleStage.WAITING_FOR_BOUNDARY, cycle.stage)
         assertTrue(state.isMainHandActionActive(80))
         assertEquals(
@@ -154,7 +124,7 @@ class ModuleElytraMotionFireworkCycleTest {
             state.resolveRestore(player, level, 1, currentSerial = 81, expectedServerSlot = 3),
         )
 
-        cycle.leaseOwned = false
+        cycle.serverLeaseOwned = false
         cycle.stage = ElytraMotionFireworkCycleStage.WAITING_FOR_SWAP_BACK
         cycle.inventoryRestoreObserved = true
         assertEquals(ElytraMotionFireworkCycleStage.WAITING_FOR_SWAP_BACK, cycle.stage)
@@ -162,14 +132,13 @@ class ModuleElytraMotionFireworkCycleTest {
     }
 
     @Test
-    fun cancelledUseStillRestoresSafelyWithoutConsumingTimer() {
+    fun cancelledRawUseStillRestoresSafelyAndConsumesVCoreInterval() {
         val player = Any()
         val level = Any()
         val state = stateWithPending(player, level, fireworkSlot = 5, returnSlot = 0)
-        state.completeUse(boundarySerial = 30, observed = false, accepted = false)
+        state.completeUse(boundarySerial = 30, observed = false)
 
         assertFalse(state.pending!!.usePacketObserved)
-        assertFalse(state.pending!!.interactionAccepted)
         assertSame(
             ElytraMotionFireworkRestoreDecision.WAIT,
             state.resolveRestore(player, level, 0, currentSerial = 30, expectedServerSlot = 5),
@@ -179,8 +148,8 @@ class ModuleElytraMotionFireworkCycleTest {
             state.resolveRestore(player, level, 0, currentSerial = 31, expectedServerSlot = 5),
         )
         val timer = ElytraMotionFireworkTimer(0L)
-        assertFalse(timer.record(FireworkUseResult.FAILED, 600_000_000L))
-        assertTrue(timer.hasElapsed(600_000_000L))
+        assertTrue(timer.record(FireworkUseResult.USED, 600_000_000L))
+        assertFalse(timer.hasElapsed(600_000_000L))
     }
 
     @Test
@@ -201,7 +170,7 @@ class ModuleElytraMotionFireworkCycleTest {
         val player = Any()
         val level = Any()
         val state = stateWithPending(player, level, fireworkSlot = 5, returnSlot = 3)
-        state.completeUse(boundarySerial = 50, observed = true, accepted = true)
+        state.completeUse(boundarySerial = 50, observed = true)
 
         assertEquals(
             ElytraMotionFireworkRestoreDecision.RELEASE_AND_SYNC(5, emitsHeldPacket = false),
@@ -214,7 +183,7 @@ class ModuleElytraMotionFireworkCycleTest {
         val player = Any()
         val level = Any()
         val state = stateWithPending(player, level, fireworkSlot = 5, returnSlot = 0)
-        state.completeUse(boundarySerial = 40, observed = true, accepted = true)
+        state.completeUse(boundarySerial = 40, observed = true)
 
         assertEquals(
             ElytraMotionFireworkRestoreDecision.RELEASE_AND_SYNC(8, emitsHeldPacket = true),
@@ -227,7 +196,7 @@ class ModuleElytraMotionFireworkCycleTest {
         val originalPlayer = Any()
         val level = Any()
         val state = stateWithPending(originalPlayer, level, fireworkSlot = 5, returnSlot = 3)
-        state.completeUse(boundarySerial = 60, observed = true, accepted = true)
+        state.completeUse(boundarySerial = 60, observed = true)
 
         assertSame(
             ElytraMotionFireworkRestoreDecision.DROP,
@@ -261,7 +230,7 @@ class ModuleElytraMotionFireworkCycleTest {
         returnSlot: Int,
         inventorySourceSlot: Int? = null,
         stage: ElytraMotionFireworkCycleStage = ElytraMotionFireworkCycleStage.WAITING_FOR_BOUNDARY,
-        leaseOwned: Boolean = true,
+        serverLeaseOwned: Boolean = true,
         source: FireworkSource = FireworkSource.HOTBAR,
     ) = ElytraMotionFireworkPendingCycle(
         playerIdentity = player,
@@ -275,6 +244,6 @@ class ModuleElytraMotionFireworkCycleTest {
         createdNanos = 0,
         source = source,
         stage = stage,
-        leaseOwned = leaseOwned,
+        serverLeaseOwned = serverLeaseOwned,
     )
 }

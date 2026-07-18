@@ -21,6 +21,7 @@ package net.ccbluex.liquidbounce.injection.mixins.minecraft.network;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import net.ccbluex.liquidbounce.event.EventManager;
 import net.ccbluex.liquidbounce.event.events.*;
+import net.ccbluex.liquidbounce.utils.client.ServerCarriedSlotLease;
 import net.ccbluex.liquidbounce.utils.client.SilentHotbar;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
@@ -96,7 +97,8 @@ public abstract class MixinClientPlayerInteractionManager {
      */
     @ModifyExpressionValue(method = "ensureHasSentCarriedItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Inventory;getSelectedSlot()I"))
     private int hookCustomSelectedSlot(int original) {
-        return SilentHotbar.INSTANCE.getServersideSlot();
+        int silentHotbarSlot = SilentHotbar.INSTANCE.resolveServerSlot(original);
+        return ServerCarriedSlotLease.INSTANCE.resolveSlot(silentHotbarSlot);
     }
 
     @Inject(method = "useItem", at = @At("RETURN"))

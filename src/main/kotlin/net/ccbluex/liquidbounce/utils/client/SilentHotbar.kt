@@ -34,17 +34,18 @@ import net.minecraft.world.InteractionHand
 object SilentHotbar : EventListener {
 
     private var hotbarState: SilentHotbarState? = null
-    private var leaseRequester: Any? = null
     private var ticksSinceLastUpdate: Int = 0
 
     /**
      * Returns the slot that interactions would take place with
      */
     val serversideSlot: Int
-        get() = resolveSilentHotbarServerSlot(
-            enforcedSlot = hotbarState?.enforcedHotbarSlot,
-            visibleSlot = mc.player?.inventory?.selectedSlot ?: 0,
-        )
+        get() = resolveServerSlot(mc.player?.inventory?.selectedSlot ?: 0)
+
+    fun resolveServerSlot(visibleSlot: Int): Int = resolveSilentHotbarServerSlot(
+        enforcedSlot = hotbarState?.enforcedHotbarSlot,
+        visibleSlot = visibleSlot,
+    )
 
     val clientsideSlot: Int
         get() = hotbarState?.clientsideSlot ?: mc.player?.inventory?.selectedSlot ?: 0
@@ -56,10 +57,6 @@ object SilentHotbar : EventListener {
         slot is OffHandSlot || selectSlotSilently(requester, slot.hotbarSlot, ticksUntilReset)
 
     fun selectSlotSilently(requester: Any?, slot: Int, ticksUntilReset: Int): Boolean {
-        if (leaseRequester != null && leaseRequester != requester) {
-            return false
-        }
-
         val event = EventManager.callEvent(SelectHotbarSlotSilentlyEvent(requester, slot))
         if (event.isCancelled) {
             return false
@@ -70,24 +67,9 @@ object SilentHotbar : EventListener {
         return true
     }
 
-    /**
-     * Selects [slot] and prevents unrelated requesters from replacing it until [resetSlot] or the safety timeout.
-     */
-    fun selectSlotSilentlyWithLease(requester: Any, slot: Int, ticksUntilReset: Int): Boolean {
-        if (hasIncompatibleSelection(requester) || !selectSlotSilently(requester, slot, ticksUntilReset)) {
-            return false
-        }
-
-        leaseRequester = requester
-        return hotbarState?.requester == requester && hotbarState?.enforcedHotbarSlot == slot
-    }
-
     fun resetSlot(requester: Any?) {
         if (hotbarState?.requester == requester) {
             hotbarState = null
-        }
-        if (leaseRequester == requester) {
-            leaseRequester = null
         }
     }
 
@@ -98,23 +80,11 @@ object SilentHotbar : EventListener {
      */
     fun isSlotModifiedBy(requester: Any?) = hotbarState?.requester == requester
 
-    fun isLeaseOwnedBy(requester: Any?) = leaseRequester == requester
-
-    fun hasIncompatibleSelection(requester: Any?): Boolean =
-        !isSilentHotbarSelectionCompatible(
-            currentRequester = hotbarState?.requester,
-            leaseRequester = leaseRequester,
-            requestedBy = requester,
-        )
-
     @Suppress("unused")
     private val tickHandler = handler<GameTickEvent>(priority = 1001) {
         val hotbarState = hotbarState ?: return@handler
 
         if (ticksSinceLastUpdate >= hotbarState.ticksUntilReset) {
-            if (leaseRequester == hotbarState.requester) {
-                leaseRequester = null
-            }
             this.hotbarState = null
             return@handler
         }
@@ -125,13 +95,6 @@ object SilentHotbar : EventListener {
 
 internal fun resolveSilentHotbarServerSlot(enforcedSlot: Int?, visibleSlot: Int): Int =
     enforcedSlot ?: visibleSlot
-
-internal fun isSilentHotbarSelectionCompatible(
-    currentRequester: Any?,
-    leaseRequester: Any?,
-    requestedBy: Any?,
-): Boolean = (leaseRequester == null || leaseRequester == requestedBy) &&
-    (currentRequester == null || currentRequester == requestedBy)
 
 private class SilentHotbarState(
     val enforcedHotbarSlot: Int,
