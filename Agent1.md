@@ -10511,7 +10511,7 @@ and full-bright light. `shaderPassRendered` still suppresses the normal duplicat
   `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
 - Result: `BUILD SUCCESSFUL in 2m 1s`.
 - JAR: `build/libs/liquidbounce-0.31.2.jar`.
-- SHA-256: `a73e8b6840cf708bc6b92e0c3d28e1acfcea48596a4915ec39b9450f64cecc5a`.
+- SHA-256: `5ad6b718c198a10f2a0f9002b2385e72253a08cebe477e9041d3e019c82e3fd4` (latest artifact after the focused-test build).
 
 ### Manual render status
 
