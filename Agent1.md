@@ -9683,3 +9683,133 @@ to keep container inventory actions out of the reproduced action window. No dela
 - Documentation entry: `72dc19a5` — `docs(agent1): record firework lease reliability fix`.
 - First push result: `69cb8230c..72dc19a53 main -> main` on `origin` (`https://github.com/Duong1234vi0/Wraith-0.1.git`).
 - This final push-status clarification is committed separately so the journal records the exact remote result.
+
+## ElytraMotion raw V-Core-shaped server-slot Firework correction — 2026-07-18, Codex
+
+### Checked
+
+- Read the complete read-first/port/evidence/review workflow in `Skill/` before editing.
+- Read the complete V-Core references: `vcore/features/modules/movement/ElytraMotion.java`,
+  `vcore/utility/player/InventoryUtility.java`, `vcore/features/modules/Module.java` (including
+  `sendSequencedPacket`), and `vcore/utility/Timer.java`.
+- Read the complete current Wraith paths: `ModuleElytraMotion.kt`, `SilentHotbar.kt`,
+  `MixinPlayerInventory.java`, `MixinClientPlayerInteractionManager.java`, `NetworkUtils.kt`,
+  `MojangCompatExtensions.kt`, `ActionTickBoundary.kt`, `ModuleKillAura.kt`, `ModuleElytraSwap.kt`,
+  and `ModuleElytraMotionFireworkCycleTest.kt`.
+- Read the complete Grim references `PacketOrderE.java`, `PacketOrderI.java`, and
+  `PacketOrderProcessor.java`, plus both latest ElytraMotion Firework entries immediately above.
+- Verified target `minecraft_version=26.1.2`, current branch `main`, and preserved pre-existing unrelated
+  worktree changes (`src.zip`, the deleted sound, caches, and attached reference trees).
+
+### Reproduced regression
+
+Offhand Fireworks worked, but Hotbar Fireworks repeatedly appeared to switch in and out and rarely boosted.
+The previous correction had removed PacketOrderE by holding an ordinary `SilentHotbar` lease across the natural
+boundary, while local selected-item resolution and `interactItem(...)` remained coupled to that lease.
+
+### V-Core raw Firework behavior
+
+V-Core `useFireworkFromHotbar()` is a raw server sequence:
+
+`HELD_ITEM_CHANGE(Firework) -> sequenced USE_ITEM(MAIN_HAND) -> HELD_ITEM_CHANGE(return)`.
+
+It does not call vanilla/local item interaction, inspect `InteractionResult`, claim a cross-tick SilentHotbar
+state, override local `getSelectedItem()`, or gate its 500 ms timer on local acceptance.
+
+### Why the ordinary SilentHotbar lease was incorrect
+
+The failed Wraith implementation changed the ordinary SilentHotbar server slot, which also fed
+`MixinPlayerInventory` and local selected-item/main-hand resolution. It then called `interaction.interactItem(...)`.
+When local interaction returned `PASS` or otherwise failed, `acceptedAndObserved` stayed false, the timer was not
+reset, and the module retried on later ticks, producing the visible switch/retry loop.
+
+### Server-only carried-slot lease
+
+Added `ServerCarriedSlotLease`, with owner, hotbar slot, player/level identities, creation tick/time, bounded
+expiry, identity cleanup, world/disconnect cleanup, conflict refusal for active ordinary SilentHotbar state, and
+owner-protected release. `MixinClientPlayerInteractionManager.ensureHasSentCarriedItem` now resolves in this order:
+
+1. server-only carried-slot lease;
+2. ordinary SilentHotbar server slot;
+3. the original visible selected slot.
+
+`MixinPlayerInventory` remains unchanged and never reads the new lease. Ordinary SilentHotbar behavior was restored
+to its pre-lease implementation; the failed lease-only APIs/state were removed.
+
+### Raw hotbar use
+
+Hotbar Fireworks now validate/capture the visible and Firework slots, claim only the server lease, call
+`ensureHasSentCarriedItem()`, send a raw sequenced `ServerboundUseItemPacket`, complete the action token, and retain
+only the server lease until the natural boundary. The client continues resolving and rendering its visible weapon.
+Already-selected Fireworks send only raw `USE_ITEM`; Offhand remains the direct raw sequenced route. Main-inventory
+Fireworks retain inventory-first search and gated SWAP-in/SWAP-back, but use the same raw server-slot route after the
+SWAP-in and restore the held slot before the SWAP-back.
+
+### Timer correction
+
+The timer now resets after a raw `USE_ITEM` send attempt, whether or not an outgoing observer sees the packet. No
+local `InteractionResult`, `itemStack.use`, or client prediction participates. Blocked/no-item/pending/invalid
+routes do not reset the interval, and the per-player-tick attempt guard remains.
+
+### KillAura boundary coordination
+
+The existing narrow action-window gate remains: no attack, AutoWeapon held-slot preparation, ShieldBreaker, or
+MaceSwap action until the first natural boundary. Target tracking and rotation state are retained, and Aura resumes
+immediately after the deferred restore. ElytraTarget and ElytraMotion movement/BPS formulas were untouched.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/client/ServerCarriedSlotLease.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/client/SilentHotbar.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/network/MixinClientPlayerInteractionManager.java`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotionFireworkCycleTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/utils/client/ServerCarriedSlotLeaseTest.kt`
+- `Agent1.md` (this append-only record)
+
+V-Core and Grim reference files, `MixinPlayerInventory.java`, `ModuleKillAura.kt`, `ModuleElytraSwap.kt`,
+ElytraTarget, movement/BPS code, and unrelated dirty/untracked workspace files were not changed.
+
+### Tests
+
+- Focused command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.movement.ModuleElytraMotionFireworkCycleTest --tests net.ccbluex.liquidbounce.utils.client.ServerCarriedSlotLeaseTest`
+- Result after clean build: `BUILD SUCCESSFUL`; 19 tests, zero failures (12 Elytra cycle + 7 server lease).
+- Coverage includes server/local slot separation, ordinary SilentHotbar fallback, owner conflicts, bounded timeout,
+  player/world identity cleanup, raw-use timer semantics, cancelled observer behavior, one attempt per tick,
+  deferred boundary restore, inventory ordering, Offhand action-window protection, Aura gating, and lifecycle state.
+
+### Build/JAR hash
+
+- Command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL` in 2m 22s.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `6e6bae2e972d1a273b10caa617577e64ce37480c94fbedf67c6868e501398502`.
+
+### FCL/Grim status
+
+FCL/in-game testing and server-side Grim capture remain unavailable in this headless Termux workspace. The required
+manual matrix remains: one Firework stack in another Hotbar slot with the original weapon selected, AutoFirework and
+ElytraTarget enabled, ordinary SilentHotbar disabled; then already-selected Hotbar, Offhand control, main inventory,
+target loss, module disable, world replacement, and another SilentHotbar owner. Verify visible weapon stability,
+one attempt per 500 ms, reliable boost, `HELD Firework -> USE_ITEM -> CLIENT_TICK_END -> HELD visible`, no
+PacketOrderE/PacketOrderI, and immediate Aura resumption.
+
+### Deviations
+
+The only deviation from V-Core is the required current Grim adaptation: the final server-slot restore is deferred
+until `ActionTickBoundary.hasPassed(useBoundarySerial)` and uses the current `ensureHasSentCarriedItem()` cache path.
+No unrequested behavior was added.
+
+The previous reliability fix used ordinary SilentHotbar across the post-use boundary. That changed local
+selected-item resolution and gated the timer on a local `InteractionResult`, neither of which exists in V-Core.
+ElytraMotion now uses a server-only carried-slot lease, raw sequenced USE_ITEM, and V-Core-shaped timer semantics
+while retaining only the deferred network restore required for PacketOrderE.
+
+### Commits
+
+- `fix(elytra): restore raw vcore hotbar firework use`
+- `docs(agent1): record raw firework reliability correction` (this entry)
+
+Exact implementation/documentation commit hashes and push result are reported in the task handoff.
