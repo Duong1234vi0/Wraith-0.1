@@ -1,5 +1,9 @@
 package net.ccbluex.liquidbounce.features.module.modules.movement
 
+import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.elytraMotionAllowsKillAuraMainHandAction
+import net.ccbluex.liquidbounce.utils.client.isSilentHotbarSelectionCompatible
+import net.ccbluex.liquidbounce.utils.client.resolveSilentHotbarServerSlot
+import net.minecraft.world.InteractionHand
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -10,41 +14,173 @@ import org.junit.jupiter.api.Test
 class ModuleElytraMotionFireworkCycleTest {
 
     @Test
-    fun hotbarFireworkDefersExactlyOneReturnHeldPacketUntilNaturalBoundary() {
+    fun hotbarLeaseKeepsLocalResolutionAndAuraAlignedUntilOneBoundaryRestore() {
         assertEquals(
-            listOf(
-                ElytraMotionFireworkPacketStep.HELD_FIREWORK,
-                ElytraMotionFireworkPacketStep.USE_ITEM,
-            ),
+            listOf(ElytraMotionFireworkPacketStep.HELD_FIREWORK, ElytraMotionFireworkPacketStep.USE_ITEM),
             elytraMotionHotbarStartSteps(fireworkSlot = 6, visibleSlot = 2),
         )
+        assertEquals(6, resolveSilentHotbarServerSlot(enforcedSlot = 6, visibleSlot = 2))
 
         val player = Any()
         val level = Any()
         val state = stateWithPending(player, level, fireworkSlot = 6, returnSlot = 2)
-        state.completeUse(boundarySerial = 10, observed = true)
+        state.completeUse(boundarySerial = 10, observed = true, accepted = true)
 
+        assertTrue(state.pending!!.usePacketObserved)
+        assertTrue(state.pending!!.interactionAccepted)
+        assertTrue(state.isMainHandActionActive(currentSerial = 10))
+        assertFalse(elytraMotionAllowsKillAuraMainHandAction(state.isMainHandActionActive(10)))
         assertSame(
             ElytraMotionFireworkRestoreDecision.WAIT,
-            state.resolveRestore(player, level, currentVisibleSlot = 2, currentSerial = 10, expectedServerSlot = 6),
+            state.resolveRestore(player, level, 2, currentSerial = 10, expectedServerSlot = 6),
         )
         assertEquals(
-            ElytraMotionFireworkRestoreDecision.SEND(2),
-            state.resolveRestore(player, level, currentVisibleSlot = 2, currentSerial = 11, expectedServerSlot = 6),
+            ElytraMotionFireworkRestoreDecision.RELEASE_AND_SYNC(slot = 2, emitsHeldPacket = true),
+            state.resolveRestore(player, level, 2, currentSerial = 11, expectedServerSlot = 6),
         )
-        state.clear()
-        assertSame(
-            ElytraMotionFireworkRestoreDecision.CLEAR,
-            state.resolveRestore(player, level, currentVisibleSlot = 2, currentSerial = 12, expectedServerSlot = 2),
-        )
+
+        state.pending!!.leaseOwned = false
+        assertFalse(state.isMainHandActionActive(currentSerial = 11))
+        assertTrue(elytraMotionAllowsKillAuraMainHandAction(state.isMainHandActionActive(11)))
     }
 
     @Test
-    fun alreadySelectedFireworkUsesWithoutAnyHeldPacket() {
+    fun alreadySelectedFireworkUsesWithoutLeaseOrHeldPacket() {
         assertEquals(
             listOf(ElytraMotionFireworkPacketStep.USE_ITEM),
             elytraMotionHotbarStartSteps(fireworkSlot = 4, visibleSlot = 4),
         )
+        assertEquals(4, resolveSilentHotbarServerSlot(enforcedSlot = null, visibleSlot = 4))
+    }
+
+    @Test
+    fun anotherSilentHotbarOwnerCannotBeOverwrittenByFireworkLease() {
+        val otherOwner = Any()
+        val fireworkOwner = Any()
+
+        assertFalse(
+            isSilentHotbarSelectionCompatible(
+                currentRequester = otherOwner,
+                leaseRequester = null,
+                requestedBy = fireworkOwner,
+            )
+        )
+        assertFalse(
+            isSilentHotbarSelectionCompatible(
+                currentRequester = otherOwner,
+                leaseRequester = otherOwner,
+                requestedBy = fireworkOwner,
+            )
+        )
+        assertTrue(
+            isSilentHotbarSelectionCompatible(
+                currentRequester = fireworkOwner,
+                leaseRequester = fireworkOwner,
+                requestedBy = fireworkOwner,
+            )
+        )
+    }
+
+    @Test
+    fun timerOnlyConsumesAcceptedObservedUseResult() {
+        val timer = ElytraMotionFireworkTimer(initialSuccessfulUseNanos = 0L)
+        val elapsed = 600_000_000L
+
+        assertTrue(timer.hasElapsed(elapsed))
+        assertFalse(timer.record(FireworkUseResult.BLOCKED, elapsed))
+        assertFalse(timer.record(FireworkUseResult.NO_ITEM, elapsed))
+        assertFalse(timer.record(FireworkUseResult.FAILED, elapsed))
+        assertFalse(timer.record(FireworkUseResult.STARTED_PENDING, elapsed))
+        assertEquals(0L, timer.lastSuccessfulUseNanos())
+
+        assertTrue(timer.record(FireworkUseResult.USED, elapsed))
+        assertEquals(elapsed, timer.lastSuccessfulUseNanos())
+        assertFalse(timer.hasElapsed(elapsed + 499_000_000L))
+        assertTrue(timer.hasElapsed(elapsed + 500_000_000L))
+    }
+
+    @Test
+    fun retryGuardAllowsAtMostOneAttemptPerPlayerGameTick() {
+        val guard = ElytraMotionFireworkAttemptGuard()
+        val player = Any()
+
+        assertTrue(guard.tryAcquire(player, currentTick = 40))
+        assertFalse(guard.tryAcquire(player, currentTick = 40))
+        assertTrue(guard.tryAcquire(player, currentTick = 41))
+        assertTrue(guard.tryAcquire(Any(), currentTick = 41))
+    }
+
+    @Test
+    fun directOffhandWindowBlocksAuraButNeverClaimsMainHandWindow() {
+        val window = ElytraMotionFireworkActionWindow(
+            playerIdentity = Any(),
+            levelIdentity = Any(),
+            hand = InteractionHand.OFF_HAND,
+            boundarySerial = 70,
+            createdTick = 70,
+            createdNanos = 0,
+        )
+
+        assertTrue(window.isActive(currentSerial = 70, mainHandOnly = false))
+        assertFalse(window.isActive(currentSerial = 70, mainHandOnly = true))
+        assertFalse(elytraMotionAllowsKillAuraMainHandAction(window.isActive(70, mainHandOnly = false)))
+        assertTrue(elytraMotionAllowsKillAuraMainHandAction(window.isActive(71, mainHandOnly = false)))
+    }
+
+    @Test
+    fun mainInventoryOrderIsSwapInLeaseUseBoundaryHeldRestoreThenSwapBack() {
+        val player = Any()
+        val level = Any()
+        val cycle = pending(
+            player = player,
+            level = level,
+            fireworkSlot = 3,
+            returnSlot = 1,
+            inventorySourceSlot = 20,
+            stage = ElytraMotionFireworkCycleStage.WAITING_FOR_SWAP_IN,
+            leaseOwned = false,
+            source = FireworkSource.MAIN_INVENTORY,
+        )
+        val state = ElytraMotionFireworkCycleState()
+        assertTrue(state.begin(cycle))
+
+        cycle.inventorySwapObserved = true
+        cycle.leaseOwned = true
+        state.completeUse(boundarySerial = 80, observed = true, accepted = true)
+        assertEquals(ElytraMotionFireworkCycleStage.WAITING_FOR_BOUNDARY, cycle.stage)
+        assertTrue(state.isMainHandActionActive(80))
+        assertEquals(
+            ElytraMotionFireworkRestoreDecision.RELEASE_AND_SYNC(1, emitsHeldPacket = true),
+            state.resolveRestore(player, level, 1, currentSerial = 81, expectedServerSlot = 3),
+        )
+
+        cycle.leaseOwned = false
+        cycle.stage = ElytraMotionFireworkCycleStage.WAITING_FOR_SWAP_BACK
+        cycle.inventoryRestoreObserved = true
+        assertEquals(ElytraMotionFireworkCycleStage.WAITING_FOR_SWAP_BACK, cycle.stage)
+        assertTrue(cycle.inventoryRestoreObserved)
+    }
+
+    @Test
+    fun cancelledUseStillRestoresSafelyWithoutConsumingTimer() {
+        val player = Any()
+        val level = Any()
+        val state = stateWithPending(player, level, fireworkSlot = 5, returnSlot = 0)
+        state.completeUse(boundarySerial = 30, observed = false, accepted = false)
+
+        assertFalse(state.pending!!.usePacketObserved)
+        assertFalse(state.pending!!.interactionAccepted)
+        assertSame(
+            ElytraMotionFireworkRestoreDecision.WAIT,
+            state.resolveRestore(player, level, 0, currentSerial = 30, expectedServerSlot = 5),
+        )
+        assertEquals(
+            ElytraMotionFireworkRestoreDecision.RELEASE_AND_SYNC(0, emitsHeldPacket = true),
+            state.resolveRestore(player, level, 0, currentSerial = 31, expectedServerSlot = 5),
+        )
+        val timer = ElytraMotionFireworkTimer(0L)
+        assertFalse(timer.record(FireworkUseResult.FAILED, 600_000_000L))
+        assertTrue(timer.hasElapsed(600_000_000L))
     }
 
     @Test
@@ -61,43 +197,15 @@ class ModuleElytraMotionFireworkCycleTest {
     }
 
     @Test
-    fun moduleDisableDoesNotDiscardPendingRestore() {
+    fun currentVisibleFireworkStillRunsOneSyncCallWithoutDuplicateHeldPacket() {
         val player = Any()
         val level = Any()
-        val state = stateWithPending(player, level, fireworkSlot = 7, returnSlot = 1)
-        state.completeUse(boundarySerial = 20, observed = true)
+        val state = stateWithPending(player, level, fireworkSlot = 5, returnSlot = 3)
+        state.completeUse(boundarySerial = 50, observed = true, accepted = true)
 
-        // Module disable deliberately has no state transition on the always-running cycle.
         assertEquals(
-            ElytraMotionFireworkRestoreDecision.SEND(1),
-            state.resolveRestore(player, level, currentVisibleSlot = 1, currentSerial = 21, expectedServerSlot = 7),
-        )
-    }
-
-    @Test
-    fun worldOrDisconnectCleanupDropsPendingStateWithoutRestore() {
-        val state = stateWithPending(Any(), Any(), fireworkSlot = 5, returnSlot = 0)
-
-        state.clear()
-
-        assertNull(state.pending)
-    }
-
-    @Test
-    fun cancelledUseStillWaitsForBoundaryThenRestores() {
-        val player = Any()
-        val level = Any()
-        val state = stateWithPending(player, level, fireworkSlot = 5, returnSlot = 0)
-        state.completeUse(boundarySerial = 30, observed = false)
-
-        assertFalse(state.pending!!.usePacketObserved)
-        assertSame(
-            ElytraMotionFireworkRestoreDecision.WAIT,
-            state.resolveRestore(player, level, currentVisibleSlot = 0, currentSerial = 30, expectedServerSlot = 5),
-        )
-        assertEquals(
-            ElytraMotionFireworkRestoreDecision.SEND(0),
-            state.resolveRestore(player, level, currentVisibleSlot = 0, currentSerial = 31, expectedServerSlot = 5),
+            ElytraMotionFireworkRestoreDecision.RELEASE_AND_SYNC(5, emitsHeldPacket = false),
+            state.resolveRestore(player, level, currentVisibleSlot = 5, currentSerial = 51, expectedServerSlot = 5),
         )
     }
 
@@ -106,38 +214,34 @@ class ModuleElytraMotionFireworkCycleTest {
         val player = Any()
         val level = Any()
         val state = stateWithPending(player, level, fireworkSlot = 5, returnSlot = 0)
-        state.completeUse(boundarySerial = 40, observed = true)
+        state.completeUse(boundarySerial = 40, observed = true, accepted = true)
 
         assertEquals(
-            ElytraMotionFireworkRestoreDecision.SEND(8),
+            ElytraMotionFireworkRestoreDecision.RELEASE_AND_SYNC(8, emitsHeldPacket = true),
             state.resolveRestore(player, level, currentVisibleSlot = 8, currentSerial = 41, expectedServerSlot = 5),
         )
     }
 
     @Test
-    fun invalidVisibleSlotFallsBackAndKnownServerSlotAvoidsDuplicate() {
-        val player = Any()
-        val level = Any()
-        val state = stateWithPending(player, level, fireworkSlot = 5, returnSlot = 3)
-        state.completeUse(boundarySerial = 50, observed = true)
-
-        assertSame(
-            ElytraMotionFireworkRestoreDecision.CLEAR,
-            state.resolveRestore(player, level, currentVisibleSlot = -1, currentSerial = 51, expectedServerSlot = 3),
-        )
-    }
-
-    @Test
-    fun playerReplacementClearsWithoutSendingIntoNewSession() {
+    fun lifecycleReplacementDropsStateWithoutRestoreIntoNewSession() {
         val originalPlayer = Any()
         val level = Any()
         val state = stateWithPending(originalPlayer, level, fireworkSlot = 5, returnSlot = 3)
-        state.completeUse(boundarySerial = 60, observed = true)
+        state.completeUse(boundarySerial = 60, observed = true, accepted = true)
 
         assertSame(
-            ElytraMotionFireworkRestoreDecision.CLEAR,
+            ElytraMotionFireworkRestoreDecision.DROP,
             state.resolveRestore(Any(), level, currentVisibleSlot = 3, currentSerial = 61, expectedServerSlot = 5),
         )
+        assertNull(state.pending)
+    }
+
+    @Test
+    fun explicitClearReleasesPendingStateModel() {
+        val state = stateWithPending(Any(), Any(), fireworkSlot = 5, returnSlot = 0)
+
+        state.clear()
+
         assertNull(state.pending)
     }
 
@@ -155,15 +259,22 @@ class ModuleElytraMotionFireworkCycleTest {
         level: Any,
         fireworkSlot: Int,
         returnSlot: Int,
+        inventorySourceSlot: Int? = null,
+        stage: ElytraMotionFireworkCycleStage = ElytraMotionFireworkCycleStage.WAITING_FOR_BOUNDARY,
+        leaseOwned: Boolean = true,
+        source: FireworkSource = FireworkSource.HOTBAR,
     ) = ElytraMotionFireworkPendingCycle(
         playerIdentity = player,
         levelIdentity = level,
         fireworkSlot = fireworkSlot,
         capturedReturnSlot = returnSlot,
-        inventorySourceSlot = null,
+        inventorySourceSlot = inventorySourceSlot,
         originalTemporaryItem = null,
         diagnosticsEnabled = false,
         createdTick = 0,
         createdNanos = 0,
+        source = source,
+        stage = stage,
+        leaseOwned = leaseOwned,
     )
 }
