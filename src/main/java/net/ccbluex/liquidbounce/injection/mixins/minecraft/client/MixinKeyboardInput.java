@@ -29,6 +29,7 @@ import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKi
 import net.ccbluex.liquidbounce.features.module.modules.movement.noslow.ModuleNoSlow;
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager;
 import net.ccbluex.liquidbounce.utils.aiming.features.MovementCorrection;
+import net.ccbluex.liquidbounce.utils.aiming.features.FocusedFullMoveFix;
 import net.ccbluex.liquidbounce.utils.input.InputTracker;
 import net.ccbluex.liquidbounce.utils.movement.DirectionalInput;
 import net.minecraft.client.Minecraft;
@@ -163,8 +164,12 @@ public abstract class MixinKeyboardInput extends MixinInput {
 
             resetFullMoveFixState();
             // #Edit By Codex: Focused Full now follows VCore's quantized target-position input search.
-            float directionYaw = getQuantizedYawTo(player, entity);
-            float[] movementInput = getVCoreFocusedFullInput(rotation.getYaw(), directionYaw, z, x);
+            float directionYaw = FocusedFullMoveFix.quantizedTargetYaw(
+                    player.getX(), player.getEyeY(), player.getZ(),
+                    entity.getX(), entity.getY(), entity.getZ(),
+                    Minecraft.getInstance().options.sensitivity().get()
+            );
+            float[] movementInput = FocusedFullMoveFix.selectInput(rotation.getYaw(), directionYaw, z, x);
             return new DirectionalInput(movementInput[0], movementInput[1]);
         }
 
@@ -209,22 +214,6 @@ public abstract class MixinKeyboardInput extends MixinInput {
     }
 
     @Unique
-    private static float getQuantizedYawTo(LocalPlayer player, Entity entity) {
-        double posX = entity.getX() - player.getX();
-        double posY = entity.getY() - player.getEyeY();
-        double posZ = entity.getZ() - player.getZ();
-        double sqrt = Mth.sqrt((float) (posX * posX + posZ * posZ));
-        float yaw = (float) (Math.atan2(posZ, posX) * 180.0 / Math.PI) - 90.0f;
-        float pitch = (float) (-(Math.atan2(posY, sqrt) * 180.0 / Math.PI));
-        float sensitivity = (float) (Math.pow(Minecraft.getInstance().options.sensitivity().get(), 1.5) * 0.05 + 0.1);
-        float gcd = sensitivity * sensitivity * sensitivity * 1.2f;
-
-        yaw -= yaw % gcd;
-        pitch -= pitch % (gcd * sensitivity);
-        return yaw;
-    }
-
-    @Unique
     private static float getDirectionYawTo(LocalPlayer player, Entity entity) {
         var box = entity.getBoundingBox();
         double targetX = (box.minX + box.maxX) * 0.5;
@@ -257,44 +246,6 @@ public abstract class MixinKeyboardInput extends MixinInput {
         }
 
         return Math.toRadians(yaw);
-    }
-
-    @Unique
-    private static float[] getVCoreFocusedFullInput(
-            float rotationYaw,
-            float directionYaw,
-            float forward,
-            float strafe
-    ) {
-        if (forward == 0.0f && strafe == 0.0f) {
-            return new float[]{0.0f, 0.0f};
-        }
-
-        double angle = Mth.wrapDegrees(Math.toDegrees(getMoveDirection(directionYaw, forward, strafe)));
-        float closestForward = 0.0f;
-        float closestStrafe = 0.0f;
-        float closestDifference = Float.MAX_VALUE;
-
-        for (float predictedForward = -1.0f; predictedForward <= 1.0f; predictedForward += 1.0f) {
-            for (float predictedStrafe = -1.0f; predictedStrafe <= 1.0f; predictedStrafe += 1.0f) {
-                if (predictedStrafe == 0.0f && predictedForward == 0.0f) {
-                    continue;
-                }
-
-                double predictedAngle = Mth.wrapDegrees(
-                        Math.toDegrees(getMoveDirection(rotationYaw, predictedForward, predictedStrafe))
-                );
-                float difference = Math.abs((float) (angle - predictedAngle));
-
-                if (difference < closestDifference) {
-                    closestDifference = difference;
-                    closestForward = predictedForward;
-                    closestStrafe = predictedStrafe;
-                }
-            }
-        }
-
-        return new float[]{closestForward, closestStrafe};
     }
 
     @Unique
