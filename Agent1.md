@@ -9571,3 +9571,113 @@ to keep container inventory actions out of the reproduced action window. No dela
   (`https://github.com/Duong1234vi0/Wraith-0.1.git`).
 - This append-only record is committed as `docs(agent1): record elytra motion packet-order fix` and pushed
   separately; its exact content-derived commit hash and push result are reported in the final task handoff.
+
+## ElytraMotion Firework SilentHotbar lease reliability fix — 2026-07-18, Codex
+
+### Checked
+
+- Read the live Wraith sources completely: `ModuleElytraMotion.kt`, `SilentHotbar.kt`,
+  `MixinPlayerInventory.java`, `MixinClientPlayerInteractionManager.java`, `NetworkUtils.kt`,
+  `ActionTickBoundary.kt`, `ModuleKeyPearl.kt`, `ModuleKillAura.kt`, `KillAuraRequirements.kt`,
+  `ModuleElytraMotionFireworkCycleTest.kt`, and the current dispatch paths for `GameTickEvent`,
+  `AttackEntityEvent`, `PlayerInteractItemEvent`, and `OutgoingPacketSentEvent`.
+- Re-read the supplied Grim 2.0 `PacketOrderE.java`, `PacketOrderI.java`, and
+  `PacketOrderProcessor.java` completely.
+- Read the latest ElytraMotion natural-boundary PacketOrderE entry and verified its claims against the live source.
+
+### User regression
+
+- The prior PacketOrderE mitigation correctly deferred the raw post-use held-slot restore, but runtime testing
+  showed Hotbar Fireworks activating rarely, repeated apparent slot switching, and weak/absent chase acceleration.
+- Offhand Fireworks remained reliable because they do not own a selected-slot window.
+
+### Hotbar versus Offhand comparison / confirmed root cause
+
+- The prior Hotbar path manually sent `HELD Firework -> raw USE_ITEM` without claiming Wraith's SilentHotbar state.
+- During the pending natural boundary, `SilentHotbar.serversideSlot` and local selected-item resolution still named
+  the visible weapon while the server was holding the Firework; `ensureHasSentCarriedItem()` and local prediction
+  were bypassed. This split-brain state explains the repeated switch appearance and unreliable use.
+- Offhand has no selected-slot lease and remains a direct rotated interaction path.
+
+### SilentHotbar lease design
+
+- Added an owner-scoped, explicitly releasable SilentHotbar lease with a sufficiently long safety lifetime.
+- Hotbar and post-SWAP-in Main-inventory Fireworks now claim the `ElytraMotionFirework` owner, resolve the local
+  main-hand stack through `SilentHotbar.serversideSlot`, and call the current rotated `interactItem` path.
+- That path performs `ensureHasSentCarriedItem()`, local item-use prediction, and the sequenced rotated USE packet.
+- Initial Hotbar synchronization is no longer a raw packet emitted by ElytraMotion.
+- After the natural `CLIENT_TICK_END`, ElytraMotion releases only its owner and calls
+  `ensureHasSentCarriedItem()` exactly once; no immediate raw restore remains, and no duplicate packet is emitted
+  when the visible slot already equals the Firework slot.
+
+### KillAura action-window coordination
+
+- Added a narrow read-only ElytraMotion action-window gate. It blocks KillAura's main-hand pre-action path while
+  Grim's right-click state is still live, including AutoWeapon preparation, ShieldBreaker, MaceSwap, and attack.
+- The target and rotation state are retained. Aura resumes immediately after the natural boundary/restore.
+- Direct Offhand use uses only a short action window; it does not claim SilentHotbar or keep the main-hand lease active.
+
+### Timer and main-inventory integration
+
+- `useFirework()` now returns a meaningful result and the 500 ms timer is reset only for an accepted, observed
+  Firework USE. Blocked, no-item, cancelled, failed, owner-conflict, and pending-SWAP attempts do not consume a
+  new interval.
+- A per-player-tick attempt guard prevents repeated packet attempts in one tick; a failed completed cycle can retry
+  on the next eligible tick without an extra 500 ms penalty.
+- Main-inventory search order remains inventory-first. Its sequence is scheduled SWAP-in, SilentHotbar lease,
+  rotated USE, natural boundary, owner release/held synchronization, then scheduled SWAP-back.
+- Inventory failures restore the temporary swap safely. A timeout never emits an unsafe held or inventory packet
+  before the natural boundary.
+
+### Lifecycle
+
+- Owner state is cleared on successful restore, module disable after the safe boundary, world change, disconnect,
+  local-player replacement, and bounded cleanup. Other SilentHotbar requesters are never reset.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/client/SilentHotbar.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotionFireworkCycleTest.kt`
+- `Agent1.md` (this append-only record)
+
+### Tests
+
+- Focused command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.movement.ModuleElytraMotionFireworkCycleTest`
+- Result: `BUILD SUCCESSFUL`; 13 tests, zero failures.
+- Coverage includes lease/local resolution, one-boundary restore, other-owner refusal, accepted-only timer reset,
+  retry limiting, Offhand action-window suppression, Main-inventory ordering, cancellation, duplicate suppression,
+  and player/session lifecycle state.
+- `git diff --check`: passed.
+
+### Build/JAR hash
+
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `bf02b358a9b114d8f29d0507b4362ebbfb205bdc8e48c2b01bb0f959f0814bb0`.
+
+### FCL/Grim status
+
+- FCL/in-game testing and server-side Grim capture are unavailable in the headless Termux workspace.
+- The required runtime matrix remains: Hotbar Firework in another slot, already-selected Firework, KillAura target,
+  repeated boosts, target changes, disable after use, another SilentHotbar owner, Main-inventory priority, and the
+  Offhand control case. Watch PacketOrderE/I, PacketOrderG, BadPackets, MultiActions, visible selection, and chase
+  acceleration.
+
+### Deviations
+
+- None beyond the explicitly required current-protocol SilentHotbar lease, rotated interaction adaptation, and
+  natural-boundary Aura coordination.
+- The previous PacketOrderE fix deferred the raw held-slot restore but left Wraith's local selected-item state
+  unaware of the temporary Firework slot. The corrected implementation uses a bounded SilentHotbar lease so local
+  interaction prediction, carried-slot synchronization, and the server all resolve the same Firework item while
+  preserving the natural post-use restore boundary.
+
+### Commits and push
+
+- Implementation: `db03ebfb` — `fix(elytra): synchronize hotbar firework lease`.
+- Documentation commit and push result are recorded in the final task handoff after this append-only entry is committed.
