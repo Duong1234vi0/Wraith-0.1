@@ -10232,3 +10232,165 @@ stable visible combat selection, original 500 ms behavior, and no PacketOrderE.
 - Documentation: this append-only entry is committed separately as
   `docs(agent1): record deterministic packet-order bypass`; its exact hash and final push result are reported in
   the task handoff.
+
+## ElytraMotion Firework next-tick action-phase PacketOrder/Post bypass — 2026-07-18, Codex
+
+### Checked
+
+- Read the repository workflow and safe-history rules, current `ModuleElytraMotion.kt`, `ModuleElytraTarget.kt`,
+  `MixinClientConnection.java`, `MixinMinecraftClient.java`, `ActionTickBoundary.kt`, every current ElytraMotion
+  Firework test, and the definitions/dispatch sites for `GameTickEvent`, `OutgoingPacketSentEvent`,
+  `OutgoingPacketPostSendEvent`, `WorldChangeEvent`, and `DisconnectEvent` completely.
+- Read the latest ElytraMotion/ElytraTarget/Firework entries in this journal, including the natural-boundary,
+  SilentHotbar lease, server-slot lease, carried-slot override, and post-tick-end attempts, then verified them
+  against live source.
+- Read the supplied Grim 2.0 `PacketOrderE.java`, `Post.java`, `PacketOrderProcessor.java`, `PacketOrderG.java`,
+  and `PacketOrderI.java` completely. Also audited the inventory-relevant `PacketOrderA.java`,
+  `PacketOrderK.java`, and `PacketOrderL.java`. No supplied Grim source was modified.
+- Verified event hooks run in descending priority. `GameTickEvent` is injected at `Minecraft.tick` HEAD,
+  sequence processing uses `FIRST_PRIORITY=1000`, and the new Firework restore uses priority `1003`.
+
+### Two user test cases
+
+- Main inventory slot 35, no Hotbar Firework: Grim reported `PacketOrderE` with only
+  `rightClicking=true`. The live order was
+  `SWAP-in -> HELD temporary -> USE_ITEM -> HELD visible -> SWAP-back`.
+- Direct Hotbar slot 8, no inventory Firework: `PacketOrderE` disappeared, but Grim reported
+  `Post: held item change v26.1`. The live order was
+  `HELD Firework -> USE_ITEM -> CLIENT_TICK_END -> HELD visible` because the held return was emitted from the
+  tick-end post-send callback.
+
+### Inventory-first Firework search order
+
+The source order remains unchanged: inventory slots `35 downTo 9` are searched before Hotbar slots
+`8 downTo 0`. The temporary slot remains exactly `currentSlot % 8 + 1`; no Firework selection priority,
+rotation, trigger, or timer formula changed.
+
+### Slot 35 PacketOrderE path
+
+The immediate held return occurred after raw `USE_ITEM` while Grim's `PacketOrderProcessor.using` state was still
+true. The immediate inventory SWAP-back also remained in the same right-click action window. The corrected path is:
+
+`SWAP-in -> HELD temporary -> USE_ITEM -> natural CLIENT_TICK_END -> next GameTick HEAD: HELD visible -> SWAP-back`.
+
+The SWAP-in, raw held selection, and raw use remain immediate. Only held restoration and SWAP-back move after the
+old natural boundary. The SWAP-back uses the existing direct container `SWAP` mechanism and is attempted exactly
+once after the held restore, before normal tick action consumers and the next movement boundary.
+
+### Slot 8 Post path
+
+The previous post-send correction cleared Grim's `using/rightClicking` state before the return held packet, which
+avoided `PacketOrderE`, but `Post` records held changes sent in the post-boundary phase. Emitting the return directly
+inside `OutgoingPacketPostSendEvent(ServerboundClientTickEndPacket)` was therefore too late.
+
+### Grim PacketOrderE analysis
+
+`PacketOrderProcessor` sets `using=true` on `USE_ITEM`; `PacketOrderE` checks every later held-item change against
+that state. A natural tick packet clears the per-action state. The initial `HELD Firework` before use is retained;
+the return held change must occur only after that natural boundary.
+
+### Grim Post analysis
+
+`Post` sets its movement-boundary state on a tick packet and records later action packets including held-item
+changes and use/interact/dig actions. A held return emitted synchronously from the tick-end packet's post-send
+callback is in the wrong post-boundary phase. Modern container clicks are not added to `Post`; the audited Grim
+inventory checks also do not reject this single `ContainerInput.SWAP` after the old action state has been cleared.
+
+### Why post-send restoration was incorrect
+
+The post-send hook is valid for proving that the old natural boundary completed, but it is not a valid place to
+emit the next action. The listener is now observation-only: it increments/records a bounded boundary serial/tick,
+marks `boundaryObserved=true`, and sends no held or inventory packet.
+
+### Next-GameTick-HEAD packet phase
+
+An always-running `ElytraMotionFireworkCycleOwner` retains source, player/level/connection identities, source
+inventory slot, Firework/temporary Hotbar slots, captured visible slot, SWAP/use/boundary/restore/SWAP-back state,
+creation tick/time, and bounded diagnostic ownership. At `GameTickEvent` priority `1003`, after a boundary has been
+observed, it prefers the current valid visible slot, claims held ownership before the nested send, emits exactly one
+raw held restore, then performs exactly one inventory SWAP-back only for the main-inventory source. Direct Hotbar
+never enters the inventory path.
+
+World change, disconnect, player/level/connection replacement, invalid state, and a 20-tick/one-second timeout
+clear without sending into another session. Module disable does not clear a valid cycle. New Firework attempts are
+refused while a cycle is pending. Diagnostics are capped at four cycles and record the requested phase fields,
+including any unexpected held change between raw use and the observed natural boundary.
+
+### Direct-hotbar correction
+
+Different-slot Hotbar use remains immediately:
+
+`HELD Firework -> raw sequenced USE_ITEM`.
+
+The cycle observes the old natural `CLIENT_TICK_END` without sending, then restores at the next GameTick action
+phase before sequences/combat/movement boundary work. Already-selected Firework remains `USE_ITEM` only. No
+inventory scheduler or movement gate is used by direct Hotbar.
+
+### Main-inventory correction
+
+Main-inventory use retains immediate inventory-first raw behavior through use:
+
+`SWAP-in -> HELD temporary -> raw sequenced USE_ITEM`.
+
+It no longer sends `HELD visible` or `SWAP-back` in the active right-click window. After the observed natural
+boundary, the next GameTick HEAD sends `HELD visible` first and then performs the one SWAP-back, restoring the
+Firework to its original inventory slot and the temporary Hotbar item to its original place.
+
+### Unchanged raw/blatant behavior
+
+- `USE_ITEM` is not delayed for either direct Hotbar or post-SWAP inventory use.
+- Direct Offhand remains raw `USE_ITEM(OFF_HAND)` with no held packet. The existing main-hand-use/offhand-SWAP
+  route is unchanged.
+- AutoFirework and MatrixBypass still call the shared `useFirework()` and reset the timer at the exact original
+  call sites. `500 ms`, BPS, `AttackDistance`, freeze, PeakAssist exclusion, rotation, and formulas are unchanged.
+- No SilentHotbar, lease, carried-slot override, `ensureHasSentCarriedItem()`, local interaction/prediction,
+  manual tick-end packet, combat pause, success result, or acceptance gate was added.
+- KillAura, AutoWeapon, MaceSwap, ShieldBreaker, ElytraTarget, attacks, CPS, targets, rotations, and critical logic
+  were not modified by this task.
+
+“The previous direct-hotbar correction emitted the return held-slot packet after CLIENT_TICK_END, which avoided PacketOrderE but violated Grim’s Post check. The final bypass now observes the old natural boundary without sending from its post-send callback, then restores the held slot at the next GameTick action phase before the next movement boundary. The same phase model is applied to the inventory Firework path.”
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotionFireworkCycleTest.kt`
+- `Agent1.md` (this append-only record)
+
+`ModuleElytraTarget.kt`, the network/client mixins, `ActionTickBoundary.kt`, combat files, and supplied Grim files
+retain their pre-edit hashes.
+
+### Tests
+
+- Unfiltered focused invocation still reaches the unrelated pre-existing
+  `PointFindingKtTest.kt` test-compilation blocker (`math`, `Vec3d`, vector fields, and `toVector3f` unresolved).
+- Focused command with the established one-source exclusion:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.movement.ModuleElytraMotionFireworkCycleTest`
+- Result: `BUILD SUCCESSFUL`; 11 tests, zero failures/errors/skips.
+- Coverage includes direct Hotbar phase order, observation-only post-send, priority-1003 restore, already-selected
+  use, slot-35 SWAP order, exactly-once restore/SWAP-back, manual visible change, disable-pending, world/disconnect/
+  identity cleanup, invalid state/timeout/no-overwrite, unchanged triggers/search/timer/offhand, and forbidden-path
+  absence. `git diff --check` passed.
+
+### Build and JAR hash
+
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL in 2m 17s` (`10 actionable tasks: 7 executed, 3 up-to-date`).
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `6e07fd4f6ef70c03e5d9ef601187929883402418833ac67e1721336a734b7a50`.
+
+### FCL/Grim status
+
+Not run in this headless Termux workspace. Focused tests and compilation do not prove runtime Grim acceptance.
+Required FCL tests remain direct Hotbar, slot-35 main inventory, AutoFirework, MatrixBypass, disable while pending,
+target loss, world change, manual slot change, and Offhand control. Watch `PacketOrderE`, `Post`, `PacketOrderG`,
+`PacketOrderI`, BadPackets, and inventory checks; verify immediate/reliable boosts and no visible switch loop.
+
+### Commits and push result
+
+- Implementation: `8b4003b12c401f3752ba70b359afc63bd5148e72` —
+  `fix(elytra): restore firework slot in next tick action phase`.
+- Implementation push succeeded: `37f13bf4b..8b4003b12 main -> main` on
+  `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+- Documentation: `docs(agent1): record firework packet phase bypass` (this entry). Its exact hash and final push
+  result are reported in the task handoff after the separate documentation commit is created and pushed.
