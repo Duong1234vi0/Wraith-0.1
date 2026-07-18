@@ -23,8 +23,10 @@ import net.ccbluex.liquidbounce.utils.entity.*
 import com.google.gson.JsonObject
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.event.Sequence
+import net.ccbluex.liquidbounce.event.events.GameTickEvent
 import net.ccbluex.liquidbounce.event.events.RotationUpdateEvent
 import net.ccbluex.liquidbounce.event.events.SprintEvent
+import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
@@ -73,6 +75,7 @@ import net.ccbluex.liquidbounce.utils.inventory.isInContainerScreen
 import net.ccbluex.liquidbounce.utils.item.isAxe
 import net.ccbluex.liquidbounce.utils.item.sharpnessLevel
 import net.ccbluex.liquidbounce.utils.kotlin.Priority
+import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.FIRST_PRIORITY
 import net.ccbluex.liquidbounce.utils.kotlin.random
 import net.ccbluex.liquidbounce.utils.render.WorldTargetRenderer
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
@@ -159,6 +162,8 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     // V-Core Track owns this mutable point state on Aura and resets it on enable.
     internal var rotationPoint = Vec3.ZERO
     internal var rotationMotion = Vec3.ZERO
+    private var trackAimTickIdentity = 0L
+    private val trackAimPointCache = VCoreTrackAimPointCache()
 
     private var shieldBreakerHitTicks = 0
     private var directShieldBreakerAttackInProgress = false
@@ -182,6 +187,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         targetTracker.reset()
         rotationPoint = Vec3.ZERO
         rotationMotion = Vec3.ZERO
+        trackAimPointCache.clear()
         shieldBreakerHitTicks = 0
         directShieldBreakerAttackInProgress = false
         failedHits.clear()
@@ -192,6 +198,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     override fun enable() {
         rotationPoint = Vec3.ZERO
         rotationMotion = Vec3.ZERO
+        trackAimPointCache.clear()
         shieldBreakerHitTicks = 0
         directShieldBreakerAttackInProgress = false
     }
@@ -202,6 +209,16 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
         renderTarget(matrixStack, event.partialTicks)
         renderFailedHits(matrixStack)
+    }
+
+    @Suppress("unused")
+    private val trackAimTickHandler = handler<GameTickEvent>(priority = (FIRST_PRIORITY + 1).toShort()) {
+        trackAimTickIdentity++
+    }
+
+    @Suppress("unused")
+    private val trackAimWorldChangeHandler = handler<WorldChangeEvent> {
+        trackAimPointCache.clear()
     }
 
     private fun renderTarget(matrixStack: PoseStack, partialTicks: Float) {
@@ -609,26 +626,40 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
      * this fork, so the source's first branch is equivalent to its disabled state here.
      */
     internal fun resolveVCoreTrackAimPoint(entity: LivingEntity): Vec3? {
-        val dynamic = !player.isFallFlying
-        val base = if (dynamic) {
-            getDynamicTrackLookPoint(entity, activeAttackRange().toDouble())
-        } else if (ModuleElytraTarget.shouldTarget(entity)) {
-            ModuleElytraTarget.getElytraTargetVec(entity)
-        } else {
-            entity.eyePosition
-        } ?: return null
+        val localPlayer = mc.player ?: return null
+        val localWorld = mc.level ?: return null
 
-        val withPeekHigh = if (dynamic) {
-            // getDynamicTrackLookPoint contains V-Core's own PeekHigh branch.
-            base
-        } else if (KillAuraRotationsConfigurable.aimThroughWalls && ModuleWallsBypass.running &&
-            ModuleWallsBypass.isPeekHigh() && !player.canSee(entity)) {
-            entity.position().add((-0.15..0.15).random(), entity.boundingBox.maxY - entity.boundingBox.minY, (-0.15..0.15).random())
-        } else {
-            base
+        return trackAimPointCache.getOrUpdate(
+            tickIdentity = trackAimTickIdentity,
+            targetIdentity = entity,
+            playerIdentity = localPlayer,
+            worldIdentity = localWorld,
+        ) {
+            val dynamic = !localPlayer.isFallFlying
+            val base = if (dynamic) {
+                getDynamicTrackLookPoint(entity, activeAttackRange().toDouble())
+            } else if (ModuleElytraTarget.shouldTarget(entity)) {
+                ModuleElytraTarget.getElytraTargetVec(entity)
+            } else {
+                entity.eyePosition
+            } ?: return@getOrUpdate null
+
+            val withPeekHigh = if (dynamic) {
+                // getDynamicTrackLookPoint contains V-Core's own PeekHigh branch.
+                base
+            } else if (KillAuraRotationsConfigurable.aimThroughWalls && ModuleWallsBypass.running &&
+                ModuleWallsBypass.isPeekHigh() && !localPlayer.canSee(entity)) {
+                entity.position().add(
+                    (-0.15..0.15).random(),
+                    entity.boundingBox.maxY - entity.boundingBox.minY,
+                    (-0.15..0.15).random(),
+                )
+            } else {
+                base
+            }
+
+            ModuleEMaceHelper.applyPeakAssistAimOffset(entity, withPeekHigh)
         }
-
-        return ModuleEMaceHelper.applyPeakAssistAimOffset(entity, withPeekHigh)
     }
 
     /** V-Core Grim's base/prediction -> PeekHigh -> PeakAssist point order. */
@@ -691,11 +722,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
             killAuraOwnedRotation = activeServerFacingRotationFor(target),
             playerRotation = player.rotation,
         )
-        val initialWallRange = if (KillAuraRotationsConfigurable.aimThroughWalls) {
-            activeWallRange().toDouble()
-        } else {
-            0.0
-        }
+        val initialWallRange = activeWallRange().toDouble()
         if (!evaluateVCoreTrackInitialRaytrace(
                 raytraceEnabled = raycast != TRACE_NONE,
                 attackRange = attackRange,
@@ -996,11 +1023,13 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
             range
         }
 
-    private fun activeWallRange(): Float = if (player.isFallFlying) {
-        activeAttackRange() + ModuleEMaceHelper.getElytraAimRangeOverride(elytraAimRange)
-    } else {
-        wallRange
-    }
+    private fun activeWallRange(): Float = resolveVCoreActiveWallRange(
+        aimThroughWalls = KillAuraRotationsConfigurable.aimThroughWalls,
+        isFallFlying = player.isFallFlying,
+        activeAttackRange = activeAttackRange(),
+        groundedWallRange = wallRange,
+        effectiveElytraAimRange = ModuleEMaceHelper.getElytraAimRangeOverride(elytraAimRange).toFloat(),
+    )
 
     private fun activeElytraAcquisitionRange(): Float {
         val aimRange = ModuleEMaceHelper.getElytraAimRangeOverride(elytraAimRange).toFloat()
@@ -1050,6 +1079,65 @@ internal fun selectVCoreTrackInitialRotation(
     killAuraOwnedRotation: Rotation?,
     playerRotation: Rotation,
 ): Rotation = killAuraOwnedRotation ?: playerRotation
+
+internal fun resolveVCoreActiveWallRange(
+    aimThroughWalls: Boolean,
+    isFallFlying: Boolean,
+    activeAttackRange: Float,
+    groundedWallRange: Float,
+    effectiveElytraAimRange: Float,
+): Float {
+    if (!aimThroughWalls) {
+        return 0.0f
+    }
+
+    return if (isFallFlying) {
+        activeAttackRange + effectiveElytraAimRange
+    } else {
+        groundedWallRange
+    }
+}
+
+internal class VCoreTrackAimPointCache {
+    private var tickIdentity = Long.MIN_VALUE
+    private var targetIdentity: Any? = null
+    private var playerIdentity: Any? = null
+    private var worldIdentity: Any? = null
+    private var cachedPoint: Vec3? = null
+    private var populated = false
+
+    fun getOrUpdate(
+        tickIdentity: Long,
+        targetIdentity: Any,
+        playerIdentity: Any,
+        worldIdentity: Any,
+        update: () -> Vec3?,
+    ): Vec3? {
+        if (populated && this.tickIdentity == tickIdentity &&
+            this.targetIdentity === targetIdentity && this.playerIdentity === playerIdentity &&
+            this.worldIdentity === worldIdentity) {
+            return cachedPoint
+        }
+
+        return update().also { point ->
+            this.tickIdentity = tickIdentity
+            this.targetIdentity = targetIdentity
+            this.playerIdentity = playerIdentity
+            this.worldIdentity = worldIdentity
+            cachedPoint = point
+            populated = true
+        }
+    }
+
+    fun clear() {
+        tickIdentity = Long.MIN_VALUE
+        targetIdentity = null
+        playerIdentity = null
+        worldIdentity = null
+        cachedPoint = null
+        populated = false
+    }
+}
 
 internal inline fun updateVCoreTrackBoundaryMotion(
     rotationPoint: Vec3,

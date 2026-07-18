@@ -48,11 +48,13 @@ class TrackAngleSmooth(parent: ChoiceConfigurable<*>) : AngleSmooth("Track", par
         val alreadyRaytracing = entity != null &&
             ModuleKillAura.isTrackPitchRaytracingTarget(entity, currentRotation)
 
-        pitchAcceleration = if (alreadyRaytracing) {
-            aimedPitchStep
-        } else {
-            (pitchAcceleration * pitchAccelerate).coerceAtMost(maxPitchStep)
-        }
+        pitchAcceleration = updateVCoreTrackPitchAcceleration(
+            pitchAcceleration = pitchAcceleration,
+            alreadyRaytracing = alreadyRaytracing,
+            aimedPitchStep = aimedPitchStep,
+            maxPitchStep = maxPitchStep,
+            pitchAccelerate = pitchAccelerate,
+        )
 
         var yawStep = (minYawStep.toFloat()..maxYawStep.toFloat()).random()
         var pitchStep = if (player.isFallFlying && player.fallFlyingTicks > 5) {
@@ -115,4 +117,18 @@ class TrackAngleSmooth(parent: ChoiceConfigurable<*>) : AngleSmooth("Track", par
         PITCH("Pitch"),
         BOTH("Both"),
     }
+}
+
+internal fun updateVCoreTrackPitchAcceleration(
+    pitchAcceleration: Float,
+    alreadyRaytracing: Boolean,
+    aimedPitchStep: Float,
+    maxPitchStep: Float,
+    pitchAccelerate: Float,
+): Float = if (alreadyRaytracing) {
+    aimedPitchStep
+} else if (pitchAcceleration < maxPitchStep) {
+    pitchAcceleration * pitchAccelerate
+} else {
+    maxPitchStep
 }
