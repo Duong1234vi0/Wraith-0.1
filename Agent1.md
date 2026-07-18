@@ -9181,3 +9181,128 @@ commit records this final commit/push state.
 
 - Implementation commit and push: pending after this audit record is committed.
 - Documentation commit and push: pending after this append-only record is committed.
+
+## V-Core Elytra combat stack — fourth fidelity audit (2026-07-18, Codex)
+
+### Checked
+
+- Read the complete live Wraith KillAura, ElytraTarget, MaceSwap, EMaceHelper, TrackAngleSmooth,
+  RotationManager, EventManager, GameTick/RotationUpdate dispatch, and focused V-Core fidelity tests.
+- Read the complete V-Core Aura, ElytraTarget, MaceSwap, Track, ClientPlayerEntity mixin, and PlayerManager
+  sources under `WorkSpace/Client/VCore-0.8`. Their SHA-256 hashes were recorded before editing and remained
+  identical after implementation and verification; no V-Core reference file was modified.
+- Rechecked the third-audit paths and confirmed StartFireWork post-send, raw Firework profiles, ElytraSwap input
+  handling, MaceSwap real AutoDisable, ThroughWalls/IgoneWall migration, PeakAssist, Armor Swap, Track/Grim GCD,
+  and direct inventory-Axe ShieldBreaker behavior remain present.
+
+### Fourth fidelity audit
+
+- Corrected five remaining source mismatches without adding delays, safety gates, modes, settings, or redesigned
+  behavior: Track upper-boundary signs, Track initial raytrace inputs/ownership, ElytraTarget post-Aura timing,
+  MaceSwap post-Aura timing, and the hotbar ShieldBreaker return slot after MaceStun.
+- The current event mapping is now `GameTickEvent` priority `1000` for the KillAura tick sequence followed by
+  ElytraTarget and MaceSwap at `READ_FINAL_STATE` (`-1000`), preserving V-Core's PlayerUpdateEvent -> EventSync
+  ordering without an extra tick or real-time delay.
+
+### Track boundary-sign bug
+
+- V-Core generates a positive random magnitude and explicitly negates it at the positive X/Y/Z AABB boundaries.
+  Wraith previously randomized across a mixed negative-to-positive range, so motion could keep traveling outward.
+- Extracted a pure boundary-motion helper used by runtime and deterministic tests. Positive X/Y/Z boundaries now
+  always produce negative motion; negative X/Y/Z boundaries retain positive source ranges.
+- Preserved V-Core's intentionally ineffective non-assigned `rotationPoint.add(...)` call unchanged.
+
+### Track initial WallRange/rotation-ownership bug
+
+- The first dynamic-point test now uses the active attack range, authoritative wall range when ThroughWalls is
+  active, current raycast setting, and exact current target identity.
+- It accepts `RotationManager.currentRotation` only through the existing narrow proof that KillAura owns the active
+  rotation request for the exact current target. Without that proof it uses player rotation; Scaffold, AutoCrystal,
+  or another provider's global rotation cannot enter this check.
+- The center fallback and full `0.05 / 0.15` AABB candidate scan intentionally retain zero wall range, matching
+  V-Core.
+
+### ElytraTarget event-phase mismatch
+
+- Removed ElytraTarget state mutation from `RotationUpdateEvent` and moved it to final-priority `GameTickEvent`
+  after the KillAura attack sequence.
+- Target selection, point resolution, and attack-window calculation therefore use one consistent previous
+  prediction state during the current Aura tick. ElytraTarget then updates `status`, `bps`, `scale`, and
+  `disableForward` for the following tick/render state.
+- Preserved source internal order and formulas: status first; BPS/scale using the prior suppression state; local
+  hurt suppression last; null target clears BPS/suppression exactly as before.
+
+### MaceSwap one-tick sync delay
+
+- Replaced the pre-Aura `RotationUpdateEvent` synchronization with final-priority `GameTickEvent` synchronization.
+- The post-Aura handler preserves exact V-Core internal order: `processSwitchBack(false)` followed by
+  `processAutoDisable()`.
+- Silent restoration can now occur in the same tick after the attack; visible delay counting begins in the attack
+  tick; AutoDisable sees the current Aura post-action marker; manual switch-back and delay values remain unchanged.
+
+### ShieldBreaker post-Mace return-slot bug
+
+- The raw hotbar-Axe route now reads `player.inventory.selectedSlot` after optional MaceStun and emits that validated
+  `0..8` slot, exactly where V-Core sends its current selected slot.
+- With MaceStun disabled or no matching Mace, this is the original visible slot. With a matching Mace, it is the
+  Mace slot, allowing MaceSwap's source post-Aura synchronization to perform the restoration without an early and
+  duplicate original-slot packet.
+- The visible selected slot is still not changed by the raw Axe route; the no-Mace second attack quirk, inventory-Axe
+  route, Axe scan/score, hit delay, AutoWeapon suppression, and lack of direct post-action markers are unchanged.
+
+### Changed files
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleElytraTarget.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleMaceSwap.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/VCoreAuraFidelityTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleMaceSwapAutoDisableTest.kt`
+- this append-only `Agent1.md` section
+
+### Tests
+
+- `git diff --check` passed before the build and before each scoped commit.
+- Direct focused Gradle selection first reproduced the unrelated existing `PointFindingKtTest` compile errors for
+  removed `math`/`Vec3d` mappings.
+- Re-ran the same two focused classes with only `PointFindingKtTest.kt` excluded by a temporary uncommitted Gradle
+  init filter. `VCoreAuraFidelityTest` and `ModuleMaceSwapAutoDisableTest` passed (`BUILD SUCCESSFUL`).
+- Added deterministic coverage for all six Track boundaries, initial attack/wall ranges, Aura-owned/player rotation
+  selection, previous-state ElytraTarget attack ordering, old versus corrected MaceSwap ordering, source internal
+  switch-back/AutoDisable order, and ShieldBreaker return slots with MaceStun disabled, no Mace, and matching Mace.
+- Static checks confirmed initial Track uses the authoritative wall range, center/AABB candidates still use `0.0`,
+  neither sync module handles `RotationUpdateEvent`, and no hotbar original-slot restoration remains after MaceStun.
+
+### Build and JAR hash
+
+- Exact requested command passed: `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk`
+  `PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin`
+  `sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`.
+- Result: `BUILD SUCCESSFUL in 1m 39s`.
+- Packaged JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- JAR SHA-256: `77a44271e9069aecf35bf6c10747316b5a663c5dc28ab2f7c3ee3b1872fb0911`.
+- JAR inspection contains KillAura, ElytraTarget, MaceSwap, TrackAngleSmooth, and the preserved
+  `OutgoingPacketPostSendEvent` and InputTracker classes.
+
+### FCL status
+
+- FCL/in-game packet capture, visual comparison, and server-side Grim observation were unavailable in this headless
+  Termux workspace. Compilation, focused tests, static ordering checks, and JAR packaging do not prove runtime
+  behavior.
+- Runtime checks remain for Track boundary motion/wall targeting, same-tick prediction consistency, silent/visible
+  Mace restoration, AutoDisable, and hotbar ShieldBreaker with and without a matching Mace.
+- No Grim-safe delay was added and no Grim acceptance is claimed.
+
+### ElytraPlus remaining deviation
+
+- Full V-Core ElytraPlus remains intentionally unported. Track's ElytraPlus branch, Aura acquisition `+4`, and the
+  SmartCrit exemption remain unavailable. This audit does not claim full dependency closure.
+
+### Commits
+
+- Implementation: `472d096b` — `fix(elytra): align final vcore tick and rotation semantics`.
+- Documentation: pending until this append-only record is committed.
+
+### Push result
+
+- Both scoped commits are pending push at the time this append-only entry is created; the final result is reported
+  after the documentation commit and push complete.
