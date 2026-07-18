@@ -9813,3 +9813,185 @@ while retaining only the deferred network restore required for PacketOrderE.
 - `docs(agent1): record raw firework reliability correction` (this entry)
 
 Exact implementation/documentation commit hashes and push result are reported in the task handoff.
+
+## ElytraMotion one-shot carried-slot synchronization for PacketOrderE — 2026-07-18, Codex
+
+### Checked
+
+- Read the repository workflow and strict-port evidence/review documents before editing.
+- Read the complete live Wraith paths: `ModuleElytraMotion.kt`, `ActionTickBoundary.kt`, `SilentHotbar.kt`,
+  the now-removed `ServerCarriedSlotLease.kt`, `MixinClientPlayerInteractionManager.java`,
+  `MixinClientConnection.java`, `NetworkUtils.kt`, `ModuleKeyPearl.kt`, `ModuleTotemHit.kt`, the current
+  GameTick/WorldChange/Disconnect/outgoing-packet event definitions and dispatch sites, and all current
+  ElytraMotion/lease Firework tests.
+- Read the complete supplied Grim 2.0 `PacketOrderE.java`, `PacketOrderProcessor.java`, `PacketOrderI.java`, and
+  `PacketOrderG.java` without modifying them.
+- Read V-Core `ElytraMotion.java`, its complete `useFirework()`/Hotbar route, `InventoryUtility.switchToSilent`,
+  `SearchInvResult`, the interaction-manager slot-sync invoker, and `Timer`.
+- Read all latest Agent1 sections for previous ElytraMotion PacketOrderE, SilentHotbar lease, server-carried-slot
+  lease, natural-boundary, and raw V-Core restoration attempts, then verified them against the live source.
+- Inspected the target 26.1.2 `MultiPlayerGameMode.ensureHasSentCarriedItem()` bytecode. It reads the selected slot,
+  compares it with private `carriedIndex`, writes `carriedIndex`, and sends one held-slot packet when different.
+
+### Restored baseline
+
+The live worktree baseline had already restored V-Core-shaped ElytraMotion behavior: exact settings and gates,
+inventory-first Firework search, immediate raw sequenced Firework use, the original 500 ms timer reset after
+`useFirework()` is called, unchanged movement/freeze/rotation behavior, direct Offhand use, and the original raw
+Hotbar slot/use/return route. It also removed the previous KillAura action pause and ordinary SilentHotbar lease
+API changes. This live restored source, not the older committed lease implementation or Agent1 history, was the
+authoritative starting point.
+
+### User reproduction
+
+With ElytraMotion and AutoFirework enabled, MatrixBypass disabled, ElytraTarget enabled, a Firework in a different
+Hotbar slot, and the combat weapon visibly selected, the live raw order was:
+
+`HELD_ITEM_CHANGE(Firework) -> USE_ITEM(MAIN_HAND) -> HELD_ITEM_CHANGE(previous)`.
+
+The Firework worked, but Grim reported:
+
+`PacketOrderE: attacking=false, rightClicking=true, openingInventory=false, releasing=false, sneaking=false, sprinting=false, bed=false, gliding=false, mountJumping=false`.
+
+### Exact Grim PacketOrderE semantics
+
+`PacketOrderProcessor` sets `using=true` when it receives `USE_ITEM`. `isRightClicking()` includes `using`.
+`PacketOrderE` checks a later `HELD_ITEM_CHANGE` against that state. Grim clears the action state only when it
+receives a natural tick packet. The initial held-slot packet before `USE_ITEM` is valid; the immediate return packet
+after `USE_ITEM` is the exact reproduced violation.
+
+Required and implemented direct-Hotbar order:
+
+`HELD Firework -> USE_ITEM -> natural CLIENT_TICK_END -> HELD current visible slot`.
+
+No manual tick-end packet is sent.
+
+### Interaction-manager carried-slot cache root cause
+
+The restored raw path used `network.sendPacket(ServerboundSetCarriedItemPacket(fireworkSlot))`. That changed the
+server slot without updating `MultiPlayerGameMode.carriedIndex`. A later ordinary
+`ensureHasSentCarriedItem()` could therefore still believe its cached slot was the visible weapon and omit the
+required return packet. Deferring the old raw return alone was insufficient because the initial raw send bypassed
+the cache that must drive the deferred restore.
+
+### Why prior SilentHotbar/lease approaches were rejected
+
+- Ordinary SilentHotbar changes local selected-item/main-hand resolution and can affect unrelated module behavior.
+- A cross-tick SilentHotbar lease changed local prediction/render semantics and previously caused retry/switching
+  regressions.
+- The abandoned `ServerCarriedSlotLease` held a server-only override across ticks, introduced timeout/lifecycle
+  ownership beyond the needed synchronous cache read, and was completely unused by the restored live source.
+- Local `interactItem`/`useItem`, `InteractionResult`, local Firework prediction, accepted-result gates, and combat
+  action pauses are absent from V-Core's raw route and were explicitly excluded.
+
+### One-shot carried-slot synchronization
+
+- Added `CarriedSlotSyncOverride` with the exact synchronous `withSlot(owner, slot, block)` and `resolveSlot(...)`
+  shape.
+- It is main-thread-only, identity-owner-scoped, validates `0..8`, rejects nested/conflicting overrides, installs
+  immediately before the block, and removes in `finally`.
+- It has no tick lifetime, timeout, lease, inventory mutation, or local selected-item/render integration.
+- `MixinClientPlayerInteractionManager.hookCustomSelectedSlot` now resolves only the selected-slot expression in
+  `ensureHasSentCarriedItem()` as one-shot override, otherwise ordinary `SilentHotbar.serversideSlot`, otherwise
+  its existing visible-slot behavior.
+- The direct-Hotbar initial switch now wraps exactly one `ensureHasSentCarriedItem()` call. This emits the initial
+  held-slot packet when required and updates private `carriedIndex` to the Firework slot while leaving the visible
+  selection and rendered item unchanged after the synchronous block.
+
+### Raw V-Core USE_ITEM preservation
+
+For a different direct Hotbar slot, ElytraMotion validates player/level/game mode and slots, refuses only an
+already-pending direct-Hotbar restore, captures player/level/visible/Firework/boundary identity, begins one
+`ActionTickBoundary.ActionKind.USE_ITEM` token, registers the initial held synchronization, performs the one-shot
+cache-aware ensure call, and immediately sends the original raw sequenced `ServerboundUseItemPacket` with the
+existing rotation. No delay occurs before `USE_ITEM`.
+
+When the Firework is already selected, ElytraMotion sends only raw `USE_ITEM`: no override, held packet, pending
+restore, or redundant return packet. Direct Offhand behavior is unchanged.
+
+### Deferred restore only
+
+- A minimal always-running pending cycle retains player identity, level identity, Firework slot, captured visible
+  slot, post-use natural-boundary serial, bounded diagnostic ownership, and creation tick/time.
+- It waits for `ActionTickBoundary.hasPassed(postUseBoundarySerial)` and
+  `canSendPostActionHeldItemChange(...)`, prefers the current valid visible slot, registers one post-action held
+  expectation, and calls normal `ensureHasSentCarriedItem()` without an override.
+- Because the initial ensure updated `carriedIndex` to the Firework slot, the normal ensure emits the one return
+  packet and updates the cache back to the visible slot. There is no raw return and no duplicate raw-plus-ensure
+  restore.
+- A cancelled/unobserved raw `USE_ITEM` still waits for the same natural boundary before restoring.
+- Disable stops new module actions but does not discard a valid pending restore. World change, disconnect, player
+  or level replacement, invalid stored slots, and bounded timeout clear without sending into a new session.
+- A new direct-Hotbar cycle cannot overwrite a pending one-tick restore.
+- The direct Hotbar helper was split from the temporary Main-inventory Hotbar helper. The Main-inventory route is
+  unchanged and unaudited for this specific direct-Hotbar reproduction.
+
+### Unchanged timer/combat/module logic
+
+- The current V-Core-shaped 500 ms timer semantics are unchanged: the caller resets the timer after
+  `useFirework()` is called.
+- No local acceptance/result gate, retry loop, cooldown, delay, configurable option, or generalized mitigation was
+  added.
+- Firework search, rotation, AutoFirework, MatrixBypass, movement/freeze, and BPS logic are unchanged.
+- No new KillAura, AutoWeapon, ShieldBreaker, MaceSwap, attack, target, rotation, click, or critical logic was added.
+- ElytraTarget and supplied Grim sources are unchanged.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/client/CarriedSlotSyncOverride.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/network/MixinClientPlayerInteractionManager.java`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotionFireworkCycleTest.kt`
+- Deleted unused `src/main/kotlin/net/ccbluex/liquidbounce/utils/client/ServerCarriedSlotLease.kt`
+- Deleted its abandoned-design-only `ServerCarriedSlotLeaseTest.kt`
+- The implementation commit also captured the already-present live baseline restoration in `ModuleKillAura.kt`
+  and `SilentHotbar.kt`; the new correction adds no Firework action pause or ordinary SilentHotbar API.
+- `Agent1.md` (this append-only record)
+
+### Tests
+
+- The normal focused Gradle command was blocked during repository-wide test compilation by the pre-existing,
+  unrelated `PointFindingKtTest` unresolved `math`/`Vec3d`/vector symbols.
+- Focused command with the established source exclusion:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.movement.ModuleElytraMotionFireworkCycleTest`
+- Result: `BUILD SUCCESSFUL`; 10 tests, zero failures/errors/skips.
+- Coverage includes different-slot initial/cache/use/deferred-restore order, exactly one return, one-shot
+  main-thread/owner/nesting/finally semantics, ordinary/local/render slot isolation, already-selected use,
+  cancelled use, disable-pending, current-visible preference/captured fallback, no overwrite, identity/world/
+  disconnect cleanup model, invalid slots, and bounded timeout.
+- `git diff --check` and staged diff checks passed. Static searches found no direct-Hotbar local interaction,
+  InteractionResult, SilentHotbar selection/lease, cross-tick carried-slot lease, or manual tick packet.
+
+### Build and JAR hash
+
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL in 3m` (`10 actionable tasks: 7 executed, 3 up-to-date`).
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `6909f6e8f79e16749fe65089eb77d2c102e0a23808a4a5827d9232176840206f`.
+- JAR inspection found `ModuleElytraMotion`, `CarriedSlotSyncOverride`, and the interaction-manager mixin classes;
+  no `ServerCarriedSlotLease` class remains.
+
+### FCL/Grim status
+
+FCL/in-game packet capture and server-side Grim execution are unavailable in this headless Termux environment.
+Focused tests and compilation do not prove runtime success. The required manual configuration remains:
+ElytraMotion enabled, AutoFirework enabled, MatrixBypass disabled, ElytraTarget enabled, one Firework stack in a
+different Hotbar slot, and the combat weapon selected. Verify normal boost, stable visible selection, original
+500 ms attempts, exact `HELD Firework -> USE_ITEM -> CLIENT_TICK_END -> HELD visible` order, no PacketOrderE, and
+unchanged Offhand behavior.
+
+### Commits and push result
+
+- Implementation: `c54298759` — `fix(elytra): synchronize firework slot before deferred restore`.
+- Implementation push succeeded: `9e3ce3abb..c54298759 main -> main` on `origin`
+  (`https://github.com/Duong1234vi0/Wraith-0.1.git`).
+- Documentation: `docs(agent1): record minimal packet-order correction` (this entry). Its exact commit hash and
+  final push result are reported in the task handoff.
+
+### Supersedes / reverts
+
+This correction supersedes the latest cross-tick `ServerCarriedSlotLease` approach for the direct-Hotbar route and
+its lease-only tests. It retains only the already-proven natural-boundary deferral of the conflicting return packet.
+
+“The correction does not soften or redesign ElytraMotion. The original raw Firework use remains immediate. Only the interaction manager’s carried-slot cache is synchronized for the initial Firework slot, and only the conflicting return held-slot packet is deferred until Grim’s natural action boundary.”
