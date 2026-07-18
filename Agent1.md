@@ -9418,3 +9418,156 @@ commit records this final commit/push state.
 - Implementation commit pushed successfully: `dc05160da..914999391` `main -> main` on `origin`.
 - Documentation commit is pushed separately after this append-only record; the final hash and push result are
   reported in the task handoff.
+
+## ElytraMotion AutoFirework natural-boundary slot restoration — 2026-07-18, Codex
+
+### Checked
+
+- Read the mandatory live Wraith sources completely: `ModuleElytraMotion.kt`, `ModuleElytraTarget.kt`,
+  `ActionTickBoundary.kt`, `ModuleKeyPearl.kt`, `ModuleTotemHit.kt`, and `MixinClientConnection.java`.
+- Read the current definitions and live dispatch sites for `GameTickEvent`, `OutgoingPacketSentEvent`,
+  `WorldChangeEvent`, and `DisconnectEvent`, plus the current Firework-focused ElytraSwap test.
+- Read the supplied, untouched Grim 2.0 `PacketOrderE.java`, `PacketOrderProcessor.java`, `PacketOrderG.java`, and
+  `PacketOrderI.java` under `WorkSpace/.../Grim-2.0` completely.
+- Read the latest chronological Agent1 sections for ActionTickBoundary, KeyPearl deferred restoration, TotemHit's
+  always-running deferred restoration, the raw V-Core ElytraMotion Firework port, and prior ElytraMotion
+  PacketOrderE attempts. Historical claims were verified against the live source.
+
+### User reproduction
+
+The reproduced Grim report was:
+
+`PacketOrderE: attacking=false, rightClicking=true, openingInventory=false, releasing=false, sneaking=false, sprinting=false, bed=false, gliding=false, mountJumping=false`.
+
+The Firework was in another Hotbar slot. The relevant enabled path was ElytraMotion AutoFirework; ElytraTarget was
+not a packet owner and remained unchanged.
+
+### Config evidence
+
+- `ElytraMotion.Enabled=true`
+- `ElytraMotion.AutoFirework=true`
+- `ElytraMotion.MatrixBypass=false`
+- `ElytraMotion.AttackDistance=3.0`
+- `ElytraTarget.Enabled=true`
+- `ElytraSwap.Enabled=false`
+- `EMaceHelper.Enabled=false`
+
+### Grim PacketOrderE root cause
+
+Grim's `PacketOrderProcessor` sets `using=true` when it receives `USE_ITEM`, making `isRightClicking()` true. That
+state is cleared only by its natural tick-packet path. `PacketOrderE` inspects every later `HELD_ITEM_CHANGE` and
+flags it while any conflicting action flag remains set. This exactly matches the user's single
+`rightClicking=true` reproduction.
+
+### Exact old packet sequence
+
+The live raw Hotbar path was:
+
+`HELD_ITEM_CHANGE(Firework) -> USE_ITEM(MAIN_HAND) -> HELD_ITEM_CHANGE(captured selected slot)`.
+
+The last packet was emitted synchronously before the natural `CLIENT_TICK_END`, so it was the reproduced
+PacketOrderE violation.
+
+### Deferred restoration mapping
+
+- A narrowly scoped always-running `ElytraMotionFireworkCycle` now owns a temporary packet-only Hotbar selection.
+- The Firework selection and `USE_ITEM(MAIN_HAND)` remain synchronous and immediate.
+- Before `USE_ITEM`, the cycle creates an `ActionTickBoundary.ActionKind.USE_ITEM` token. After the synchronous
+  `sendSequencedPacket` call, it calls `actionCallCompleted(token)`, records whether the outgoing packet was
+  observed, and captures `ActionTickBoundary.currentSerial()` as the post-use boundary serial.
+- The cycle emits no manual tick-end packet. It waits until the natural serial has advanced, checks
+  `canSendPostActionHeldItemChange(...)`, wraps the one return packet with `expectHeldItemChange(...)` and
+  `completeHeldItemChangeAttempt(...)`, and then clears the Hotbar-only cycle.
+- If another outgoing carried-slot packet has already synchronized the server to the valid current visible slot,
+  the cycle can prove no change is necessary and clears without a duplicate packet.
+- The return target prefers the current local visible selected slot in `0..8`; only an invalid live value falls
+  back to the captured pre-use slot. This is a current-protocol adaptation because the raw packet-only temporary
+  switch remains active across one natural boundary while local visible selection remains unchanged.
+
+### Already-selected Firework behavior
+
+When the Firework Hotbar slot is already the local selected slot, the plan is exactly:
+
+`USE_ITEM(MAIN_HAND)`.
+
+No pre-use or post-use `HELD_ITEM_CHANGE` is emitted, and no pending restoration cycle is created.
+
+### Pending-cycle lifecycle
+
+- A second ElytraMotion Firework request is refused while a restoration or inventory cycle is pending.
+- Module disable retains the always-running valid pending restoration while the normal module lifecycle still sets
+  `freeze=false` and stops new module actions.
+- The cycle retains player identity, level identity, Firework slot, captured return slot, use-boundary serial,
+  bounded diagnostics ownership, creation tick/time, and use-packet observation.
+- World replacement, disconnect, and local-player replacement clear without a stale packet. Invalid slots are
+  rejected. A 100-tick/10-second bound prevents a permanent pending cycle; a safe passed-boundary restore is tried
+  first when applicable.
+- A cancelled/unobserved `USE_ITEM` still waits for the same natural boundary before undoing the temporary server
+  slot, because a later outgoing listener can cancel after the temporary selection packet.
+
+### Inventory-path audit
+
+- Direct Offhand Firework use remains immediate and unchanged because it sends no carried-slot packet.
+- The main-hand-being-used Offhand-SWAP route remains unchanged; supplied `PacketOrderG` concerns
+  `PLAYER_DIGGING` swap/drop/open actions and did not prove a reason to redesign this separate container-SWAP path.
+- Main-inventory Fireworks now use a bounded multi-stage current-protocol adaptation instead of the old immediate
+  `SWAP -> HELD -> USE -> HELD -> SWAP-back` chain. Only its inventory clicks go through the existing accepted
+  inventory scheduler and `InventoryActionMovementGate`: scheduled SWAP-in, temporary held slot, use, natural
+  boundary, visible/server held-slot synchronization, then scheduled SWAP-back. No inventory SWAP-back occurs in
+  the same right-click action window.
+- Firework search order, temporary slot formula (`currentSlot % 8 + 1`), source final inventory result, rotation,
+  AutoFirework/MatrixBypass gates, 500 ms timer, freeze behavior, and V-Core BPS formulas are unchanged.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotionFireworkCycleTest.kt`
+- `Agent1.md` (this append-only record)
+
+`ModuleElytraTarget.kt`, all supplied Grim sources, and unrelated dirty/untracked workspace files were not changed.
+
+### Tests
+
+- The direct focused command first reached the known unrelated `PointFindingKtTest` mapping failure
+  (`math`/`Vec3d` unresolved references) during repository-wide test compilation.
+- Re-ran only `ModuleElytraMotionFireworkCycleTest` with the established temporary init filter excluding that one
+  unrelated source. All 9 focused tests passed. Coverage includes different-slot pre/post-boundary order and a
+  single restore, already-selected use with no held packets, repeated-request ownership, module disable, world/
+  disconnect cleanup, cancelled use, manual visible-slot change, duplicate suppression, and player replacement.
+- Final focused command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.movement.ModuleElytraMotionFireworkCycleTest`
+- Result: `BUILD SUCCESSFUL` in 24 seconds; 9 tests, zero failures.
+
+### Build and JAR hash
+
+- Exact command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL` in 2m 4s (`10 actionable tasks: 7 executed, 3 up-to-date`).
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `8137557872cbb938feb7c5cfda78ba43935588fc48737eec11ab85eb560475e6`.
+
+### FCL/Grim status
+
+FCL/in-game packet capture and server-side Grim testing were unavailable in this headless Termux workspace. Build
+and focused tests do not establish runtime success. The required manual matrix remains: another Hotbar slot,
+already-selected Firework, repeated 500 ms use, disable immediately after use, target disappearance, KillAura
+enabled, and MatrixBypass separately; watch PacketOrderE/G/I, BadPackets, and MultiActions. Expected Hotbar order is
+`HELD Firework -> USE_ITEM -> natural CLIENT_TICK_END -> HELD current visible slot`.
+
+### Deviations from raw V-Core timing
+
+“The raw V-Core ElytraMotion hotbar sequence restored the selected slot immediately after USE_ITEM. Grim retains right-click state until the natural client tick boundary, so Wraith now preserves immediate Firework use but defers only the server-side slot restoration.”
+
+The additional main-inventory deviation is the scheduler/movement-gated SWAP-in and post-boundary SWAP-back needed
+to keep container inventory actions out of the reproduced action window. No delay was added before Hotbar
+`USE_ITEM`, and Offhand use remains immediate.
+
+### Commit hashes and push result
+
+- Pre-fix branch tip: `8d52c730b3cd14bf874e47b249dc5139d7a2f94d`.
+- Implementation: `2a6c9ff6f2b46ddb28c0b407be2a075ba67fd60f` —
+  `fix(elytra): defer firework slot restore after use`.
+- Implementation push succeeded: `8d52c730b..2a6c9ff6f` `main -> main` on `origin`
+  (`https://github.com/Duong1234vi0/Wraith-0.1.git`).
+- This append-only record is committed as `docs(agent1): record elytra motion packet-order fix` and pushed
+  separately; its exact content-derived commit hash and push result are reported in the final task handoff.
