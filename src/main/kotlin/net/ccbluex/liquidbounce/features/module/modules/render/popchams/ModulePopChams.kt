@@ -203,14 +203,11 @@ object ModulePopChams : ClientModule("PopChams", Category.RENDER) {
         val clone = person.clone
         val renderer = mc.entityRenderDispatcher.getRenderer(clone) as? AvatarRenderer<RemotePlayer> ?: return
 
-        clone.setPos(
-            person.snapshot.position.x,
-            person.snapshot.position.y + ySpeed / 50.0,
-            person.snapshot.position.z
-        )
-        val renderX = clone.x - cam.x
-        val renderY = clone.y - cam.y
-        val renderZ = clone.z - cam.z
+        val renderPosition = clone.position()
+        val renderX = renderPosition.x - cam.x
+        val renderY = renderPosition.y - cam.y
+        val renderZ = renderPosition.z - cam.z
+        clone.setPos(PopChamsMotion.nextPosition(renderPosition, ySpeed))
 
         val state = renderer.createRenderState()
         renderer.extractRenderState(clone, state, partialTicks)
