@@ -9995,3 +9995,96 @@ This correction supersedes the latest cross-tick `ServerCarriedSlotLease` approa
 its lease-only tests. It retains only the already-proven natural-boundary deferral of the conflicting return packet.
 
 “The correction does not soften or redesign ElytraMotion. The original raw Firework use remains immediate. Only the interaction manager’s carried-slot cache is synchronized for the initial Firework slot, and only the conflicting return held-slot packet is deferred until Grim’s natural action boundary.”
+
+## MaceSwap PacketOrderE switch-back phase correction — 2026-07-18, Codex
+
+### Checked
+
+- Read the complete current Wraith paths: `ModuleMaceSwap.kt`, `ModuleKillAura.kt`, `KillAuraClicker.kt`,
+  `CombatExtensions.kt`, `ActionTickBoundary.kt`, `MixinClientConnection.java`, `MixinMinecraftClient.java`,
+  `Sequence.kt`, `Priority.kt`, the current MaceSwap/Aura focused tests, and every requested call site for
+  `silentSwapToMace`, `processSwitchBack`, `markAuraPostAttack`, `beginMaceStunAttack`, `endMaceStunAttack`,
+  `rawShieldBreakerAttack`, and `ensureHasSentCarriedItem`.
+- Read the supplied, untouched Grim 2.0 `PacketOrderE.java`, `PacketOrderProcessor.java`, `PacketOrderB.java`,
+  and `PacketOrderI.java` completely.
+- Read the latest MaceSwap, ShieldBreaker, ActionTickBoundary, and PacketOrderE Agent1 entries and verified them
+  against the live source.
+
+### User reproduction / Grim PacketOrderE root cause
+
+The reproduced Normal-mode path was `HELD Mace -> ATTACK -> ANIMATION -> HELD previous` when MaceSwap's
+post-Aura countdown restored the previous selected slot. Grim sets `attacking=true` on the attack packet and
+clears it only at a natural tick packet; PacketOrderE flags the later held-slot packet while that state remains
+active. The reported `attacking=true, rightClicking=false` therefore isolates this MaceSwap attack window from
+ElytraMotion/Firework use. Mode Normal and the ordinary unenchanted Mace are not the cause.
+
+### Changed behavior
+
+- `ModuleMaceSwap` retains the source switch-delay values and initial `currentSwitchDelay=-1`. Its final-priority
+  post-Aura handler now advances the countdown and sets only `restoreReady`; it never mutates the selected slot
+  or calls `ensureHasSentCarriedItem`.
+- A `FIRST_PRIORITY + 2` pre-Aura handler emits a ready restore before `SequenceManager`, KillAura, AutoWeapon,
+  ShieldBreaker, or a new MaceSwap attack. It validates the previous slot, waits for the latest observed
+  MaceSwap-owned attack boundary when necessary, registers one held-item expectation, selects the previous slot,
+  calls `ensureHasSentCarriedItem()` exactly once, completes the expectation, and then resets switching state.
+- `withMaceAttackBoundary` scopes `ActionTickBoundary.ActionKind.ATTACK` ownership to the actual normal Aura attack
+  and the direct ShieldBreaker MaceStun attack. Mace selection remains before the attack and both attack calls
+  remain immediate. Observed attacks update the latest boundary serial; cancelled/unobserved attacks are cleared
+  and restore on the next pre-Aura phase without recursive synchronous restoration.
+- Dedicated ShieldBreaker keeps its source order, no-Mace MaceStun quirk, no normal Aura post-action markers, and
+  unchanged Axe sequence. SwitchBack=false, already-selected Mace, mode matching/defaults, click scheduling,
+  criticals, swing, KeepSprint, attack cooldown, and AutoDisable semantics remain intact.
+- Added bounded ActionTickBoundary diagnostics for slots, Silent/delay state, attack observation/boundary serial,
+  restore readiness, natural-boundary wait, pre-Aura restore, and stale-state clearing. No user setting or chat
+  spam was added.
+
+### Required packet order
+
+The only delayed packet is the conflicting return held-slot change:
+
+`HELD Mace -> ATTACK -> ANIMATION -> natural CLIENT_TICK_END -> HELD previous`.
+
+If Aura attacks again in that following tick, the aggressive pre-Aura order is
+`CLIENT_TICK_END -> HELD previous -> HELD Mace -> ATTACK -> ANIMATION`. No manual tick packet, attack
+suppression, CPS reduction, delay setting, SilentHotbar, inventory scheduler, movement gate, or local interaction
+prediction was added.
+
+### Tests
+
+- Updated `ModuleMaceSwapAutoDisableTest` so the post-Aura test asserts `restoreReady` rather than an unsafe
+  same-event switch-back packet.
+- Added priority coverage proving pre-Aura restoration runs before `FIRST_PRIORITY` Aura/sequence work and that
+  post-Aura synchronization remains after Aura while preserving its internal switch-back/AutoDisable order.
+- Focused command with the established unrelated-test exclusion:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.combat.ModuleMaceSwapAutoDisableTest --tests net.ccbluex.liquidbounce.features.module.modules.combat.killaura.VCoreAuraFidelityTest`
+- Result: `BUILD SUCCESSFUL`; both focused classes passed with zero failures.
+- The same focused command without the exclusion remains blocked by the pre-existing unrelated
+  `PointFindingKtTest.kt` unresolved `math`/`Vec3d`/vector symbols.
+
+### Build and JAR hash
+
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `c3fc28a109ef4bc0893b51bbc5e003382e77ae238e1892b67c4e8c62bef50b01`.
+
+### FCL/Grim status
+
+FCL gameplay and server-side Grim capture are unavailable in this headless Termux workspace. Build and focused
+tests do not prove runtime acceptance. The required manual matrix remains Normal/Silent true and false, continuous
+and isolated Aura attacks, cancelled attack, already-selected Mace, SwitchBack=false, all three mode/no-match
+cases, direct ShieldBreaker MaceStun with and without a matching Mace, and AutoDisable. Capture
+`HELD Mace -> ATTACK -> ANIMATION -> CLIENT_TICK_END -> HELD previous`, verify no PacketOrderE/B/I or related
+flags, and verify that a following Aura attack immediately reselects Mace without being skipped.
+
+### Deviations
+
+None beyond the required current-protocol adaptation: only the MaceSwap-owned return held-slot packet moves from
+the post-attack phase to the first natural-boundary-safe pre-Aura phase. The bypass does not delay Mace selection
+or the Mace attack. If Aura attacks again in that tick, MaceSwap immediately reselects the Mace before attacking.
+
+### Commits and push
+
+- Implementation: `1ec937b1` — `fix(combat): defer mace switchback before aura`.
+- Documentation: this append-only entry is committed separately after the implementation.
