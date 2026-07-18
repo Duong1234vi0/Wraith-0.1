@@ -26,6 +26,7 @@ import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
 import net.ccbluex.liquidbounce.utils.client.logger
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.entity.*
+import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.FIRST_PRIORITY
 import net.minecraft.network.protocol.game.ServerboundClientTickEndPacket
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket
@@ -49,8 +50,8 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
     private var fireworkTimerNanos = System.nanoTime()
 
     init {
-        // The raw return belongs to the action cycle, even if the module is disabled before tick end.
-        ElytraMotionDirectHotbarRestore
+        // The raw return belongs to the action cycle, even if the module is disabled before it completes.
+        ElytraMotionFireworkCycleOwner
     }
 
     override fun disable() {
@@ -110,6 +111,9 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
         if (mc.gameMode == null || player.cooldowns.isOnCooldown(Items.FIREWORK_ROCKET.defaultInstance)) {
             return
         }
+        if (ElytraMotionFireworkCycleOwner.isPending) {
+            return
+        }
 
         if (player.offhandItem.item == Items.FIREWORK_ROCKET) {
             useFireworkFromHand(InteractionHand.OFF_HAND)
@@ -131,11 +135,7 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
             is FireworkSlot.Hotbar -> useDirectHotbarFirework(firework.hotbarSlot, currentSlot)
             is FireworkSlot.Inventory -> {
                 val temporarySlot = currentSlot % 8 + 1
-                if (!clickSwap(firework.serverSlot, temporarySlot)) {
-                    return
-                }
-                useTemporaryInventoryFirework(temporarySlot, currentSlot)
-                clickSwap(firework.serverSlot, temporarySlot)
+                useTemporaryInventoryFirework(firework.serverSlot, temporarySlot, currentSlot)
             }
         }
     }
@@ -145,7 +145,7 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
         val level = mc.level ?: return
         val connection = mc.connection ?: return
         if (fireworkSlot !in 0..8 || visibleSlot !in 0..8 ||
-            ElytraMotionDirectHotbarRestore.isPending) {
+            ElytraMotionFireworkCycleOwner.isPending) {
             return
         }
 
@@ -154,56 +154,122 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
             return
         }
 
-        val diagnosticsEnabled = ElytraMotionDirectHotbarRestore.claimDiagnosticCycle(
-            fireworkSlot,
-            visibleSlot,
+        val diagnosticsEnabled = ElytraMotionFireworkCycleOwner.claimDiagnosticCycle(
+            source = ElytraMotionFireworkSource.HOTBAR,
+            originalInventorySlot = fireworkSlot,
+            temporaryHotbarSlot = null,
+            fireworkHotbarSlot = fireworkSlot,
+            capturedVisibleSlot = visibleSlot,
         )
         val createdTick = player.tickCount
         val createdNanos = System.nanoTime()
         connection.sendPacket(ServerboundSetCarriedItemPacket(fireworkSlot))
-        ElytraMotionDirectHotbarRestore.diagnostic(
+        ElytraMotionFireworkCycleOwner.diagnostic(
             diagnosticsEnabled,
-            "initial raw HELD sent fireworkSlot=$fireworkSlot capturedSelectedSlot=$visibleSlot",
+            "initial raw HELD sent slot=$fireworkSlot",
         )
         useFireworkFromHand(InteractionHand.MAIN_HAND)
-        ElytraMotionDirectHotbarRestore.diagnostic(
+        ElytraMotionFireworkCycleOwner.diagnostic(
             diagnosticsEnabled,
             "raw USE_ITEM send call completed hand=MAIN_HAND",
         )
 
         check(
-            ElytraMotionDirectHotbarRestore.arm(
-                ElytraMotionDirectHotbarPendingRestore(
+            ElytraMotionFireworkCycleOwner.arm(
+                ElytraMotionFireworkCycle(
+                    source = ElytraMotionFireworkSource.HOTBAR,
                     playerIdentity = player,
                     levelIdentity = level,
                     connectionIdentity = connection,
-                    fireworkSlot = fireworkSlot,
+                    originalInventorySlot = fireworkSlot,
+                    fireworkHotbarSlot = fireworkSlot,
                     capturedVisibleSlot = visibleSlot,
+                    temporaryHotbarSlot = null,
+                    inventorySwapInCompleted = false,
+                    rawUseSent = true,
+                    inventorySwapBackPending = false,
                     diagnosticsEnabled = diagnosticsEnabled,
                     createdTick = createdTick,
                     createdNanos = createdNanos,
                 )
             )
-        ) { "ElytraMotion direct-Hotbar restore ownership changed during synchronous Firework use" }
+        ) { "ElytraMotion Firework cycle ownership changed during synchronous Hotbar use" }
     }
 
-    /** Main-inventory SWAP/use/SWAP-back behavior is outside the direct-Hotbar reproduction. */
-    private fun useTemporaryInventoryFirework(fireworkSlot: Int, returnSlot: Int) {
-        if (fireworkSlot !in 0..8 || returnSlot !in 0..8) {
+    private fun useTemporaryInventoryFirework(
+        originalInventorySlot: Int,
+        temporaryHotbarSlot: Int,
+        visibleSlot: Int,
+    ) {
+        val player = mc.player ?: return
+        val level = mc.level ?: return
+        val connection = mc.connection ?: return
+        if (originalInventorySlot !in 9..35 || temporaryHotbarSlot !in 0..8 || visibleSlot !in 0..8 ||
+            ElytraMotionFireworkCycleOwner.isPending) {
             return
         }
 
-        network.sendPacket(ServerboundSetCarriedItemPacket(fireworkSlot))
+        val diagnosticsEnabled = ElytraMotionFireworkCycleOwner.claimDiagnosticCycle(
+            source = ElytraMotionFireworkSource.MAIN_INVENTORY,
+            originalInventorySlot = originalInventorySlot,
+            temporaryHotbarSlot = temporaryHotbarSlot,
+            fireworkHotbarSlot = temporaryHotbarSlot,
+            capturedVisibleSlot = visibleSlot,
+        )
+        val createdTick = player.tickCount
+        val createdNanos = System.nanoTime()
+        if (!clickElytraMotionSwap(originalInventorySlot, temporaryHotbarSlot)) {
+            ElytraMotionFireworkCycleOwner.diagnostic(
+                diagnosticsEnabled,
+                "cycle clear reason=inventory SWAP-in rejected",
+            )
+            return
+        }
+
+        ElytraMotionFireworkCycleOwner.diagnostic(
+            diagnosticsEnabled,
+            "inventory SWAP-in completed originalInventorySlot=$originalInventorySlot " +
+                "temporaryHotbarSlot=$temporaryHotbarSlot",
+        )
+        connection.sendPacket(ServerboundSetCarriedItemPacket(temporaryHotbarSlot))
+        ElytraMotionFireworkCycleOwner.diagnostic(
+            diagnosticsEnabled,
+            "initial raw HELD sent slot=$temporaryHotbarSlot",
+        )
         useFireworkFromHand(InteractionHand.MAIN_HAND)
-        network.sendPacket(ServerboundSetCarriedItemPacket(returnSlot))
+        ElytraMotionFireworkCycleOwner.diagnostic(
+            diagnosticsEnabled,
+            "raw USE_ITEM send call completed hand=MAIN_HAND",
+        )
+
+        check(
+            ElytraMotionFireworkCycleOwner.arm(
+                ElytraMotionFireworkCycle(
+                    source = ElytraMotionFireworkSource.MAIN_INVENTORY,
+                    playerIdentity = player,
+                    levelIdentity = level,
+                    connectionIdentity = connection,
+                    originalInventorySlot = originalInventorySlot,
+                    fireworkHotbarSlot = temporaryHotbarSlot,
+                    capturedVisibleSlot = visibleSlot,
+                    temporaryHotbarSlot = temporaryHotbarSlot,
+                    inventorySwapInCompleted = true,
+                    rawUseSent = true,
+                    inventorySwapBackPending = true,
+                    diagnosticsEnabled = diagnosticsEnabled,
+                    createdTick = createdTick,
+                    createdNanos = createdNanos,
+                )
+            )
+        ) { "ElytraMotion Firework cycle ownership changed during synchronous inventory use" }
     }
 
     private fun useFireworkWithOffhandSwap(sourceSlot: Int) {
-        if (!clickSwap(sourceSlot, OFFHAND_SWAP_BUTTON)) {
+        if (!clickElytraMotionSwap(sourceSlot, OFFHAND_SWAP_BUTTON)) {
             return
         }
         useFireworkFromHand(InteractionHand.OFF_HAND)
-        clickSwap(sourceSlot, OFFHAND_SWAP_BUTTON)
+        clickElytraMotionSwap(sourceSlot, OFFHAND_SWAP_BUTTON)
     }
 
     private fun useFireworkFromHand(hand: InteractionHand) {
@@ -235,7 +301,7 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
         return null
     }
 
-    private fun clickSwap(slot: Int, button: Int): Boolean {
+    internal fun clickElytraMotionSwap(slot: Int, button: Int): Boolean {
         val player = mc.player ?: return false
         if (slot !in player.screenHandler.slots.indices ||
             button !in 0..8 && button != OFFHAND_SWAP_BUTTON) {
@@ -267,9 +333,10 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
         System.nanoTime() - fireworkTimerNanos >= FIREWORK_INTERVAL_MS * NANOS_PER_MILLISECOND
 }
 
-private object ElytraMotionDirectHotbarRestore : EventListener {
+private object ElytraMotionFireworkCycleOwner : EventListener {
 
-    private val state = ElytraMotionDirectHotbarRestoreState()
+    private val state = ElytraMotionFireworkCycleState()
+    private var naturalBoundarySerial = 0L
     private var diagnosticCyclesRemaining = MAX_DIAGNOSTIC_CYCLES
     private var diagnosticMessagesRemaining = MAX_DIAGNOSTIC_MESSAGES
 
@@ -279,7 +346,13 @@ private object ElytraMotionDirectHotbarRestore : EventListener {
     val isPending: Boolean
         get() = state.pending != null
 
-    fun claimDiagnosticCycle(fireworkSlot: Int, visibleSlot: Int): Boolean {
+    fun claimDiagnosticCycle(
+        source: ElytraMotionFireworkSource,
+        originalInventorySlot: Int,
+        temporaryHotbarSlot: Int?,
+        fireworkHotbarSlot: Int,
+        capturedVisibleSlot: Int,
+    ): Boolean {
         if (diagnosticCyclesRemaining <= 0 || diagnosticMessagesRemaining <= 0) {
             return false
         }
@@ -287,12 +360,14 @@ private object ElytraMotionDirectHotbarRestore : EventListener {
         diagnosticCyclesRemaining--
         diagnostic(
             true,
-            "cycle created fireworkSlot=$fireworkSlot capturedSelectedSlot=$visibleSlot",
+            "cycle created source=$source originalInventorySlot=$originalInventorySlot " +
+                "temporaryHotbarSlot=${temporaryHotbarSlot ?: "none"} " +
+                "fireworkHotbarSlot=$fireworkHotbarSlot capturedVisibleSlot=$capturedVisibleSlot",
         )
         return true
     }
 
-    fun arm(restore: ElytraMotionDirectHotbarPendingRestore): Boolean = state.begin(restore)
+    fun arm(cycle: ElytraMotionFireworkCycle): Boolean = state.begin(cycle)
 
     fun diagnostic(enabled: Boolean, message: String) {
         if (!enabled || diagnosticMessagesRemaining <= 0) {
@@ -305,25 +380,37 @@ private object ElytraMotionDirectHotbarRestore : EventListener {
 
     @Suppress("unused")
     private val postSendHandler = handler<OutgoingPacketPostSendEvent> { event ->
-        val pending = state.pending ?: return@handler
         when (val packet = event.packet) {
-            is ServerboundClientTickEndPacket -> completeAfterNaturalTickEnd(pending)
-            is ServerboundSetCarriedItemPacket -> diagnostic(
-                pending.diagnosticsEnabled,
-                "unexpected HELD before CLIENT_TICK_END slot=${packet.slot}",
-            )
+            is ServerboundClientTickEndPacket -> {
+                naturalBoundarySerial++
+                val pending = state.pending ?: return@handler
+                if (state.observeNaturalBoundary(naturalBoundarySerial, mc.player?.tickCount ?: Int.MAX_VALUE)) {
+                    diagnostic(
+                        pending.diagnosticsEnabled,
+                        "natural CLIENT_TICK_END post-send observed boundarySerial=$naturalBoundarySerial; " +
+                            "restoration deferred to next GameTick HEAD",
+                    )
+                }
+            }
+
+            is ServerboundSetCarriedItemPacket -> {
+                val pending = state.pending ?: return@handler
+                if (pending.rawUseSent && !pending.boundaryObserved && !pending.heldRestorationCompleted) {
+                    warning(
+                        pending.diagnosticsEnabled,
+                        "unexpected HELD_ITEM_CHANGE between USE_ITEM and natural boundary slot=${packet.slot}",
+                    )
+                }
+            }
         }
     }
 
-    private fun completeAfterNaturalTickEnd(pending: ElytraMotionDirectHotbarPendingRestore) {
-        diagnostic(
-            pending.diagnosticsEnabled,
-            "natural CLIENT_TICK_END post-send observed",
-        )
-
+    @Suppress("unused")
+    private val restoreHandler = handler<GameTickEvent>(priority = (FIRST_PRIORITY + 3).toShort()) {
+        val pending = state.pending ?: return@handler
         val currentPlayer = mc.player
         val currentConnection = mc.connection
-        val decision = state.completeAfterTickEnd(
+        val decision = state.prepareNextTickRestore(
             currentPlayerIdentity = currentPlayer,
             currentLevelIdentity = mc.level,
             currentConnectionIdentity = currentConnection,
@@ -333,42 +420,55 @@ private object ElytraMotionDirectHotbarRestore : EventListener {
         )
 
         when (decision) {
-            is ElytraMotionDirectHotbarRestoreDecision.DROP -> diagnostic(
+            ElytraMotionFireworkCycleDecision.WAIT -> Unit
+
+            is ElytraMotionFireworkCycleDecision.DROP -> diagnostic(
                 pending.diagnosticsEnabled,
                 "cycle clear reason=${decision.reason}",
             )
 
-            is ElytraMotionDirectHotbarRestoreDecision.RESTORE -> {
-                // completeAfterTickEnd clears ownership before this nested send can emit another post-send event.
+            is ElytraMotionFireworkCycleDecision.RESTORE -> {
+                // prepareNextTickRestore transitions held ownership before this nested send can re-enter observers.
                 diagnostic(
                     pending.diagnosticsEnabled,
-                    "final raw HELD return slot=${decision.slot}",
+                    "next-GameTick HEAD raw HELD restore slot=${decision.slot} " +
+                        "boundarySerial=${pending.boundarySerial}",
                 )
+                var clearReason = "held slot restored at next GameTick HEAD"
                 try {
                     checkNotNull(currentConnection).sendPacket(ServerboundSetCarriedItemPacket(decision.slot))
+                    check(state.markHeldRestorationCompleted(pending)) {
+                        "ElytraMotion held restoration ownership was already completed"
+                    }
+
+                    if (pending.source == ElytraMotionFireworkSource.MAIN_INVENTORY) {
+                        val temporarySlot = checkNotNull(pending.temporaryHotbarSlot)
+                        check(state.claimInventorySwapBack(pending)) {
+                            "ElytraMotion inventory SWAP-back ownership was already consumed"
+                        }
+                        val swappedBack = ModuleElytraMotion.clickElytraMotionSwap(
+                            pending.originalInventorySlot,
+                            temporarySlot,
+                        )
+                        clearReason = if (swappedBack) {
+                            diagnostic(
+                                pending.diagnosticsEnabled,
+                                "inventory SWAP-back completed originalInventorySlot=${pending.originalInventorySlot} " +
+                                    "temporaryHotbarSlot=$temporarySlot",
+                            )
+                            "held slot restored and inventory SWAP-back completed at next GameTick HEAD"
+                        } else {
+                            "inventory SWAP-back rejected after held restoration"
+                        }
+                    }
+                } catch (throwable: Throwable) {
+                    clearReason = "next-GameTick restoration failed: ${throwable.javaClass.simpleName}"
+                    logger.error("$DIAGNOSTIC_PREFIX $clearReason", throwable)
                 } finally {
-                    diagnostic(
-                        pending.diagnosticsEnabled,
-                        "cycle clear reason=restored after natural CLIENT_TICK_END",
-                    )
+                    clear(clearReason, pending)
                 }
             }
         }
-    }
-
-    @Suppress("unused")
-    private val cleanupHandler = handler<GameTickEvent> {
-        val pending = state.pending ?: return@handler
-        val currentPlayer = mc.player
-        val reason = state.invalidReason(
-            currentPlayerIdentity = currentPlayer,
-            currentLevelIdentity = mc.level,
-            currentConnectionIdentity = mc.connection,
-            currentTick = currentPlayer?.tickCount ?: Int.MAX_VALUE,
-            nowNanos = System.nanoTime(),
-        ) ?: return@handler
-
-        clear(reason, pending)
     }
 
     @Suppress("unused")
@@ -383,12 +483,21 @@ private object ElytraMotionDirectHotbarRestore : EventListener {
         resetDiagnosticBudget()
     }
 
-    private fun clear(reason: String, expected: ElytraMotionDirectHotbarPendingRestore? = null) {
+    private fun clear(reason: String, expected: ElytraMotionFireworkCycle? = null) {
         val pending = state.clear() ?: return
         check(expected == null || pending === expected) {
-            "ElytraMotion direct-Hotbar restore ownership changed during cleanup"
+            "ElytraMotion Firework cycle ownership changed during cleanup"
         }
         diagnostic(pending.diagnosticsEnabled, "cycle clear reason=$reason")
+    }
+
+    private fun warning(enabled: Boolean, message: String) {
+        if (!enabled || diagnosticMessagesRemaining <= 0) {
+            return
+        }
+
+        diagnosticMessagesRemaining--
+        logger.warn("$DIAGNOSTIC_PREFIX tick=${mc.player?.tickCount ?: -1} $message")
     }
 
     private fun resetDiagnosticBudget() {
@@ -398,15 +507,32 @@ private object ElytraMotionDirectHotbarRestore : EventListener {
 
     private const val DIAGNOSTIC_PREFIX = "[ElytraMotionFireworkOrder]"
     private const val MAX_DIAGNOSTIC_CYCLES = 4
-    private const val MAX_DIAGNOSTIC_MESSAGES = MAX_DIAGNOSTIC_CYCLES * 8
+    private const val MAX_DIAGNOSTIC_MESSAGES = MAX_DIAGNOSTIC_CYCLES * 12
 }
 
-internal data class ElytraMotionDirectHotbarPendingRestore(
+internal enum class ElytraMotionFireworkSource {
+    HOTBAR,
+    MAIN_INVENTORY,
+}
+
+internal data class ElytraMotionFireworkCycle(
+    val source: ElytraMotionFireworkSource,
     val playerIdentity: Any,
     val levelIdentity: Any,
     val connectionIdentity: Any,
-    val fireworkSlot: Int,
+    val originalInventorySlot: Int,
+    val fireworkHotbarSlot: Int,
     val capturedVisibleSlot: Int,
+    val temporaryHotbarSlot: Int?,
+    var inventorySwapInCompleted: Boolean,
+    var rawUseSent: Boolean,
+    var boundaryObserved: Boolean = false,
+    var boundarySerial: Long = Long.MIN_VALUE,
+    var boundaryObservedTick: Int = Int.MIN_VALUE,
+    var heldRestoreClaimed: Boolean = false,
+    var heldRestorationCompleted: Boolean = false,
+    var inventorySwapBackPending: Boolean,
+    var inventorySwapBackCompleted: Boolean = false,
     val diagnosticsEnabled: Boolean,
     val createdTick: Int,
     val createdNanos: Long,
@@ -420,21 +546,49 @@ internal data class ElytraMotionDirectHotbarPendingRestore(
     }
 }
 
-internal sealed interface ElytraMotionDirectHotbarRestoreDecision {
-    data class RESTORE(val slot: Int) : ElytraMotionDirectHotbarRestoreDecision
-    data class DROP(val reason: String) : ElytraMotionDirectHotbarRestoreDecision
+internal sealed interface ElytraMotionFireworkCycleDecision {
+    data object WAIT : ElytraMotionFireworkCycleDecision
+    data class RESTORE(val slot: Int) : ElytraMotionFireworkCycleDecision
+    data class DROP(val reason: String) : ElytraMotionFireworkCycleDecision
 }
 
-internal class ElytraMotionDirectHotbarRestoreState {
-    var pending: ElytraMotionDirectHotbarPendingRestore? = null
+internal class ElytraMotionFireworkCycleState {
+    var pending: ElytraMotionFireworkCycle? = null
         private set
 
-    fun begin(restore: ElytraMotionDirectHotbarPendingRestore): Boolean {
-        if (pending != null || restore.fireworkSlot !in 0..8 || restore.capturedVisibleSlot !in 0..8) {
+    fun begin(cycle: ElytraMotionFireworkCycle): Boolean {
+        if (pending != null || !cycle.isValid()) {
             return false
         }
 
-        pending = restore
+        pending = cycle
+        return true
+    }
+
+    private fun ElytraMotionFireworkCycle.isValid(): Boolean {
+        if (fireworkHotbarSlot !in 0..8 || capturedVisibleSlot !in 0..8 || !rawUseSent ||
+            boundaryObserved || heldRestoreClaimed || heldRestorationCompleted || inventorySwapBackCompleted) {
+            return false
+        }
+
+        return when (source) {
+            ElytraMotionFireworkSource.HOTBAR -> originalInventorySlot in 0..8 &&
+                temporaryHotbarSlot == null && !inventorySwapInCompleted && !inventorySwapBackPending
+
+            ElytraMotionFireworkSource.MAIN_INVENTORY -> originalInventorySlot in 9..35 &&
+                temporaryHotbarSlot == fireworkHotbarSlot && inventorySwapInCompleted && inventorySwapBackPending
+        }
+    }
+
+    fun observeNaturalBoundary(serial: Long, tick: Int): Boolean {
+        val cycle = pending ?: return false
+        if (!cycle.rawUseSent || cycle.boundaryObserved) {
+            return false
+        }
+
+        cycle.boundaryObserved = true
+        cycle.boundarySerial = serial
+        cycle.boundaryObservedTick = tick
         return true
     }
 
@@ -445,26 +599,37 @@ internal class ElytraMotionDirectHotbarRestoreState {
         currentTick: Int,
         nowNanos: Long,
     ): String? {
-        val restore = pending ?: return null
+        val cycle = pending ?: return null
         return when {
-            restore.playerIdentity !== currentPlayerIdentity -> "local player replaced"
-            restore.levelIdentity !== currentLevelIdentity -> "level replaced"
-            restore.connectionIdentity !== currentConnectionIdentity -> "connection replaced"
-            restore.fireworkSlot !in 0..8 || restore.capturedVisibleSlot !in 0..8 -> "invalid stored slot"
-            restore.isTimedOut(currentTick, nowNanos) -> "restore timeout"
+            cycle.playerIdentity !== currentPlayerIdentity -> "local player replaced"
+            cycle.levelIdentity !== currentLevelIdentity -> "level replaced"
+            cycle.connectionIdentity !== currentConnectionIdentity -> "connection replaced"
+            !cycle.isValidStoredState() -> "invalid stored cycle state"
+            cycle.isTimedOut(currentTick, nowNanos) -> "cycle timeout"
             else -> null
         }
     }
 
-    fun completeAfterTickEnd(
+    private fun ElytraMotionFireworkCycle.isValidStoredState(): Boolean =
+        fireworkHotbarSlot in 0..8 && capturedVisibleSlot in 0..8 && rawUseSent &&
+            when (source) {
+                ElytraMotionFireworkSource.HOTBAR -> originalInventorySlot in 0..8 &&
+                    temporaryHotbarSlot == null && !inventorySwapInCompleted && !inventorySwapBackPending
+
+                ElytraMotionFireworkSource.MAIN_INVENTORY -> originalInventorySlot in 9..35 &&
+                    temporaryHotbarSlot == fireworkHotbarSlot && inventorySwapInCompleted &&
+                    (inventorySwapBackPending || inventorySwapBackCompleted)
+            }
+
+    fun prepareNextTickRestore(
         currentPlayerIdentity: Any?,
         currentLevelIdentity: Any?,
         currentConnectionIdentity: Any?,
         currentVisibleSlot: Int,
         currentTick: Int,
         nowNanos: Long,
-    ): ElytraMotionDirectHotbarRestoreDecision {
-        val restore = pending ?: return ElytraMotionDirectHotbarRestoreDecision.DROP("no pending restore")
+    ): ElytraMotionFireworkCycleDecision {
+        val cycle = pending ?: return ElytraMotionFireworkCycleDecision.DROP("no pending cycle")
         val invalidReason = invalidReason(
             currentPlayerIdentity,
             currentLevelIdentity,
@@ -474,18 +639,47 @@ internal class ElytraMotionDirectHotbarRestoreState {
         )
         if (invalidReason != null) {
             pending = null
-            return ElytraMotionDirectHotbarRestoreDecision.DROP(invalidReason)
+            return ElytraMotionFireworkCycleDecision.DROP(invalidReason)
+        }
+        if (!cycle.boundaryObserved || cycle.heldRestorationCompleted) {
+            return ElytraMotionFireworkCycleDecision.WAIT
+        }
+        if (cycle.heldRestoreClaimed) {
+            return ElytraMotionFireworkCycleDecision.WAIT
         }
 
-        val restoreSlot = currentVisibleSlot.takeIf { it in 0..8 } ?: restore.capturedVisibleSlot
+        val restoreSlot = currentVisibleSlot.takeIf { it in 0..8 } ?: cycle.capturedVisibleSlot
         if (restoreSlot !in 0..8) {
             pending = null
-            return ElytraMotionDirectHotbarRestoreDecision.DROP("no valid visible return slot")
+            return ElytraMotionFireworkCycleDecision.DROP("no valid visible return slot")
         }
 
-        pending = null
-        return ElytraMotionDirectHotbarRestoreDecision.RESTORE(restoreSlot)
+        cycle.heldRestoreClaimed = true
+        return ElytraMotionFireworkCycleDecision.RESTORE(restoreSlot)
     }
 
-    fun clear(): ElytraMotionDirectHotbarPendingRestore? = pending.also { pending = null }
+    fun markHeldRestorationCompleted(expected: ElytraMotionFireworkCycle): Boolean {
+        val cycle = pending ?: return false
+        if (cycle !== expected || !cycle.heldRestoreClaimed || cycle.heldRestorationCompleted) {
+            return false
+        }
+
+        cycle.heldRestorationCompleted = true
+        return true
+    }
+
+    fun claimInventorySwapBack(expected: ElytraMotionFireworkCycle): Boolean {
+        val cycle = pending ?: return false
+        if (cycle !== expected || cycle.source != ElytraMotionFireworkSource.MAIN_INVENTORY ||
+            !cycle.heldRestorationCompleted || !cycle.inventorySwapBackPending ||
+            cycle.inventorySwapBackCompleted) {
+            return false
+        }
+
+        cycle.inventorySwapBackPending = false
+        cycle.inventorySwapBackCompleted = true
+        return true
+    }
+
+    fun clear(): ElytraMotionFireworkCycle? = pending.also { pending = null }
 }
