@@ -10088,3 +10088,147 @@ or the Mace attack. If Aura attacks again in that tick, MaceSwap immediately res
 
 - Implementation: `1ec937b1` — `fix(combat): defer mace switchback before aura`.
 - Documentation: this append-only entry is committed separately after the implementation.
+
+## ElytraMotion raw post-tick-end Firework restoration — 2026-07-18, Codex
+
+### Checked
+
+- Read the repository read-first/investigation workflow and the latest chronological ElytraMotion history before
+  editing. The live restored worktree source, not the older carried-cache implementation in `HEAD`, was treated as
+  the raw baseline.
+- Read completely: current `ModuleElytraMotion.kt`, `ModuleElytraTarget.kt`, `MixinClientConnection.java`,
+  `NetworkEvents.kt`, `EventManager.kt`, `ActionTickBoundary.kt`, `SilentHotbar.kt`,
+  `CarriedSlotSyncOverride.kt`, and every current ElytraMotion test.
+- Read completely the supplied, untouched Grim 2.0 `PacketOrderE.java`, `PacketOrderProcessor.java`,
+  `PacketOrderI.java`, and `PacketOrderG.java` under `WorkSpace/.../Grim-2.0`.
+- Read the latest Agent1 entries for the natural-boundary cycle, ordinary SilentHotbar lease, server-carried-slot
+  lease, and one-shot carried-cache restoration attempts. Every historical claim was checked against live source.
+
+### Restored raw baseline
+
+The live worktree had already restored the raw V-Core ElytraMotion behavior: immediate selected-slot packets,
+immediate raw sequenced Firework use, inventory-first descending search, the original 500 ms timer reset after
+every `useFirework()` call, unchanged AutoFirework and MatrixBypass formulas, unchanged rotation, freeze, PeakAssist
+exclusion, Offhand route, Main-inventory SWAP route, and no local item-use prediction or combat pause.
+
+The direct-Hotbar baseline was exactly:
+
+`HELD Firework -> USE_ITEM(MAIN_HAND) -> HELD visible slot`.
+
+### User PacketOrderE reproduction
+
+With ElytraMotion AutoFirework enabled, ElytraTarget enabled, a Firework in another Hotbar slot, and the combat
+item visibly selected, Grim reported:
+
+`PacketOrderE: attacking=false, rightClicking=true, openingInventory=false, releasing=false, sneaking=false, sprinting=false, bed=false, gliding=false, mountJumping=false`.
+
+MatrixBypass reaches the same `useFirework()` -> direct-Hotbar helper, so the deterministic return-packet defect was
+shared by AutoFirework and MatrixBypass. Their trigger conditions and calculations were not changed.
+
+### Grim PacketOrderE state analysis and deterministic root cause
+
+Grim's `PacketOrderProcessor` sets `using=true` when `USE_ITEM` arrives. `isRightClicking()` is
+`placing || using || interacting`. `PacketOrderE` evaluates `HELD_ITEM_CHANGE` against that action state, and the
+processor clears `using` only when its natural tick-packet condition runs. Therefore the initial `HELD Firework`
+before use is valid, while the immediate raw `HELD visible slot` after use is the exact deterministic violation.
+
+`ModuleElytraTarget` sends no use-item or held-slot packet and does not own this sequence. It remained unchanged.
+
+### Why previous approaches were rejected
+
+- Ordinary `SilentHotbar` and cross-tick server-slot leases changed ownership/lifecycle semantics and had already
+  caused Firework reliability and visible-switch regressions.
+- `CarriedSlotSyncOverride` plus `ensureHasSentCarriedItem()` routed the raw path through Minecraft's private
+  carried-slot cache even though ElytraMotion explicitly owns both held packets.
+- `interaction.interactItem()`, `InteractionResult`, and local `ItemStack.use()` add local prediction absent from
+  the V-Core route.
+- A GameTick restore occurs later than necessary. A nested send from `OutgoingPacketSentEvent` HEAD would occur
+  before the natural tick-end send completes. The existing `OutgoingPacketPostSendEvent` TAIL is the exact phase
+  required for the most aggressive safe return.
+
+### True post-send CLIENT_TICK_END restoration
+
+- Direct Hotbar and temporary Main-inventory Hotbar helpers are split. The Main-inventory immediate
+  `SWAP -> HELD -> USE_ITEM -> HELD -> SWAP-back` path is explicitly unchanged and outside this reproduction.
+- For a different direct Hotbar slot, ElytraMotion validates player, level, connection and both slots, rejects an
+  already-pending cycle, captures player/level/connection identities, Firework/visible slots, creation tick/time,
+  and bounded diagnostic ownership, then synchronously sends:
+  `HELD Firework -> USE_ITEM(MAIN_HAND)`.
+- The existing raw `useFireworkFromHand(MAIN_HAND)` call remains immediate. Only after that synchronous call
+  returns is one pending raw return record armed. No return packet is sent by the direct helper.
+- An always-running listener observes `OutgoingPacketPostSendEvent`. At the true post-send event for the next
+  natural `ServerboundClientTickEndPacket`, it validates the same player, level and connection, prefers the current
+  visible Hotbar slot, falls back to the captured valid slot, clears pending ownership before the nested send, and
+  emits exactly one raw `ServerboundSetCarriedItemPacket(restoreSlot)`.
+- Clearing before the nested send prevents a reentrant duplicate. World change, disconnect, player/level/
+  connection replacement, invalid state, and a 20-tick/1-second timeout clear without sending into a new session.
+  Module disable does not discard a valid pending return.
+- When the Firework is already visibly selected, the path sends only raw `USE_ITEM(MAIN_HAND)`: no initial held
+  packet, pending record, return held packet, cache override, or local prediction. Offhand remains unchanged.
+- Internal diagnostics are capped at four cycles/eight messages per cycle and record Firework/captured slots,
+  initial raw HELD, raw USE call completion, post-send natural tick end, final raw return, unexpected intervening
+  HELD packets, and clear reason. Nothing is sent to chat and no Logs module was added.
+
+Required direct-Hotbar network order is now:
+
+`HELD Firework -> USE_ITEM(MAIN_HAND) -> natural CLIENT_TICK_END -> HELD current visible slot`.
+
+### Unchanged raw V-Core behavior
+
+- Immediate Firework selection and raw sequenced use remain in the same ElytraMotion call.
+- Firework search order, rotations, Offhand and Main-inventory behavior, freeze calculation, PeakAssist exclusion,
+  AutoFirework and MatrixBypass conditions, AttackDistance, local BPS threshold, and exact 500 ms timer assignment
+  remain unchanged.
+- No manual tick-end packet, SilentHotbar, carried-slot cache override, local interaction prediction, inventory
+  scheduler, movement gate, retry/cooldown, combat pause, target/rotation/attack/CPS/critical change, or Grim edit.
+
+“The bypass preserves ElytraMotion’s raw V-Core Firework selection and immediate use. It removes only the same-action-window return held-slot packet and emits that raw return immediately after the next natural CLIENT_TICK_END has completed its send path.”
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotionFireworkCycleTest.kt`
+- `Agent1.md` (this append-only record)
+
+`ModuleElytraTarget`, KillAura/combat files, outgoing event/mixin infrastructure, Grim sources, and unrelated dirty
+or untracked workspace files were not changed by this correction.
+
+### Tests
+
+- The ordinary focused command was blocked during repository-wide test compilation by the pre-existing unrelated
+  `PointFindingKtTest.kt` unresolved `math`, `Vec3d`, and vector-member symbols. Production Kotlin/Java compilation
+  had already passed before that unrelated test-source failure.
+- Focused command with the established single-source exclusion:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.movement.ModuleElytraMotionFireworkCycleTest`
+- Result: `BUILD SUCCESSFUL` in 33 seconds; 9 tests, zero failures/errors/skips.
+- Coverage includes immediate pre-boundary order, exactly one post-send return, already-selected behavior, module
+  disable, current-visible preference/captured fallback, player/level/connection replacement, world/disconnect
+  cleanup, timeout/invalid slots, no overwrite/duplicate, exact post-send event selection, forbidden-path absence,
+  unchanged Main-inventory sequence, shared AutoFirework/MatrixBypass path, and unchanged timer formula.
+- `git diff --check` passed before build and before commit.
+
+### Build and JAR hash
+
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL in 2m 17s` (`10 actionable tasks: 7 executed, 3 up-to-date`).
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `ef028d34bca6fbb0eaadf664dc45948df96989b0ada0585de322372381b2144c`.
+
+### FCL/Grim status
+
+FCL gameplay, packet capture, and server-side Grim execution are unavailable in this headless Termux workspace.
+Focused tests and a successful clean build do not prove runtime acceptance. The required manual matrix remains:
+AutoFirework with another Hotbar slot, MatrixBypass separately, already-selected Hotbar, Offhand control,
+Main-inventory control, manual visible-slot change during pending, disable immediately after use, and world/session
+replacement. Capture `HELD Firework -> USE_ITEM -> CLIENT_TICK_END -> HELD visible`, verify immediate/reliable boosts,
+stable visible combat selection, original 500 ms behavior, and no PacketOrderE.
+
+### Commits and push result
+
+- Implementation: `367fadeb4` — `fix(elytra): restore hotbar slot after tick-end`.
+- Implementation push succeeded: `2b0b5f772..367fadeb4 main -> main` on `origin`
+  (`https://github.com/Duong1234vi0/Wraith-0.1.git`).
+- Documentation: this append-only entry is committed separately as
+  `docs(agent1): record deterministic packet-order bypass`; its exact hash and final push result are reported in
+  the task handoff.
