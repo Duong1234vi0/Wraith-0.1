@@ -10525,3 +10525,95 @@ and through-wall visibility. Compilation does not prove recognizable skin render
 - `e0f2c311` — `feat(popchams): add target skin ghost mode`.
 - Documentation commit: this entry (`docs(agent1): record movefix audit and skin popchams`); exact hash and push result are
   reported in the final handoff after commit/push.
+
+## PopChams cumulative vertical movement correction — 2026-07-19, Codex
+
+### Checked
+
+- Wraith `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/popchams/ModulePopChams.kt`,
+  `PopChamsPipelines.kt`, `PopChamsRenderDecisions.kt`, and the existing
+  `PopChamsSkinModeTest.kt` were read completely.
+- Current normal world rendering was checked through `WorldRenderEvent` in `MixinGameRenderer.java` and the
+  PopChams normal handler.
+- Current Iris shader-world rendering was checked through `MixinWorldRenderer.java`, which calls
+  `ModulePopChams.renderShaderWorldPass(...)` before Iris' final composite.
+- V-Core `WorkSpace/Client/VCore-0.8/vcore/features/modules/render/PopChams.java` was read completely, especially
+  `renderEntity(...)` and its mutable clone-position update.
+- Current PopChams Agent1 history was checked, including the original V-Core core re-port, render corrections, and the
+  latest Skin-mode fidelity audit. Historical notes were verified against live source.
+
+### User reproduction
+
+With `YSpeed=10`, Simple, Textured, and Skin clones appeared at the pop position and stayed visually stationary until
+alpha faded. The setting ranges and all other PopChams behavior were required to remain unchanged.
+
+### V-Core cumulative Y movement
+
+V-Core captures `entity` coordinates for the current frame, then mutates the clone from its current position by
+`(0.0, ySpeed / 50.0, 0.0)`. The next render therefore uses the newly advanced position.
+
+### Wraith snapshot-reset root cause
+
+Wraith previously reset every PopChams clone to `snapshot.position + YSpeed / 50` during every render, producing only a
+fixed offset. The correction advances the clone from its current mutable position each render, restoring V-Core's
+cumulative vertical motion for Simple, Textured, and Skin modes.
+
+### Exact movement correction
+
+- Added pure `PopChamsMotion.verticalDelta(ySpeed)` and `PopChamsMotion.nextPosition(current, ySpeed)` helpers.
+- `renderEntity(...)` now captures `clone.position()` for camera-relative coordinates, advances the clone exactly once
+  with `PopChamsMotion.nextPosition(renderPosition, ySpeed)`, and renders using the coordinates captured before the
+  advance.
+- The immutable `PopChamsSkinSnapshot` remains unchanged; the mutable clone owns animated position state.
+- Positive, zero, and negative YSpeed values naturally move upward, remain stationary, and move downward respectively.
+
+### Normal/Iris render handling
+
+Both normal and shader-world passes continue to call the shared `renderEntity(...)`. Existing `shaderPassRendered`
+gating remains unchanged: a successful Iris pass advances/renders once, and the following normal WorldRenderEvent
+returns without a duplicate render or second movement advance.
+
+### Preserved behavior
+
+YSpeed remains `-10..10` with default `1`; AlphaSpeed remains `1..100` with default `35`; RotationSpeed remains
+`0..6` with default `0.0`. Tick-based `alpha -= AlphaSpeed`, clone lifetime/cleanup, all three pipelines, skin texture
+and wide/slim snapshot behavior, SecondLayer, lighting, no-depth rendering, rotation animation, model transforms,
+Iris integration, local-player exclusion, and world/disable cleanup were not changed.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/popchams/ModulePopChams.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/popchams/PopChamsMotion.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/popchams/PopChamsMotionTest.kt`
+- this `Agent1.md` section.
+
+### Tests
+
+- `git diff --check`: passed.
+- Focused command with the established unrelated-test exclusion:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.render.popchams.PopChamsSkinModeTest --tests net.ccbluex.liquidbounce.features.module.modules.render.popchams.PopChamsMotionTest`
+- Result: `BUILD SUCCESSFUL`; 23 tests passed, zero failures/errors/skips (16 existing Skin-mode tests and 7 new
+  motion tests).
+- The unfiltered focused invocation remains blocked by the unrelated pre-existing `PointFindingKtTest.kt` 1.21.4
+  mapping imports (`math`, `Vec3d`, vector fields, and `toVector3f` unresolved).
+- Static checks confirmed no `snapshot.position` render reset remains, the exact `YSpeed / 50.0` delta is preserved,
+  all modes share the helper, alpha and RotationSpeed code are unchanged, and Iris normal-pass gating remains intact.
+
+### Build and JAR hash
+
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL in 1m 56s`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `5ce9a5f85385d789f59065b632e82e044b39ecb771835970ac554d2ed771b426`.
+
+### Manual rendering status
+
+Not run in the headless Termux workspace. FCL verification remains required for Simple, Textured, and Skin with
+`YSpeed=10`, `AlphaSpeed=1`, `RotationSpeed=0`, plus negative/zero YSpeed, Iris on/off, multiple simultaneous pops,
+and cleanup. Compilation and focused source tests do not prove visual movement or shaderpack behavior.
+
+### Commits and push result
+
+- Implementation commit: `2ee4546a` — `fix(popchams): restore cumulative vertical movement`.
+- Documentation commit: this entry; exact hash and push result are reported in the final handoff after commit/push.
