@@ -9306,3 +9306,115 @@ commit records this final commit/push state.
 
 - Both scoped commits are pending push at the time this append-only entry is created; the final result is reported
   after the documentation commit and push complete.
+
+## V-Core Elytra combat stack — fifth fidelity audit (2026-07-18, Codex)
+
+### Checked
+
+- Read the complete V-Core `vcore/features/modules/combat/aura/rotation/Track.java`,
+  `vcore/features/modules/combat/Aura.java`, and `vcore/core/manager/player/PlayerManager.java`.
+- Read the complete current Wraith `TrackAngleSmooth.kt`, `ModuleKillAura.kt`,
+  `KillAuraRotationsConfigurable.kt`, GameTick/RotationUpdate dispatch path, and focused fidelity tests.
+- Re-read current PeakAssist, target-tracker/reset, ElytraTarget, ElytraMotion, MaceSwap, and the fourth-audit
+  state to ensure accepted behavior remained unchanged. V-Core reference files were not modified.
+- Recorded the pre-edit V-Core hashes and verified the references remain untouched:
+  `Track.java` `22e81de0504cf94d8709aca59137756c039d8b712e15362e788e56ee29f57f7c`,
+  `Aura.java` `8829c6e35f495e33268995688e1ec8950dd09c2f15b10773c9074dcf0cca2c7c`,
+  `PlayerManager.java` `768363ed4bbebd7517275d21be70b459ad56f59b9474fb3c4b4a88009e2a29f9`.
+
+### Fifth fidelity audit
+
+#### Track pitch overshoot mismatch
+
+- Wraith previously clamped `pitchAcceleration * pitchAccelerate` during the update, removing V-Core's intentional
+  one-update overshoot.
+- Replaced it with the exact previous-value branch: aimed step when already raytracing; multiplication while the
+  previous value is below `MaxPitchStep`; otherwise reset to `MaxPitchStep`.
+- The default sequence is preserved as `1.0, 1.65, 2.7225, 4.492125, 7.412006, 12.22981, 8.0`.
+- Random `-1..1` pitch addition, sustained Elytra `180` pitch, `AimedPitchStep`, `AccelerateOnHit`, Track GCD,
+  and yaw behavior are unchanged.
+
+#### ThroughWalls active-wall-range bug
+
+- `activeWallRange()` now returns exactly `0.0f` when `KillAuraRotationsConfigurable.aimThroughWalls` is false.
+- When enabled, grounded behavior still uses configured `WallRange`; gliding behavior still uses active Elytra
+  attack range plus effective `ElytraAimRange`.
+- The authoritative value remains used by attack-facing validation, ordinary PointTracker/raytrace-box paths,
+  and Track's initial dynamic-point wall check.
+- Track's special pitch-raytrace helper remains intentionally independent: it uses attack range plus aim range
+  for both ranges, or returns true when raycast is disabled.
+- Existing `ThroughWalls`/`IgoneWall` alias and explicit saved values were not changed.
+
+#### OnTick double dynamic-point update
+
+- Wraith now advances Track's mutable source point through a stable per-`GameTickEvent` serial and caches the
+  fully resolved Track aim point by tick identity, target identity, local-player identity, and world identity.
+- The first request in a tick performs the source motion update and scan; later selection/attack requests return
+  the same point. Target changes, player replacement, world replacement, enable/disable, and world-change cache
+  clearing cannot reuse a stale point.
+- The cache stores only the Track aim point. It does not cache a rotation, alter Grim, ordinary PointTracker,
+  ElytraTarget prediction state, PeekHigh ownership, or PeakAssist ordering. PeekHigh and PeakAssist are applied
+  once while producing the cached point.
+
+### Grounded AimRange architectural deviation
+
+- V-Core's ordinary grounded Aura has a separate `AimRange=2.0`; current Wraith intentionally retains its
+  existing grounded `Range`, `WallRange`, and `ScanExtraRange` architecture in this focused correction.
+- No full grounded Aura fidelity is claimed. The primary Elytra path continues to use `ElytraRange` and the
+  effective `ElytraAimRange`.
+- ElytraPlus remains intentionally unported and out of scope.
+
+### Changed files
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/TrackAngleSmooth.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/VCoreAuraFidelityTest.kt`
+- this append-only `Agent1.md` section
+
+### Tests
+
+- The direct focused test command initially reached the known unrelated `PointFindingKtTest` compile blocker
+  (`math`/`Vec3d` mapping errors).
+- Re-ran the established focused classes with only that pre-existing test source excluded through a temporary
+  Gradle init filter: `VCoreAuraFidelityTest` (28 tests), `ModuleMaceSwapAutoDisableTest` (6 tests), and
+  `ModuleElytraSwapFireworkPlanTest` (5 tests) all passed with zero failures.
+- Added deterministic coverage for pitch overshoot/reset, all four active WallRange cases, one Track mutation per
+  tick, target/player/world identity invalidation, and OnTick selection/attack point reuse.
+- `git diff --check` passed. ElytraTarget and ElytraMotion source hashes remained unchanged:
+  `69ee078425e215fdda46e39046441929e31abd8d4424d5cbf48d77b50c0be298` and
+  `7a166a33a0ab28c38fba98c10d4f67362e63e488637af433fcf357ee1f5ee51c`.
+
+### Build and JAR hash
+
+- Exact requested command passed:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`.
+- Result: `BUILD SUCCESSFUL`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `9c7cc3a47aa5d66571327d7879d97e51b9951bee062f5de240a2d946e0eec9b1`.
+- JAR inspection contains `ModuleKillAura`, `VCoreTrackAimPointCache`, `TrackAngleSmooth`, `ModuleElytraTarget`,
+  and `ModuleElytraMotion` classes.
+
+### FCL status
+
+- FCL/in-game visual, packet, and server-side Grim testing was unavailable in this headless Termux workspace.
+- Runtime checks remain for the one-update Track pitch sequence, ThroughWalls false/true grounded and Elytra
+  raytrace behavior, OnTick selection/attack point identity, target/world/player replacement, and all previously
+  accepted Elytra/Mace/ShieldBreaker ordering cases.
+- No Grim-safe timing, delay, or anti-cheat behavior was added. Build and focused tests do not establish runtime
+  acceptance.
+
+### Remaining ElytraPlus deviation
+
+- Full V-Core ElytraPlus remains intentionally unported. Track's ElytraPlus branch, Aura acquisition `+4`, and
+  SmartCrit exemption remain unavailable and are not claimed by this audit.
+
+### Commits
+
+- Implementation: `914999391f267b932475825ed4351a3bb36ef85d` — `fix(elytra): finalize vcore track fidelity`.
+- Documentation: `docs(agent1): record fifth elytra fidelity audit` (committed and pushed after this record).
+
+### Push result
+
+- Implementation commit pushed successfully: `dc05160da..914999391` `main -> main` on `origin`.
+- Documentation commit is pushed separately after this append-only record; the final hash and push result are
+  reported in the task handoff.
