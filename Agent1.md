@@ -9680,4 +9680,6 @@ to keep container inventory actions out of the reproduced action window. No dela
 ### Commits and push
 
 - Implementation: `db03ebfb` — `fix(elytra): synchronize hotbar firework lease`.
-- Documentation commit and push result are recorded in the final task handoff after this append-only entry is committed.
+- Documentation entry: `72dc19a5` — `docs(agent1): record firework lease reliability fix`.
+- First push result: `69cb8230c..72dc19a53 main -> main` on `origin` (`https://github.com/Duong1234vi0/Wraith-0.1.git`).
+- This final push-status clarification is committed separately so the journal records the exact remote result.
