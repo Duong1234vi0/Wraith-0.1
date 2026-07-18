@@ -10394,3 +10394,134 @@ target loss, world change, manual slot change, and Offhand control. Watch `Packe
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - Documentation: `docs(agent1): record firework packet phase bypass` (this entry). Its exact hash and final push
   result are reported in the task handoff after the separate documentation commit is created and pushed.
+
+## V-Core MoveFix Full fidelity audit + PopChams Skin mode — 2026-07-19, Codex
+
+### Checked
+
+- Skill process: `Skill/README.md`, `Skill/Agen.md`, `Skill/AGENT1_USAGE.md`, `Skill/CODEBASE_RULES.md`,
+  `Skill/CLAUDE_PORT_SKID_MODULE_GUIDE.md`, `Skill/PORT_EVIDENCE_TEMPLATE.md`, `Skill/PORT_REVIEW_CHECKLIST.md`,
+  `Skill/RENDER_PORTING_GUIDE.md`, and `Skill/Notes_/WORK_NOTES.md`.
+- V-Core movement: `vcore/features/modules/movement/MoveFix.java`, `vcore/core/manager/player/PlayerManager.java`,
+  `vcore/injection/MixinKeyboardInput.java`, `vcore/events/impl/EventKeyboardInput.java`,
+  `vcore/features/modules/combat/aura/rotation/{Track,Grim,AuraRotationManager}.java`, and complete `AutoCart.java`.
+- Wraith movement: `MovementCorrection.kt`, `RotationManager.kt`, `RotationTarget.kt`, `RotationsConfigurable.kt`,
+  `ModuleKillAura.kt`, `MixinKeyboardInput.java`, `MixinEntity.java`, `MixinLivingEntity.java`, `ModuleSprint.kt`,
+  `ModuleAutoCart.kt`, `MovementUtils.kt`, `DirectionalInput.kt`, and the existing movement tests.
+- V-Core PopChams: complete `vcore/features/modules/render/PopChams.java`.
+- Wraith PopChams/render: complete `ModulePopChams.kt`, `PopChamsPipelines.kt`, all four PopChams shaders,
+  `MixinShaderManager.java`, `MixinWorldRenderer.java`, `ModuleSkinChanger.kt`, `ModuleCustomModels.kt`,
+  skin compatibility helpers, avatar renderer/state APIs, and relevant renderer mixins.
+- Historical PopChams and Focused Full sections were checked against live source; historical notes were not treated as
+  current behavior.
+
+### V-Core Full MoveFix oracle
+
+V-Core `MoveFix.Mode.Full` computes the target position from entity `x/y/z`, subtracts the player position and eye Y,
+computes yaw/pitch, applies sensitivity `pow(sensitivity, 1.5) * 0.05 + 0.1`, quantizes yaw by `gcd = sensitivity^3 * 1.2`,
+and quantizes pitch by `gcd * sensitivity`. It then evaluates the eight nonzero `forward/strafe` combinations in `-1..1`,
+wraps desired and predicted angles separately, and compares their difference without a final wrap.
+
+### Focused Full matches
+
+Wraith Focused Full preserves V-Core’s quantized target-yaw and eight-direction input search in the KillAura-owned
+rotation context. The implementation remains scoped to Wraith’s rotation architecture rather than becoming a global
+MoveFix module.
+
+The pure source-shaped helper is `FocusedFullMoveFix.kt`; the keyboard mixin delegates only the Focused Full branch to it.
+Ordinary `MovementCorrection.FULL` retains its existing smoother and previous-input state. Velocity uses the active server
+yaw; jump uses active yaw; Elytra pitch/look correction uses active pitch/look vector.
+
+### Architectural deviations
+
+1. V-Core owns a global module and mutable `fixRotation`; Wraith owns movement correction on `RotationTarget` requests.
+2. Wraith restricts Focused Full to `ModuleKillAura.isFocusedFullMoveFixActive()` and does not broaden it to other providers.
+3. Wraith hooks movement consumers directly instead of temporarily mutating player yaw/pitch across V-Core travel PRE/POST.
+4. Wraith pause semantics use `CombatManager`.
+
+These are intentional architecture adaptations, not behavior inventions. The ownership gate also preserves removed-target,
+passenger, AutoCart ownership, invalid-rotation, and combat/rotation-pause exclusions.
+
+### Movement tests
+
+- Added `VCoreFocusedFullMoveFixTest` with 15 focused cases: source-equivalent quantization, all eight candidates, zero,
+  cardinal/diagonal mapping, unwrapped-difference quirk, positive-left strafe, ordinary-FULL state separation, AutoCart,
+  passenger, provider/target ownership, active-yaw velocity, active-yaw jump, and ownership-gated Elytra correction.
+- Focused command passed with the existing `.codex-tmp/exclude-point-finding-test.init.gradle` exclusion:
+  `VCoreFocusedFullMoveFixTest` and `PopChamsSkinModeTest` passed.
+- The normal test compile remains blocked by the unrelated stale `PointFindingKtTest.kt` 1.21.4 `Vec3d` imports.
+- Verified fidelity: **15/15 requested source-level checks (100%)**. Runtime FCL/Grim proof remains pending.
+
+### Current PopChams rendering diagnosis
+
+Current Simple and Textured behavior remains intact. Textured is the existing V-Core-style target texture multiplied by
+theme color and uses the separate additive/lightning pipeline. The old model was always wide and the pop instance retained
+live clone position mutation; neither is acceptable for a frozen target-skin snapshot.
+
+### Skin mode design
+
+Added `Mode = Skin` while preserving saved `Simple` and `Textured` values. At `TotemPopEvent`, Wraith now snapshots the
+skin texture identifier, actual `PlayerSkin.model()` discriminator, position, body/head yaw, pitch, crouch state, and limb
+position/speed. The render path uses only the snapshot after the pop; the clone is not used to re-read the target.
+
+### Wide/slim snapshot
+
+`PlayerModelType.WIDE` selects `ModelLayers.PLAYER` with `slim = false`; `PlayerModelType.SLIM` selects
+`ModelLayers.PLAYER_SLIM` with `slim = true`. The existing model-root scale adjustment and animation snapshot are preserved.
+
+### Pipeline and color behavior
+
+- Skin has a separate `SKIN_PIPELINE` / `skinTranslucent(texture)` cache with `DefaultVertexFormat.ENTITY`, sampler,
+  `BlendFunction.TRANSLUCENT`, no depth-stencil state, and culling disabled.
+- Simple keeps theme RGB and animated alpha; Textured keeps target texture × theme RGB × animated alpha.
+- Skin uses white RGB plus animated alpha, preserving skin and overlay texture alpha.
+- Skin uses full-bright packed light in both normal and shader-world passes; Simple/Textured existing light behavior remains.
+- `OverlayTexture.NO_OVERLAY`, no hurt/red overlay, and only the six `SecondLayer` parts are enabled; armor, held items,
+  cape, elytra, name tag, arrows, and equipment layers are not submitted.
+
+PopChams Skin mode renders a frozen copy of the popped player using the captured target skin and correct wide/slim geometry.
+Unlike V-Core Textured mode, Skin mode uses white RGB with standard alpha blending so the original skin colors remain recognizable.
+
+### Iris handling
+
+The existing shader-world pass remains the single successful render path. Simple uses its white shader texture and theme tint;
+Textured uses the captured target texture and theme tint; Skin uses the captured target texture, white RGB, animated alpha,
+and full-bright light. `shaderPassRendered` still suppresses the normal duplicate pass.
+
+### Files changed
+
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/client/MixinKeyboardInput.java`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/FocusedFullMoveFix.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/VCoreFocusedFullMoveFixTest.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/popchams/ModulePopChams.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/popchams/PopChamsPipelines.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/popchams/PopChamsRenderDecisions.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/popchams/PopChamsSkinModeTest.kt`
+- this `Agent1.md` section.
+
+### Tests
+
+- `git diff --check`: passed.
+- Focused movement and PopChams tests: passed with the unrelated stale test excluded.
+- Ordinary full test task: blocked at `PointFindingKtTest.kt` due pre-existing removed-mapping imports.
+
+### Build and JAR hash
+
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL in 2m 1s`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `a73e8b6840cf708bc6b92e0c3d28e1acfcea48596a4915ec39b9450f64cecc5a`.
+
+### Manual render status
+
+Not run in the headless Termux workspace. FCL matrix remains pending: wide/Steve, slim/Alex, transparent overlays,
+hat/jacket/sleeves, crouch, walk snapshot, multiple pops, target leaving render distance, Iris on/off, first/third person,
+and through-wall visibility. Compilation does not prove recognizable skin rendering or shaderpack behavior.
+
+### Commits and push result
+
+- `283a4ef1` — `test(movement): verify vcore focused full fidelity`.
+- `e0f2c311` — `feat(popchams): add target skin ghost mode`.
+- Documentation commit: this entry (`docs(agent1): record movefix audit and skin popchams`); exact hash and push result are
+  reported in the final handoff after commit/push.
