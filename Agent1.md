@@ -10618,3 +10618,146 @@ and cleanup. Compilation and focused source tests do not prove visual movement o
 - Implementation commit: `2ee4546a` — `fix(popchams): restore cumulative vertical movement`.
 - Documentation commit: `085dac32` — `docs(agent1): record popchams motion correction`.
 - Push result: succeeded, `f31c82c68..085dac32c main -> main`, to `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+
+## V-Core TotemCounter and ArmorDurability hotbar HUD port — 2026-07-19, Codex
+
+### Checked
+
+- Required process was read before editing: `Skill/README.md`, `Skill/Agen.md`, `Skill/AGENT1_USAGE.md`,
+  `Skill/CODEBASE_RULES.md`, `Skill/CLAUDE_PORT_SKID_MODULE_GUIDE.md`, `Skill/PORT_EVIDENCE_TEMPLATE.md`,
+  `Skill/PORT_REVIEW_CHECKLIST.md`, `Skill/RENDER_PORTING_GUIDE.md`, and `Skill/Notes_/WORK_NOTES.md`.
+- V-Core files read completely:
+  - `WorkSpace/Client/VCore-0.8/vcore/features/hud/impl/TotemCounter.java`
+  - `WorkSpace/Client/VCore-0.8/vcore/features/hud/impl/ArmorHud.java`
+  - `WorkSpace/Client/VCore-0.8/vcore/features/hud/HudElement.java`
+  - `WorkSpace/Client/VCore-0.8/vcore/features/modules/render/HudEditor.java`
+  - `WorkSpace/Client/VCore-0.8/vcore/events/impl/TotemPopEvent.java`
+- Current Wraith HUD files read completely:
+  - `ModuleHUD.kt`, `HudManager.kt`, `HudElement.kt`, `WyvernHudElements.kt`, `HudConfig.kt`,
+    `ExosGuiRenderer.kt`, and `GuiAndItemCompatExtensions.kt`.
+- Current `TotemPopEvent`, `CombatManager` real-pop dispatch, FakePlayer pop dispatch, `OverlayRenderEvent`,
+  `MixinInGameHud`, `GameTickEvent`, world/disconnect events, module lifecycle, current test inventory, and relevant
+  historical HUD/item-render/HUDScale entries were checked against live source.
+- `gradle.properties` confirms the live target is Minecraft `26.1.2`.
+- Pre-edit evidence: `.codex-tmp/vcore-hotbar-hud-evidence-20260719.md`.
+
+### V-Core TotemCounter behavior
+
+V-Core draws a default Totem of Undying at `screenCenterX - 8`, uses the normal item overlay, centers the total above
+the icon at `itemY - 6`, hides the widget when the total is zero, and drives a red blurred-shadow pulse from a local
+player `TotemPopEvent`. Its source angle starts at `-15`, advances once per update, and therefore exposes a 15-tick
+fade factor.
+
+### V-Core ArmorHud behavior
+
+V-Core walks the armor collection in its native boots-to-helmet order but reverses the placement formula. The resulting
+visual order is Helmet, Chestplate/Elytra, Leggings, Boots. It draws the standard item model and item overlay, then a
+remaining-durability number above every non-empty stack.
+
+### Inventory/offhand count mapping
+
+The legacy V-Core `0..44` inventory-index loop was not copied. Current Wraith maps `Inventory.main` to
+`nonEquipmentItems` (hotbar plus main inventory) and maps `offhandItem` to player inventory slot 40. The target renderer
+sums full stack counts from exactly those two sources, excluding armor, crafting/cursor stacks, and external containers.
+Zero Totems produce no icon, count, glow, or visible reserved background.
+
+### Hotbar-relative positions
+
+Every render reads `mc.window.guiScaledWidth` and `guiScaledHeight`. Totem uses `centerX - 8`; armor uses fixed x values
+`centerX + 12`, `+32`, `+52`, and `+72`. Empty armor slots are skipped at their existing visual index, so later items do
+not collapse left. Armor renders before the Totem layer, preserving the centered icon regardless of either setting.
+
+TotemCounter and ArmorDurability are fixed hotbar-attached overlays rather than draggable Wraith cards. Their positions are recalculated from the current GUI dimensions every render, preserving V-Core’s vanilla-hotbar alignment and air-bar offset.
+
+### Air-bar adjustment
+
+Both widgets share `itemY = guiScaledHeight - 55 - airAdjustment`. `airAdjustment` is zero only while the player is not
+underwater and bounded current air is at maximum; underwater or reduced-air state moves both widgets upward by exactly
+10 GUI pixels. Nonpositive invalid max-air input is handled without division or an unsafe comparison.
+
+### Local Totem pop pulse
+
+Current Wraith `TotemPopEvent.entity` is compared by identity with `mc.player`. Only the local player starts 15 pulse
+ticks; real other-player and FakePlayer events do not. `GameTickEvent` decrements the value without going negative.
+Player replacement, world change, disconnect, and HUD disable reset the pulse. The current small GUI glow pipeline draws
+the fading red icon-local glow without fullscreen blur or global shader-color mutation.
+
+### Armor order
+
+The renderer reads `EquipmentSlot.HEAD`, `CHEST`, `LEGS`, and `FEET` explicitly every frame. A chest-slot Elytra follows
+the same chest position and durability path. Main hand, offhand, shields outside those slots, and extra equipment are not
+included.
+
+### Durability formula and color
+
+The displayed value preserves V-Core truncation:
+`100 - floor((clampedDamage / maxDamage) * 100)`, clamped to `0..100`, with no percent symbol. Non-damageable/invalid
+`maxDamage <= 0` stacks still render their standard icon but no number. Color uses full-alpha source-equivalent RGB:
+green is remaining/max, red is `1 - green`, and blue is zero. This produces green at full durability,
+`127/127/0` at half, and red when broken.
+
+TotemCounter sums Totems in the main player inventory and offhand, while ArmorDurability renders Helmet, Chestplate/Elytra, Leggings, and Boots with V-Core-equivalent remaining-durability percentages and red-to-green coloring.
+
+### Wraith HUD integration
+
+- Added independent `TotemCounter=true` and `ArmorDurability=true` values directly under `ModuleHud`.
+- `ModuleHud` calls `HotbarStatusHud` from its existing live overlay handler after current card rendering/edge flushing.
+- The existing module/debug-overlay gate remains authoritative; the renderer also requires a non-null player.
+- No new Render module, `HudElement`, `HudManager` registration, saved position, editor input, touch handler, card, panel,
+  HUD1/HUD2 branch, or HUDScale transform was added.
+- Existing Wyvern HUD elements, styles, settings, and the vanilla hotbar are unchanged.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleHUD.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/HotbarStatusHud.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/HotbarStatusHudTest.kt`
+- this `Agent1.md` section.
+
+The V-Core reference tree was read-only and was not changed.
+
+### Focused tests
+
+- Focused command with the established unrelated-test exclusion:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HotbarStatusHudTest`
+- Result: `BUILD SUCCESSFUL in 33s`; 36 tests passed, zero failures/errors/skips.
+- Tests cover seven Totem-count cases, five air cases, five fixed-position cases, six durability-percent cases, four
+  durability-color cases, four pulse/lifecycle cases, and five static architecture/integration cases.
+- The normal focused invocation without the exclusion is blocked during `compileTestKotlin` by the unrelated existing
+  `PointFindingKtTest.kt` 1.21.4 imports: `math`, `Vec3d`, vector fields, and `toVector3f` are unresolved.
+- `git diff --check`: passed.
+- Static source checks confirmed both default-enabled settings, main/offhand-only count mapping, zero-count hiding,
+  local identity pulse, explicit armor order, fixed screen-center x positions, shared air adjustment, current screen
+  dimensions, and no hotbar-widget `HudConfig`, draggable element, HUDScale, card, or panel path.
+
+### Build and JAR hash
+
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL in 2m 15s`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `680f16526f466828c904c0b1a04f348b91a97b1d5707cb8f5abc869cad7130a9`.
+- JAR inspection confirmed `ModuleHud.class`, `HotbarStatusHud.class`, `HotbarStatusHudLogic.class`,
+  `HotbarStatusHudLogic$CountedStack.class`, and `HotbarStatusHudPulseState.class` are packaged.
+
+### FCL/manual render status
+
+Not run in the headless Termux workspace. FCL verification remains required for zero/hotbar/main/offhand/multiple Totems,
+local versus other/FakePlayer pops, full/missing/Elytra/damaged/mending armor, above-water and bubble-bar states, HUD1/HUD2,
+GUI scales and resolutions, HUDScale extremes, chat, enchanted/custom-component item rendering, and inventory changes from
+AutoTotem. Compilation and pure/static tests do not prove pixel alignment, glint, glow appearance, touch-control clearance,
+or live overlay ordering on FCL.
+
+### Deviations
+
+None. Minecraft 26.1.2 item/text extraction and the current small GUI glow are framework adaptations explicitly allowed
+by the request. The safe main/offhand count scope, invalid-durability guard, fixed equipment order, state cleanup, and
+non-draggable architecture are explicit target requirements.
+
+### Commits and push result
+
+- Implementation commit: `4ba4f38c` — `feat(hud): add hotbar totem and armor status`.
+- Focused-test commit: `849bd453` — `test(hud): verify hotbar status calculations`.
+- Documentation commit: this entry (`docs(agent1): record vcore hotbar hud port`); exact hash is reported in the final
+  handoff after commit.
+- Push result: pending.
