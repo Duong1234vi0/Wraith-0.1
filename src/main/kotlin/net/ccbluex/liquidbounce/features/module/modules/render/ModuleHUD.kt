@@ -27,6 +27,10 @@ import net.ccbluex.liquidbounce.event.events.MouseCursorEvent
 import net.ccbluex.liquidbounce.event.events.NotificationEvent
 import net.ccbluex.liquidbounce.event.events.OverlayRenderEvent
 import net.ccbluex.liquidbounce.event.events.SpaceSeperatedNamesChangeEvent
+import net.ccbluex.liquidbounce.event.events.DisconnectEvent
+import net.ccbluex.liquidbounce.event.events.GameTickEvent
+import net.ccbluex.liquidbounce.event.events.TotemPopEvent
+import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.misc.HideAppearance.isDestructed
 import net.ccbluex.liquidbounce.features.module.Category
@@ -39,6 +43,8 @@ import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudMateri
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudMaterialPreset
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudMaterials
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudSurfaceRenderer
+import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HotbarStatusHud
+import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HotbarStatusHudPulseState
 import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.minecraft.client.gui.screens.ChatScreen
@@ -101,6 +107,10 @@ object ModuleHud : ClientModule("HUD", Category.RENDER, state = true, hide = tru
     private val keybinds by boolean("Keybinds", true)
     private val targetHud by boolean("TargetHUD", true)
     private val inventory by boolean("Inventory", false)
+    private val totemCounter by boolean("TotemCounter", true)
+    private val armorDurability by boolean("ArmorDurability", true)
+
+    private val hotbarStatusPulse = HotbarStatusHudPulseState()
 
     private var chatSelectedElement: HudElement? = null
     private var chatDraggingElement: HudElement? = null
@@ -190,6 +200,37 @@ object ModuleHud : ClientModule("HUD", Category.RENDER, state = true, hide = tru
             }
         }
         HudSurfaceRenderer.flushThemeEdges(event.context)
+        HotbarStatusHud.render(
+            event.context,
+            mc.player,
+            totemCounter,
+            armorDurability,
+            hotbarStatusPulse.ticks,
+        )
+    }
+
+    @Suppress("unused")
+    private val hotbarStatusTickHandler = handler<GameTickEvent> {
+        hotbarStatusPulse.tick(mc.player)
+    }
+
+    @Suppress("unused")
+    private val hotbarStatusTotemPopHandler = handler<TotemPopEvent> { event ->
+        hotbarStatusPulse.onTotemPop(event.entity, mc.player)
+    }
+
+    @Suppress("unused")
+    private val hotbarStatusWorldChangeHandler = handler<WorldChangeEvent> {
+        hotbarStatusPulse.reset()
+    }
+
+    @Suppress("unused")
+    private val hotbarStatusDisconnectHandler = handler<DisconnectEvent> {
+        hotbarStatusPulse.reset()
+    }
+
+    override fun disable() {
+        hotbarStatusPulse.reset()
     }
 
     @Suppress("unused")
