@@ -10758,6 +10758,6 @@ non-draggable architecture are explicit target requirements.
 
 - Implementation commit: `4ba4f38c` — `feat(hud): add hotbar totem and armor status`.
 - Focused-test commit: `849bd453` — `test(hud): verify hotbar status calculations`.
-- Documentation commit: this entry (`docs(agent1): record vcore hotbar hud port`); exact hash is reported in the final
-  handoff after commit.
-- Push result: pending.
+- Documentation commit: `69c2b74a` — `docs(agent1): record vcore hotbar hud port`.
+- Push result: succeeded, `6c5ab1b7a..69c2b74a0 main -> main`, to
+  `https://github.com/Duong1234vi0/Wraith-0.1.git`.
