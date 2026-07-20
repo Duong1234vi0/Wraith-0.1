@@ -10901,5 +10901,6 @@ pre-Aura boundary and PacketOrderI remains a runtime watch item rather than a co
 
 - Implementation commit: `d2a58c37` - `fix(combat): phase emace firework slot changes`.
 - Focused-test commit: `6dc845e8` - `test(combat): cover emace packet-order cycles`.
-- Documentation commit: this entry (`docs(agent1): record emace packet-order bypass`); exact hash is reported after commit.
-- Push result: pending.
+- Documentation commit: `9e782947` - `docs(agent1): record emace packet-order bypass`.
+- Push result: succeeded, `254e3f854..9e782947d main -> main`, to
+  `https://github.com/Duong1234vi0/Wraith-0.1.git`.
