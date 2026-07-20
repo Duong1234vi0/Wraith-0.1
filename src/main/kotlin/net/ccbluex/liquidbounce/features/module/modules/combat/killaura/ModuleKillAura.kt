@@ -20,6 +20,7 @@
 package net.ccbluex.liquidbounce.features.module.modules.combat.killaura
 import net.ccbluex.liquidbounce.utils.entity.*
 
+import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.event.Sequence
@@ -38,6 +39,7 @@ import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleEMaceHelper
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleElytraTarget
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleMaceSwap
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleWallsBypass
+import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.CriticalsSelectionDecision
 import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.ModuleCriticals.CriticalsSelectionMode
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.KillAuraRotationsConfigurable.KillAuraRotationTiming.ON_TICK
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.KillAuraRotationsConfigurable.KillAuraRotationTiming.SNAP
@@ -65,6 +67,7 @@ import net.ccbluex.liquidbounce.utils.combat.CombatManager
 import net.ccbluex.liquidbounce.utils.combat.attack
 import net.ccbluex.liquidbounce.utils.combat.shouldBeAttacked
 import net.ccbluex.liquidbounce.utils.client.interaction
+import net.ccbluex.liquidbounce.utils.client.logger
 import net.ccbluex.liquidbounce.utils.client.network
 import net.ccbluex.liquidbounce.utils.entity.swingHand
 import net.ccbluex.liquidbounce.utils.entity.rotation
@@ -164,6 +167,8 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     internal var rotationMotion = Vec3.ZERO
     private var trackAimTickIdentity = 0L
     private val trackAimPointCache = VCoreTrackAimPointCache()
+    private const val MAX_SMART_CRITICAL_DIAGNOSTICS = 64
+    private var smartCriticalDiagnosticsRemaining = MAX_SMART_CRITICAL_DIAGNOSTICS
 
     private var shieldBreakerHitTicks = 0
     private var directShieldBreakerAttackInProgress = false
@@ -193,6 +198,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         failedHits.clear()
         KillAuraAutoBlock.stopBlocking()
         KillAuraNotifyWhenFail.failedHitsIncrement = 0
+        resetSmartCriticalDiagnostics()
     }
 
     override fun enable() {
@@ -201,6 +207,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         trackAimPointCache.clear()
         shieldBreakerHitTicks = 0
         directShieldBreakerAttackInProgress = false
+        resetSmartCriticalDiagnostics()
     }
 
     @Suppress("unused")
@@ -219,6 +226,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     @Suppress("unused")
     private val trackAimWorldChangeHandler = handler<WorldChangeEvent> {
         trackAimPointCache.clear()
+        resetSmartCriticalDiagnostics()
     }
 
     private fun renderTarget(matrixStack: PoseStack, partialTicks: Float) {
@@ -382,16 +390,44 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
         ModuleDebug.debugParameter(ModuleKillAura, "Valid Rotation", rotation)
 
         // Attack enemy, according to the attack scheduler
-        if (clickScheduler.isClickTick && validateAttack(target)) {
+        val attackValidation = if (clickScheduler.isClickTick) {
+            evaluateAttack(target)
+        } else {
+            null
+        }
+
+        if (clickScheduler.isClickTick && attackValidation?.valid == false) {
+            recordSmartCriticalDecision(
+                decision = attackValidation.criticalDecision,
+                clickConsumed = false,
+                attackEmitted = false,
+            )
+        }
+
+        if (clickScheduler.isClickTick && attackValidation?.valid == true) {
             clickScheduler.attack(sequence, rotation, preAttack = {
                 if (!validateAttack(target)) {
                     false
                 } else {
-                    performShieldBreaker(target)
+                    performShieldBreaker(target).also { handled ->
+                        if (handled) {
+                            recordSmartCriticalDecision(
+                                decision = attackValidation.criticalDecision,
+                                clickConsumed = true,
+                                attackEmitted = true,
+                            )
+                        }
+                    }
                 }
             }) {
                 // On each click, we check if we are still ready to attack
-                if (!validateAttack(target)) {
+                val latestValidation = evaluateAttack(target)
+                if (!latestValidation.valid) {
+                    recordSmartCriticalDecision(
+                        decision = latestValidation.criticalDecision,
+                        clickConsumed = false,
+                        attackEmitted = false,
+                    )
                     return@attack false
                 }
 
@@ -422,6 +458,12 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
                     add("player", GenericDebugRecorder.debugObject(player))
                     add("targetPos", GenericDebugRecorder.debugObject(target))
                 })
+
+                recordSmartCriticalDecision(
+                    decision = attackValidation.criticalDecision,
+                    clickConsumed = true,
+                    attackEmitted = !skipShieldAttack,
+                )
 
                 true
             }
@@ -924,15 +966,74 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     /**
      * Check if we can attack the target at the current moment
      */
-    internal fun validateAttack(target: Entity? = null): Boolean {
-        val criticalHit = target == null || criticalsSelectionMode.isCriticalHit(target)
+    internal fun validateAttack(target: Entity? = null): Boolean = evaluateAttack(target).valid
+
+    private fun evaluateAttack(target: Entity? = null): AttackValidation {
+        val criticalDecision = target?.let(criticalsSelectionMode::evaluateCriticalHit)
+        val criticalHit = criticalDecision?.permitsAttack ?: true
         val isInInventoryScreen = isInventoryOpen || isInContainerScreen
         val isBreakingBlock = mc.gameMode?.isDestroying == true
 
-        return criticalHit &&
+        return AttackValidation(
+            valid = criticalHit &&
             shieldBreakerHitTicks <= 0 &&
             !isBreakingBlock &&
-            !(isInInventoryScreen && !ignoreOpenInventory && !simulateInventoryClosing)
+            !(isInInventoryScreen && !ignoreOpenInventory && !simulateInventoryClosing),
+            criticalDecision = criticalDecision,
+        )
+    }
+
+    private data class AttackValidation(
+        val valid: Boolean,
+        val criticalDecision: CriticalsSelectionDecision?,
+    )
+
+    private fun resetSmartCriticalDiagnostics() {
+        smartCriticalDiagnosticsRemaining = MAX_SMART_CRITICAL_DIAGNOSTICS
+    }
+
+    private fun recordSmartCriticalDecision(
+        decision: CriticalsSelectionDecision?,
+        clickConsumed: Boolean,
+        attackEmitted: Boolean,
+    ) {
+        if (decision?.context?.mode != CriticalsSelectionMode.SMART || smartCriticalDiagnosticsRemaining <= 0) {
+            return
+        }
+
+        smartCriticalDiagnosticsRemaining--
+        val context = decision.context
+        val payload = JsonObject().apply {
+            addProperty("tickIdentity", trackAimTickIdentity)
+            addNullableProperty("cooldownThreshold", clickScheduler.debugItemCooldownThreshold)
+            addNullableProperty("cooldownProgress", clickScheduler.debugItemCooldownProgress)
+            addProperty("physicalJumpKeyPressed", context.physicalJumpKeyPressed)
+            addProperty("transformedPlayerInputJump", context.transformedPlayerInputJump)
+            addProperty("onGround", context.onGround)
+            addProperty("fallDistance", context.fallDistance)
+            addProperty("verticalVelocity", context.verticalVelocity)
+            addProperty("sprinting", context.sprinting)
+            addProperty("allowsCriticalHitIgnoreOnGround", context.naturalCriticalEnvironmentPossible)
+            addProperty("wouldDoCriticalHit", context.wouldDoCriticalHit)
+            addProperty("smartHeuristicPermitsAttack", context.smartHeuristicPermitsAttack)
+            addProperty("manualJumpGateActive", decision.manualJumpGateActive)
+            addProperty("finalAttackDecision", decision.permitsAttack)
+            addProperty("clickConsumed", clickConsumed)
+            addProperty("attackEmitted", attackEmitted)
+            addProperty("attackStrengthReady", context.attackStrengthReady)
+            addProperty("gliding", context.gliding)
+        }
+
+        logger.info("[KillAuraSmartCritDiag] $payload")
+        GenericDebugRecorder.recordDebugInfo(ModuleKillAura, "smartCriticalDecision", payload)
+    }
+
+    private fun JsonObject.addNullableProperty(name: String, value: Number?) {
+        if (value == null) {
+            add(name, JsonNull.INSTANCE)
+        } else {
+            addProperty(name, value)
+        }
     }
 
     internal fun isTrackAttackReady(target: Entity): Boolean =

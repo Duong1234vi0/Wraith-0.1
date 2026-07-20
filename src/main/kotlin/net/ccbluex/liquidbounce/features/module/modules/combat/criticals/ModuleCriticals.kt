@@ -31,6 +31,7 @@ import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.modes.*
 import net.ccbluex.liquidbounce.features.module.modules.movement.fly.ModuleFly
 import net.ccbluex.liquidbounce.utils.block.collideBlockIntersects
 import net.ccbluex.liquidbounce.utils.clicking.Clicker
+import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.combat.findEnemy
 import net.ccbluex.liquidbounce.utils.entity.box
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.CRITICAL_MODIFICATION
@@ -171,12 +172,33 @@ object ModuleCriticals : ClientModule("Criticals", Category.COMBAT) {
         IGNORE("Ignore"),
         ALWAYS("Always");
 
-        fun isCriticalHit(target: Entity): Boolean {
-            return when (this) {
-                IGNORE -> true
-                SMART -> !shouldWaitForCrit(target, ignoreState = true)
-                ALWAYS -> wouldDoCriticalHit()
+        fun isCriticalHit(target: Entity): Boolean = evaluateCriticalHit(target).permitsAttack
+
+        internal fun evaluateCriticalHit(target: Entity): CriticalsSelectionDecision {
+            val smartHeuristicPermitsAttack = if (this == SMART) {
+                !shouldWaitForCrit(target, ignoreState = true)
+            } else {
+                false
             }
+            val naturalCriticalEnvironmentPossible = allowsCriticalHit(ignoreOnGround = true)
+            val wouldDoNaturalCritical = wouldDoCriticalHit()
+
+            return decideCriticalSelection(
+                CriticalsSelectionContext(
+                    mode = this,
+                    physicalJumpKeyPressed = mc.options.jumpKey.isPressed,
+                    transformedPlayerInputJump = player.input.playerInput.jump,
+                    naturalCriticalEnvironmentPossible = naturalCriticalEnvironmentPossible,
+                    gliding = player.isGliding,
+                    onGround = player.onGround(),
+                    fallDistance = player.fallDistance.toFloat(),
+                    verticalVelocity = player.deltaMovement.y,
+                    sprinting = player.isSprinting,
+                    attackStrengthReady = player.getAttackCooldownProgress(0.5f) > 0.9f,
+                    wouldDoCriticalHit = wouldDoNaturalCritical,
+                    smartHeuristicPermitsAttack = smartHeuristicPermitsAttack,
+                )
+            )
         }
 
         fun shouldStopSprinting(clicker: Clicker<*>, target: Entity?): Boolean {

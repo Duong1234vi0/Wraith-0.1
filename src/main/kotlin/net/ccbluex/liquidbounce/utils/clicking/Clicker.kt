@@ -82,6 +82,12 @@ open class Clicker<T>(
         null
     }
 
+    internal val debugItemCooldownProgress: Float?
+        get() = itemCooldown?.cooldownProgress()
+
+    internal val debugItemCooldownThreshold: Float?
+        get() = itemCooldown?.currentThreshold
+
     /**
      * When missing a hit, Minecraft has a cooldown before you can attack again.
      * This option will consider the cooldown before attacking again.
