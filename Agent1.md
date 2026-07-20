@@ -10761,3 +10761,145 @@ non-draggable architecture are explicit target requirements.
 - Documentation commit: `69c2b74a` — `docs(agent1): record vcore hotbar hud port`.
 - Push result: succeeded, `6c5ab1b7a..69c2b74a0 main -> main`, to
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+
+## 2026-07-20 - EMaceHelper Firework PacketOrderE phase bypass
+
+### Checked
+
+Read the current Wraith sources for `ModuleEMaceHelper`, `ModuleElytraSwap`, `ModuleMaceSwap`, `ModuleKillAura`,
+`ModuleElytraMotion`, `ActionTickBoundary`, `Sequence`, `GameTickEvent` dispatch priority ordering,
+`OutgoingPacketSentEvent`, `OutgoingPacketPostSendEvent`, world/disconnect lifecycle handlers, and the focused
+EMace/ElytraSwap/MaceSwap/ElytraMotion tests. Also read the recent Agent1 ElytraMotion, MaceSwap, EMaceHelper, and
+HUD sections, the V-Core EMaceHelper/ElytraSwap/MaceSwap/InventoryUtility/SearchInvResult references, and the supplied
+Grim `PacketOrderE`, `PacketOrderProcessor`, `PacketOrderG`, `PacketOrderI`, and `Post` checks.
+
+### Exact user settings
+
+`EMaceHelper`: Enabled true, Auto Target true, PeakAssist true, Height 26, Armor Swap true, FireWork Vector true,
+Extra AimRange false, Swap Distance 10, FireWork Distance 30, Aim Distance 900.
+
+### PacketOrderE logs
+
+- `PacketOrderE`: attacking=true, rightClicking=false, openingInventory=false, releasing=false, sneaking=false,
+  sprinting=false, bed=false, gliding=false, mountJumping=false.
+- `PacketOrderE`: attacking=false, rightClicking=true, openingInventory=false, releasing=false, sneaking=false,
+  sprinting=false, bed=false, gliding=false, mountJumping=false.
+
+### Root causes
+
+PeakAssist event ordering is `SequenceManager.tickSequences` at `FIRST_PRIORITY`, then normal-priority
+`ModuleEMaceHelper.tickHandler`. Aura can send ATTACK/ANIMATION first, then `ModuleEMaceHelper.markAuraPostAttack()`;
+PeakAssist could then request a Firework in the same `GameTick`.
+
+The attacking=true violation was caused by EMace PeakAssist emitting its initial Firework held-slot change after an Aura attack but before the natural client tick boundary. The rightClicking=true violation was caused by restoring the previous slot immediately after raw Firework use. The bypass preserves both raw V-Core Firework profiles, queues only requests created inside an active conflicting action window, and restores selected slots only in the next pre-Aura action phase after a natural boundary.
+
+FireWork Vector had a duplicate unsafe path: select Firework, raw USE_ITEM, explicit ANIMATION, immediate restore. Armor
+Swap is excluded from PacketOrderE because it emits inventory click/CLOSE packets and no HELD_ITEM_CHANGE; its trigger
+conditions and chestplate transaction were left unchanged except for waiting while EMace owns a pending Firework cycle.
+
+### MaceSwap source preflight
+
+After `git fetch origin`, live `origin/main` was `254e3f8547fb89a5478631e49780d5b495d2c369` and already contained the
+accepted MaceSwap correction: restore eligibility is separated from packet emission, Mace-owned attack boundaries are
+tracked through `ActionTickBoundary`, restoration runs from `MACE_SWAP_PRE_AURA_PRIORITY`, and there is no post-Aura
+held-slot packet. The local working tree initially contained the old unsafe `processSwitchBack()` restore shape
+(`selectedSlot = previousSlot` and `ensureHasSentCarriedItem()` in post-Aura sync), so it was restored to the live
+safe source before isolating the EMace reproduction. Final local `ModuleMaceSwap.kt` and `ModuleKillAura.kt` have no
+diff against `origin/main`.
+
+### ActionTickBoundary extension
+
+`ActionTickBoundary` now records the completed-tick serial for all outgoing `ServerboundAttackPacket`,
+`ServerboundUseItemPacket`, and `ServerboundUseItemOnPacket`, including manual/user actions with no owner token.
+New observational APIs are `hasObservedAttackInCurrentBoundary()`, `hasObservedUseInCurrentBoundary()`, and
+`hasHeldItemChangeConflictInCurrentBoundary()`. The extension does not cancel, send, or reorder packets and does not
+change owner-token semantics.
+
+### Two-boundary EMace Firework cycle
+
+Added `EMaceFireworkPhaseCoordinator` with `PEAK_ASSIST` and `FIREWORK_VECTOR` profiles and `OFFHAND`, `HOTBAR`,
+`MAIN_INVENTORY`, and `OFFHAND_SWAP` sources. Only one EMace Firework cycle can exist at a time. A selected-slot
+Firework request created after an observed attack/use waits for the natural `CLIENT_TICK_END`, then executes from
+pre-Aura `GameTickEvent` priority `FIRST_PRIORITY + 1`; selected-slot restoration and required SWAP-back run only after
+the following natural boundary from the next pre-Aura phase. `OutgoingPacketPostSendEvent` only observes natural
+boundaries and unexpected held packets; it emits no action, held, or inventory packets.
+
+Offhand and already-selected hotbar Fireworks use raw `ServerboundUseItemPacket` immediately and create no held-slot
+restore. Different hotbar and temporary inventory-slot paths send the initial HELD only when
+`ActionTickBoundary.hasHeldItemChangeConflictInCurrentBoundary()` is false, otherwise the request is accepted and queued
+without HELD/USE/swing/SWAP/CLOSE until the next natural action phase. Restoration sends exactly one raw
+`ServerboundSetCarriedItemPacket` and does not call `ensureHasSentCarriedItem()`.
+
+### Profile preservation
+
+PeakAssist keeps the V-Core ElytraSwap profile shape: inventory-first search, offhand Firework support,
+main-hand-use offhand-swap route, raw sequenced use with Aura rotation, no explicit hand swing, and temporary hotbar
+slot `visibleSlot % 8 + 1`. FireWork Vector keeps the V-Core EMaceHelper profile shape: offhand first, hotbar ascending,
+inventory descending, raw Aura-rotation use, explicit matching hand swing, `fireworkTriggered` acceptance semantics,
+inventory-screen restriction, and SWAP-in/SWAP-back behavior.
+
+PeakAssist keeps the 500 ms Firework interval and `peakOffsetActive`, `peakOffsetDisabledPendingFirework`, and
+`peakAssistPostAttackTriggered` state. A queued request is treated as accepted, so the next tick does not duplicate the
+same PeakAssist or FireWork Vector cycle.
+
+### ElytraMotion coordination
+
+`ModuleElytraMotion` was not rewritten. It only gained narrow selected-slot ownership coordination:
+ElytraMotion does not start a selected-slot Firework cycle while EMace owns one, and EMace does not start one while
+ElytraMotion owns one. Offhand-only paths remain independent when no selected-slot ownership is needed.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleEMaceHelper.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/EMaceFireworkPhaseCoordinator.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleElytraMotion.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/network/ActionTickBoundary.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/EMaceFireworkPhaseCoordinatorTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleMaceSwapAutoDisableTest.kt`
+- this `Agent1.md` section.
+
+V-Core and Grim reference sources were read-only and untouched.
+
+### Focused tests
+
+- Focused command with the established unrelated-test exclusion:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.combat.EMaceFireworkPhaseCoordinatorTest --tests net.ccbluex.liquidbounce.features.module.modules.combat.ModuleMaceSwapAutoDisableTest --tests net.ccbluex.liquidbounce.features.module.modules.movement.ModuleElytraMotionFireworkCycleTest --tests net.ccbluex.liquidbounce.features.module.modules.misc.ModuleElytraSwapFireworkPlanTest`
+- Result: `BUILD SUCCESSFUL in 21s`.
+- Same focused command without the exclusion is blocked in `compileTestKotlin` by unrelated existing
+  `PointFindingKtTest.kt` references to unresolved `math`, `Vec3d`, vector fields, and `toVector3f`.
+- `git diff --check`: passed.
+- Static checks confirmed both EMace Firework profiles remain separate, PeakAssist uses the ElytraSwap-shaped profile,
+  FireWork Vector keeps explicit swing, no initial HELD is emitted after an observed conflict in the same boundary,
+  no return HELD is emitted after use before tick-end, no restore is emitted from post-send, restoration occurs from the
+  next pre-Aura GameTick phase, offhand paths remain held-slot-free, Armor Swap logic is unchanged, timers/distances/
+  target predicates/rotations are unchanged, no SilentHotbar/local interaction/manual tick/combat pause path was added,
+  MaceSwap remains on the accepted safe restore, ElytraMotion was not rewritten, and V-Core/Grim references are untouched.
+
+### Build and JAR hash
+
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL in 2m 28s`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `01f1916c57a1b2b30097df5f7bae5e89173f18875795b80240240777c910110d`.
+
+### FCL/Grim status
+
+Not run in the headless Termux workspace. No runtime success is claimed from compilation. The requested FCL/Grim matrix
+still needs live wire capture with the exact EMaceHelper settings across offhand, different hotbar, already-selected
+hotbar, main inventory, PeakAssist only, FireWork Vector only, both settings, Armor Swap, continuous KillAura attacks,
+isolated attack followed by PeakAssist ascent, concurrent ElytraMotion, and MaceSwap Silent true/false. Runtime must
+watch PacketOrderE, PacketOrderG, PacketOrderI, Post, BadPackets, MultiActions, and inventory desynchronization.
+
+### Deviations
+
+No V-Core or Grim reference source was modified. MaceSwap was restored to the live accepted fix but has no final diff
+against `origin/main`. The coordinator does not delay Aura attacks; therefore queued Firework use can occupy the
+pre-Aura boundary and PacketOrderI remains a runtime watch item rather than a compiled-away claim.
+
+### Commits and push result
+
+- Implementation commit: `d2a58c37` - `fix(combat): phase emace firework slot changes`.
+- Focused-test commit: `6dc845e8` - `test(combat): cover emace packet-order cycles`.
+- Documentation commit: this entry (`docs(agent1): record emace packet-order bypass`); exact hash is reported after commit.
+- Push result: pending.
