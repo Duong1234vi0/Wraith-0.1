@@ -10392,6 +10392,127 @@ target loss, world change, manual slot change, and Offhand control. Watch `Packe
   `fix(elytra): restore firework slot in next tick action phase`.
 - Implementation push succeeded: `37f13bf4b..8b4003b12 main -> main` on
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+
+## 2026-07-21 - Silent ClickGUI visual-shell port over Wraith architecture
+
+### Checked
+
+- Read the requested Skill workflow files, latest relevant `Agent1.md` ClickGUI/ThemeSystem entries, and `CHANGELOG.md`.
+- Read the supplied Silent ClickGUI source structure: `CsGui`, base `Component`, category/module/setting/theme
+  components, every Silent setting component, Silent category enum, animation/easing, render/font/theme references, and
+  the two required Silent MSDF atlas JSON/PNG resources.
+- Read the live Wraith ClickGUI, ThemeSystem, module, value/configurable, MSDF font, Config, Cloud, search, blur and
+  scissor implementations before editing.
+
+### Port result
+
+The Silent ClickGUI was ported as a visual and interaction shell over Wraith’s native module and configurable
+architecture. Silent’s module manager, setting classes, renderer, ThemeManager, AutoBuy, UID system and branding were
+not imported.
+
+All category icons now come from Silent’s "silentcoreicons" MSDF atlas. The previous Wraith category PNG icons and
+dynamic page-icon loading were removed. The upper sidebar logo region remains intentionally blank for a future logo.
+
+Wraith’s ClickGuiTheme and ClientTheme remain the sole shared ThemeSystem. The Silent-style Theme category presents
+Wraith’s existing twenty gradient presets and persists selection through the existing Wraith theme configuration.
+
+### Visual and interaction details
+
+- Reference panel dimensions: `398 x 254`, centered with uniform fit scale and inverse transformed mouse coordinates.
+- Sidebar, header and content geometry: sidebar `5,5,78,244`, header `87,5,306.5,24`, content starts at local `Y=33`.
+- Open animation: scale `0.2 -> 1.0` over 400 ms with Expo Out; alpha `0 -> 1` over 300 ms with Expo Out.
+- Close animation: current scale/alpha animate back to `0.2/0`; the Minecraft screen closes only after the animation.
+- Category glyph mapping: Combat `h`, Movement `g`, Player `f`, Render `e`, Misc `P`, Config `X`, Theme `T`, Cloud `K`.
+- Theme remains a visible first-class category; Config and Cloud pages are preserved.
+- Silent AutoBuy, ThemeManager, UID, profile-service and social-link systems were omitted.
+- The old Wraith ClickGUI logo/branding text and the Silent logo/client name are not rendered.
+
+### Layout and settings architecture
+
+- Module page now uses Silent’s three-column waterfall layout with 101 px module cards and 103 px horizontal step.
+- Global module scrolling was added and clipped to the Silent content viewport.
+- Settings now expand inline under each module card. The previous detached settings-panel interaction was removed.
+- Expanded card settings are capped at 150 local pixels and have per-card scrolling.
+- Wraith value adapters remain native: Boolean, ToggleableConfigurable, Float, Int, IntRange, Float range,
+  ChoiceConfigurable, ChooseListValue, MultiChooseListValue, BindValue, ActionValue, Color and readable fallback values.
+- Wraith visibility rules remain honored: `isVisibleInUi()`, `notAnOption`, internal `Enabled`/`Hidden` filtering,
+  active choice children, enabled toggleable children, and nested configurables.
+
+### Font resources copied
+
+- `src/main/resources/assets/liquidbounce/fonts/msdf/silent_sf_pro_regular.json`
+- `src/main/resources/assets/liquidbounce/fonts/msdf/silent_sf_pro_regular.png`
+- `src/main/resources/assets/liquidbounce/fonts/msdf/silentcoreicons.json`
+- `src/main/resources/assets/liquidbounce/fonts/msdf/silentcoreicons.png`
+
+No unrelated Silent shaders, sounds, textures, logos or GIFs were copied.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiAnimation.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiIcons.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiLayout.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiPage.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiSettings.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiSettingsMath.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ExosGuiRenderer.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleClickGui.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/render/FontManager.kt`
+- focused ClickGUI tests under `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/`
+- removed old category PNG resources under `src/main/resources/resources/liquidbounce/clickgui/icons/`
+
+### Focused tests
+
+- Command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/clickgui-focused-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.render.gui.SilentClickGuiLayoutTest --tests net.ccbluex.liquidbounce.features.module.modules.render.gui.SilentClickGuiSettingsMathTest --tests net.ccbluex.liquidbounce.features.module.modules.render.gui.SilentClickGuiStaticTest`
+- Result: `BUILD SUCCESSFUL in 40s`.
+- The same focused command through the normal full test source compilation is blocked before execution by unrelated
+  existing test compile errors in `SmartCriticalDecisionTest.kt` and `ItemCooldownProgressTest.kt` for unresolved
+  `calculateItemCooldownProgress` and `ITEM_COOLDOWN_SAMPLE_TICK_DELTA`.
+
+### Build and JAR hash
+
+- `git diff --check`: passed.
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL in 1m 59s`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `f99cce9b4d6ffee466691eaa7501b21884554597668a7b05f886ea4b9e8c0d93`.
+
+### Static verification
+
+- Silent reference dimensions are used.
+- Detached settings panel behavior was removed; settings expand inline under module cards.
+- Three-column waterfall layout and global module scrolling exist.
+- Existing Wraith setting types remain supported through native Wraith value/configurable adapters.
+- Config and Cloud pages remain available.
+- AutoBuy was not added.
+- Wraith ThemeSystem remains the only theme source; Silent ThemeManager was not ported.
+- Previous Wraith category PNGs were deleted and are unused by production category rendering.
+- Category icons use Silent’s MSDF icon atlas through Wraith’s MSDF font infrastructure.
+- Neither Wraith nor Silent branding is rendered in the ClickGUI; the upper sidebar logo slot is blank.
+- Only required Silent font resources were copied.
+- `ModuleClickGui` still opens `ClickGuiScreen` from the existing Right Shift bind.
+- Silent reference source was untouched.
+- Gameplay files were not modified by this ClickGUI port; unrelated pre-existing gameplay worktree changes were
+  preserved.
+
+### FCL/manual status
+
+Not run in the headless Termux workspace. No visual or FCL runtime success is claimed from compilation alone. Manual FCL
+verification is still required for landscape resolutions, GUI scales, touch/mouse alignment through animation,
+left/right/middle click mappings, sliders, per-card scroll, global scroll, Config operations, Cloud behavior, theme
+persistence after restart, and absence of clipping outside the panel.
+
+### Deviations
+
+- The normal Gradle `test` source compilation is blocked by unrelated pre-existing ItemCooldown/Criticals test errors;
+  the ClickGUI-focused tests were run with a temporary untracked source-filtering init script.
+- Config deletion now has an explicit second-click confirmation, matching the requested confirmation behavior while
+  preserving Wraith AutoConfig load/save/delete paths.
+- Commits and push result are pending at the time of this Agent1 section and are reported by the final assistant
+  response after the requested commit/push step.
 - Documentation: `docs(agent1): record firework packet phase bypass` (this entry). Its exact hash and final push
   result are reported in the task handoff after the separate documentation commit is created and pushed.
 
