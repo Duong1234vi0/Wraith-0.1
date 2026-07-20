@@ -10511,8 +10511,17 @@ persistence after restart, and absence of clipping outside the panel.
   the ClickGUI-focused tests were run with a temporary untracked source-filtering init script.
 - Config deletion now has an explicit second-click confirmation, matching the requested confirmation behavior while
   preserving Wraith AutoConfig load/save/delete paths.
-- Commits and push result are pending at the time of this Agent1 section and are reported by the final assistant
-  response after the requested commit/push step.
+
+### Commits and push result
+
+- Implementation commit: `71b1f61523d25ef078a5b7c3b82a3352e8d3255c` -
+  `feat(clickgui): port silent client layout`.
+- Focused-test commit: `26dd9d0e7d2ec092a8c50bb50c122d9395f68578` -
+  `test(clickgui): cover silent layout icons and controls`.
+- Documentation commit: `f85b505af035170d2373ec0dde9696f609ddecbc` -
+  `docs(agent1): record silent clickgui port`.
+- Push result: succeeded, `fe70417d1..f85b505af main -> main`, to
+  `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - Documentation: `docs(agent1): record firework packet phase bypass` (this entry). Its exact hash and final push
   result are reported in the task handoff after the separate documentation commit is created and pushed.
 
