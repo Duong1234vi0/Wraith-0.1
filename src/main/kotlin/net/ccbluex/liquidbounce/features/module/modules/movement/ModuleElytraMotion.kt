@@ -111,9 +111,6 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
         if (mc.gameMode == null || player.cooldowns.isOnCooldown(Items.FIREWORK_ROCKET.defaultInstance)) {
             return
         }
-        if (ElytraMotionFireworkCycleOwner.isPending) {
-            return
-        }
 
         if (player.offhandItem.item == Items.FIREWORK_ROCKET) {
             useFireworkFromHand(InteractionHand.OFF_HAND)
@@ -128,6 +125,12 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
 
         if (player.isUsingItem && player.usedItemHand == InteractionHand.MAIN_HAND) {
             useFireworkWithOffhandSwap(firework.serverSlot)
+            return
+        }
+
+        if (ElytraMotionFireworkCycleOwner.isPending ||
+            ModuleEMaceHelper.hasPendingSelectedSlotFireworkCycle()
+        ) {
             return
         }
 
@@ -265,6 +268,11 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
     }
 
     private fun useFireworkWithOffhandSwap(sourceSlot: Int) {
+        if (ElytraMotionFireworkCycleOwner.isPending ||
+            ModuleEMaceHelper.hasPendingSelectedSlotFireworkCycle()
+        ) {
+            return
+        }
         if (!clickElytraMotionSwap(sourceSlot, OFFHAND_SWAP_BUTTON)) {
             return
         }
@@ -331,6 +339,8 @@ object ModuleElytraMotion : ClientModule("ElytraMotion", Category.MOVEMENT) {
 
     private fun hasFireworkIntervalElapsed() =
         System.nanoTime() - fireworkTimerNanos >= FIREWORK_INTERVAL_MS * NANOS_PER_MILLISECOND
+
+    internal fun hasPendingSelectedSlotFireworkCycle(): Boolean = ElytraMotionFireworkCycleOwner.isPending
 }
 
 private object ElytraMotionFireworkCycleOwner : EventListener {

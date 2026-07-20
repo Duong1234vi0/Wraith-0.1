@@ -16,21 +16,15 @@ import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
-import net.ccbluex.liquidbounce.features.module.modules.misc.ModuleElytraSwap
 import net.ccbluex.liquidbounce.utils.client.interaction
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.client.network
 import net.ccbluex.liquidbounce.utils.entity.*
 import net.ccbluex.liquidbounce.utils.inventory.ItemSlot
-import net.ccbluex.liquidbounce.utils.inventory.OffHandSlot
 import net.ccbluex.liquidbounce.utils.inventory.Slots
 import net.minecraft.core.BlockPos
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket
-import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket
-import net.minecraft.network.protocol.game.ServerboundSwingPacket
-import net.minecraft.network.protocol.game.ServerboundUseItemPacket
 import net.minecraft.tags.FluidTags
-import net.minecraft.world.InteractionHand
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.EquipmentSlot
 import net.minecraft.world.entity.LivingEntity
@@ -73,6 +67,10 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
 
     private var peakAssistFireworkTimerNanos = System.nanoTime()
 
+    init {
+        EMaceFireworkPhaseCoordinator
+    }
+
     override fun enable() {
         swapping = false
         resetFireworkFlags()
@@ -81,6 +79,7 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
 
     override fun disable() {
         swapping = false
+        EMaceFireworkPhaseCoordinator.onEMaceDisabled()
         resetFireworkFlags()
         resetPeakAssistState()
     }
@@ -221,12 +220,14 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
 
         if (peakOffsetActive) {
             if (hasPeakFireworkIntervalElapsed()) {
-                peakAssistFireworkTimerNanos = System.nanoTime()
-                triggerPeakAssistFirework()
+                if (triggerPeakAssistFirework()) {
+                    peakAssistFireworkTimerNanos = System.nanoTime()
+                }
             }
         } else if (peakOffsetDisabledPendingFirework) {
-            triggerPeakAssistFirework()
-            peakOffsetDisabledPendingFirework = false
+            if (triggerPeakAssistFirework()) {
+                peakOffsetDisabledPendingFirework = false
+            }
         }
     }
 
@@ -245,12 +246,12 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
         return player.y > offset.y || player.position().distanceToSqr(offset) < 1.0
     }
 
-    private fun triggerPeakAssistFirework() {
-        val player = mc.player ?: return
+    private fun triggerPeakAssistFirework(): Boolean {
+        val player = mc.player ?: return false
         if (hasFirework() && !player.cooldowns.isOnCooldown(Items.FIREWORK_ROCKET.defaultInstance)) {
-            // V-Core delegates this profile to ElytraSwap even when that module is disabled.
-            ModuleElytraSwap.useFireworkForPeakAssist()
+            return EMaceFireworkPhaseCoordinator.requestPeakAssist(emaceOwned = true)
         }
+        return false
     }
 
     private fun resetPeakAssistState() {
@@ -261,7 +262,7 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
     }
 
     private fun handleArmorSwap() {
-        if (isPeakAssistActive() || swapping) {
+        if (isPeakAssistActive() || swapping || EMaceFireworkPhaseCoordinator.isPending) {
             return
         }
 
@@ -341,7 +342,7 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
             return
         }
 
-        if (useFireWorkSilent()) {
+        if (EMaceFireworkPhaseCoordinator.requestFireworkVector()) {
             fireworkTriggered = true
         }
     }
@@ -356,103 +357,28 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
             findHotbarAscending(Items.FIREWORK_ROCKET) != null ||
             findInventoryDescending(Items.FIREWORK_ROCKET) != null
 
-    /** V-Core EMaceHelper.useFireWorkSilent profile; deliberately differs from PeakAssist. */
-    private fun useFireWorkSilent(): Boolean {
-        val player = mc.player ?: return false
-        if (player.offhandItem.item == Items.FIREWORK_ROCKET) {
-            useRawFirework(InteractionHand.OFF_HAND)
-            network.sendPacket(ServerboundSwingPacket(InteractionHand.OFF_HAND))
-            return true
-        }
-
-        val hotbar = findHotbarAscending(Items.FIREWORK_ROCKET)
-        val inventory = findInventoryDescending(Items.FIREWORK_ROCKET)
-        if (hotbar == null && inventory == null) return false
-
-        val savedSlot = player.inventory.selectedSlot
-        var swappedFromInventory = false
-        val selectedSlot = savedSlot
-        val source = if (hotbar != null) {
-            selectVisibleSlot(hotbar.hotbarSlot)
-            hotbar
-        } else {
-            if (player.screenHandler != player.inventoryMenu) return false
-            swappedFromInventory = true
-            if (!clickSwap(inventory!!.serverSlot, selectedSlot)) return false
-            sendCloseContainer()
-            inventory
-        }
-
-        useRawFirework(InteractionHand.MAIN_HAND)
-        network.sendPacket(ServerboundSwingPacket(InteractionHand.MAIN_HAND))
-        selectVisibleSlot(savedSlot)
-        if (swappedFromInventory) {
-            clickSwap(source.serverSlot, player.inventory.selectedSlot)
-            sendCloseContainer()
-        }
-        return true
-    }
-
-    private fun useRawFirework(hand: InteractionHand) {
-        val level = mc.level ?: return
-        val rotation = ModuleKillAura.activeServerFacingRotationForCurrentTarget() ?: mc.player?.rotation ?: return
-        interaction.sendSequencedPacket(level) { sequence ->
-            ServerboundUseItemPacket(hand, sequence, rotation.yaw, rotation.pitch)
-        }
-    }
-
-    private fun selectVisibleSlot(slot: Int) {
-        val player = mc.player ?: return
-        if (slot !in 0..8) return
-        player.inventory.selectedSlot = slot
-        interaction.ensureHasSentCarriedItem()
-    }
-
-    private fun sendCloseContainer() {
-        val player = mc.player ?: return
-        network.sendPacket(ServerboundContainerClosePacket(player.screenHandler.syncId))
-    }
-
-    private fun clickSwap(slot: Int, button: Int): Boolean {
-        val player = mc.player ?: return false
-        if (slot !in player.screenHandler.slots.indices ||
-            button !in 0..8 && button != OffHandSlot.hotbarSlotForServer) {
-            return false
-        }
-        interaction.clickSlot(player.screenHandler.syncId, slot, button, ContainerInput.SWAP, player)
-        return true
-    }
+    fun hasPendingSelectedSlotFireworkCycle(): Boolean = EMaceFireworkPhaseCoordinator.ownsSelectedSlotCycle
 
     private fun findInventoryFirst(item: Item): ItemSlot? {
         Slots.Inventory.asReversed().firstOrNull { it.itemStack.item == item }?.let { return it }
         return Slots.Hotbar.asReversed().firstOrNull { it.itemStack.item == item }
     }
 
-    private fun findInventoryDescending(item: Item): FireworkLocation.Inventory? {
+    private fun findInventoryDescending(item: Item): Int? {
         val player = mc.player ?: return null
         for (slot in 35 downTo 9) {
             if (player.inventory.getStack(slot).item == item) {
-                return FireworkLocation.Inventory(slot)
+                return slot
             }
         }
         return null
     }
 
-    private fun findHotbarDescending(item: Item): FireworkLocation.Hotbar? {
-        val player = mc.player ?: return null
-        for (slot in 8 downTo 0) {
-            if (player.inventory.getStack(slot).item == item) {
-                return FireworkLocation.Hotbar(slot, 36 + slot)
-            }
-        }
-        return null
-    }
-
-    private fun findHotbarAscending(item: Item): FireworkLocation.Hotbar? {
+    private fun findHotbarAscending(item: Item): Int? {
         val player = mc.player ?: return null
         for (slot in 0..8) {
             if (player.inventory.getStack(slot).item == item) {
-                return FireworkLocation.Hotbar(slot, 36 + slot)
+                return slot
             }
         }
         return null
@@ -466,11 +392,6 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
 
     private fun isWearingElytra(player: net.minecraft.client.player.LocalPlayer) =
         player.getItemBySlot(EquipmentSlot.CHEST).item == Items.ELYTRA
-
-    private sealed class FireworkLocation(open val serverSlot: Int) {
-        data class Hotbar(val hotbarSlot: Int, override val serverSlot: Int) : FireworkLocation(serverSlot)
-        data class Inventory(override val serverSlot: Int) : FireworkLocation(serverSlot)
-    }
 
     private const val PEAK_FIREWORK_INTERVAL_MS = 500L
     private const val NANOS_PER_MILLISECOND = 1_000_000L

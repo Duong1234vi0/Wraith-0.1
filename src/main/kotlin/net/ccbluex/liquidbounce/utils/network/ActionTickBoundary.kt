@@ -86,6 +86,8 @@ object ActionTickBoundary : EventListener {
 
     private var completedTickSerial = 0L
     private var outgoingPacketSequence = 0L
+    private var lastObservedAttackSerial = Long.MIN_VALUE
+    private var lastObservedUseSerial = Long.MIN_VALUE
     private var diagnosticCyclesRemaining = MAX_DIAGNOSTIC_CYCLES
     private var diagnosticMessagesRemaining = MAX_DIAGNOSTIC_MESSAGES
     private var crystalSequenceDiagnosticCyclesRemaining = MAX_CRYSTAL_SEQUENCE_DIAGNOSTIC_CYCLES
@@ -105,6 +107,15 @@ object ActionTickBoundary : EventListener {
     fun currentSerial(): Long = completedTickSerial
 
     fun hasPassed(serial: Long): Boolean = serial != Long.MIN_VALUE && completedTickSerial > serial
+
+    /** Global packet observation; unlike action tokens this also sees manual and unrelated-module actions. */
+    fun hasObservedAttackInCurrentBoundary(): Boolean = lastObservedAttackSerial == completedTickSerial
+
+    /** Covers both USE_ITEM and USE_ITEM_ON because both conflict with a later held-slot change in Grim. */
+    fun hasObservedUseInCurrentBoundary(): Boolean = lastObservedUseSerial == completedTickSerial
+
+    fun hasHeldItemChangeConflictInCurrentBoundary(): Boolean =
+        hasObservedAttackInCurrentBoundary() || hasObservedUseInCurrentBoundary()
 
     /**
      * Diagnostics are deliberately bounded per world/session. A cycle owns all of its follow-up
@@ -327,8 +338,14 @@ object ActionTickBoundary : EventListener {
 
         when (val packet = event.packet) {
             is ServerboundClientTickEndPacket -> observeClientTickEnd()
-            is ServerboundSetCarriedItemPacket -> observeHeldItemChange(packet)
-            else -> observeOwnedAction(packet)
+            else -> {
+                observeGlobalAction(packet)
+                if (packet is ServerboundSetCarriedItemPacket) {
+                    observeHeldItemChange(packet)
+                } else {
+                    observeOwnedAction(packet)
+                }
+            }
         }
     }
 
@@ -387,6 +404,14 @@ object ActionTickBoundary : EventListener {
         )
     }
 
+    private fun observeGlobalAction(packet: Any) {
+        when (packet) {
+            is ServerboundAttackPacket -> lastObservedAttackSerial = completedTickSerial
+            is ServerboundUseItemPacket, is ServerboundUseItemOnPacket ->
+                lastObservedUseSerial = completedTickSerial
+        }
+    }
+
     private fun observeOwnedAction(packet: Any) {
         val token = pendingActions.firstOrNull { !it.observed && it.matches(packet) } ?: return
         token.observed = true
@@ -404,6 +429,8 @@ object ActionTickBoundary : EventListener {
         pendingActions.clear()
         expectedHeldItemChanges.clear()
         activeCrystalSequenceDiagnostic = null
+        lastObservedAttackSerial = Long.MIN_VALUE
+        lastObservedUseSerial = Long.MIN_VALUE
         if (resetDiagnosticBudget) {
             diagnosticCyclesRemaining = MAX_DIAGNOSTIC_CYCLES
             diagnosticMessagesRemaining = MAX_DIAGNOSTIC_MESSAGES
