@@ -17,11 +17,28 @@
  * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
  */
 package net.ccbluex.liquidbounce.utils.clicking
-import net.ccbluex.liquidbounce.utils.entity.*
 
 import net.ccbluex.liquidbounce.config.types.nesting.ToggleableConfigurable
 import net.ccbluex.liquidbounce.event.EventListener
+import net.ccbluex.liquidbounce.utils.client.player
+import net.ccbluex.liquidbounce.utils.entity.attackCooldownProgressPerTick
+import net.ccbluex.liquidbounce.utils.entity.lastAttackedTicks
 import net.ccbluex.liquidbounce.utils.kotlin.random
+
+internal const val ITEM_COOLDOWN_SAMPLE_TICK_DELTA = 0.5f
+
+internal fun calculateItemCooldownProgress(
+    lastAttackedTicks: Int,
+    baseTime: Int,
+    attackCooldownProgressPerTick: Float,
+): Float {
+    if (!attackCooldownProgressPerTick.isFinite() || attackCooldownProgressPerTick <= 0.0f) {
+        return Float.POSITIVE_INFINITY
+    }
+
+    return (lastAttackedTicks.toFloat() + baseTime.toFloat() + ITEM_COOLDOWN_SAMPLE_TICK_DELTA) /
+        attackCooldownProgressPerTick
+}
 
 class ItemCooldown<T>(module: T) : ToggleableConfigurable(module, "ItemCooldown", true, aliases = arrayOf("Cooldown"))
     where T : EventListener {
@@ -40,8 +57,11 @@ class ItemCooldown<T>(module: T) : ToggleableConfigurable(module, "ItemCooldown"
      *
      * This can be out of percentage range [0, 1] to allow for higher minimum cooldowns.
      */
-    fun cooldownProgress(baseTime: Int = 0) =
-        (player.lastAttackedTicks + baseTime).toFloat() / player.attackCooldownProgressPerTick
+    fun cooldownProgress(baseTime: Int = 0) = calculateItemCooldownProgress(
+        lastAttackedTicks = player.lastAttackedTicks,
+        baseTime = baseTime,
+        attackCooldownProgressPerTick = player.attackCooldownProgressPerTick,
+    )
 
     /**
      * Generates a new cooldown based on the range that was set by the user.
