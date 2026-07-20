@@ -11055,5 +11055,8 @@ task were preserved.
 
 - Implementation/test commit: `95a9d64c11ad387619baaf4be27c614125eeedd2` -
   `fix(killaura): align item cooldown sampling`.
-- Documentation commit: this section, to be reported after commit creation.
-- Push result: pending at entry creation; final assistant report records the actual pushed range.
+- Documentation commit: `948da72089e58e17c70bbcdf93937a6289dd8d4f` -
+  `docs(agent1): record cooldown critical audit`.
+- First push result: succeeded, `4cf52e364..948da7208 main -> main`, to
+  `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+- Post-push documentation update: this commit, final hash reported in the assistant response.
