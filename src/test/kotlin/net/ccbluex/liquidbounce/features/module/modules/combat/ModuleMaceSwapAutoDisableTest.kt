@@ -1,7 +1,10 @@
 package net.ccbluex.liquidbounce.features.module.modules.combat
 
+import java.nio.file.Files
+import java.nio.file.Path
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.FIRST_PRIORITY
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -63,6 +66,32 @@ class ModuleMaceSwapAutoDisableTest {
     }
 
     @Test
+    fun liveSourceHasNoPostAuraHeldSlotRestore() {
+        val source = source()
+        val postAura = source.substring(
+            source.indexOf("private val syncHandler"),
+            source.indexOf("fun isMaceStun()"),
+        )
+        val processSwitchBack = source.substring(
+            source.indexOf("private fun processSwitchBack"),
+            source.indexOf("private fun emitReadySwitchBack"),
+        )
+        val preAura = source.substring(
+            source.indexOf("private val preAuraRestoreHandler"),
+            source.indexOf("private val syncHandler"),
+        ) + source.substring(
+            source.indexOf("private fun emitReadySwitchBack"),
+            source.indexOf("private fun findMaceInHotbar"),
+        )
+
+        assertFalse(postAura.contains("ensureHasSentCarriedItem"))
+        assertFalse(processSwitchBack.contains("ensureHasSentCarriedItem"))
+        assertTrue(preAura.contains("handler<GameTickEvent>(priority = MACE_SWAP_PRE_AURA_PRIORITY)"))
+        assertTrue(preAura.contains("interaction.ensureHasSentCarriedItem()"))
+        assertTrue(source.contains("withMaceAttackBoundary"))
+    }
+
+    @Test
     fun autoDisableFalseOnlyClearsThePostAttackTrigger() {
         assertEquals(
             MaceSwapAutoDisableAction.CLEAR_TRIGGER,
@@ -97,4 +126,8 @@ class ModuleMaceSwapAutoDisableTest {
             maceSwapAutoDisableAction(true, postAttackTriggered = true, isSwitching = false, switchBack = true),
         )
     }
+
+    private fun source() = Files.readString(
+        Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleMaceSwap.kt")
+    )
 }
