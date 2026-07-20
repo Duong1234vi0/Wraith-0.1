@@ -11214,5 +11214,8 @@ releasing jump returns Smart to permissive attacks.
 
 - Implementation commit: `4f245e32` - `fix(killaura): retain smart attacks for manual jump crits`.
 - Test commit: `ee78e1de` - `test(killaura): cover continuous jump phase drift`.
-- Documentation commit: this commit, final hash reported in the assistant response.
-- Push result: performed after the documentation commit; final result reported in the assistant response.
+- Documentation commit: `0dde40d6d97eca8e200dd88e5426eaf440d0f96e` -
+  `docs(agent1): correct smart critical root cause`.
+- Push result: succeeded, `7c262e12f..0dde40d6d main -> main`, to
+  `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+- Post-push documentation update: this commit, final hash reported in the assistant response.
