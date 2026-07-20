@@ -25,7 +25,7 @@ import net.ccbluex.liquidbounce.utils.client.inGame
 import org.lwjgl.glfw.GLFW
 
 /**
- * Opens the native Style 4 ClickGUI replacement.
+ * Opens the native Silent-style ClickGUI visual shell.
  */
 object ModuleClickGui : ClientModule(
     "ClickGUI",

@@ -28,6 +28,8 @@ object FontManager {
     const val TITLE_FONT_NAME: String = "suisseintlsemibold"
     const val BODY_FONT_NAME: String = "suisseintlmedium"
     const val DEFAULT_FONT_NAME: String = "medium"
+    const val CLICK_GUI_BODY_FONT_NAME: String = "silent_sf_pro_regular"
+    const val CLICK_GUI_ICON_FONT_NAME: String = "silentcoreicons"
 
     private val requiredFonts = listOf(
         DEFAULT_FONT_NAME,
@@ -36,7 +38,9 @@ object FontManager {
         "regular_semibold",
         BODY_FONT_NAME,
         "suisseintlregular",
-        TITLE_FONT_NAME
+        TITLE_FONT_NAME,
+        CLICK_GUI_BODY_FONT_NAME,
+        CLICK_GUI_ICON_FONT_NAME
     )
 
     private val displayRendererCache = ConcurrentHashMap<RendererKey, FontRenderer>()
@@ -62,6 +66,10 @@ object FontManager {
     fun body(size: Float): FontRenderer = displayRenderer(BODY_FONT_NAME, size)
 
     fun default(size: Float): FontRenderer = displayRenderer(DEFAULT_FONT_NAME, size)
+
+    fun clickGuiBody(size: Float): FontRenderer = displayRenderer(CLICK_GUI_BODY_FONT_NAME, size)
+
+    fun clickGuiIcons(size: Float): FontRenderer = displayRenderer(CLICK_GUI_ICON_FONT_NAME, size)
 
     fun textHeight(size: Float): Float = MsdfTextRenderer.visualHeight(size)
 

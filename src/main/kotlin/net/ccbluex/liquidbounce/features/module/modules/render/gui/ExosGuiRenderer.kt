@@ -336,6 +336,26 @@ object ExosGuiRenderer {
         shadow: Boolean = false,
     ) = drawWithRenderer(matrices, FontManager.body(size), text, x, y, color, shadow)
 
+    fun clickGuiBody(
+        matrices: PoseStack,
+        text: String,
+        x: Float,
+        y: Float,
+        color: Int,
+        size: Float,
+        shadow: Boolean = false,
+    ) = drawWithRenderer(matrices, FontManager.clickGuiBody(size), text, x, y, color, shadow)
+
+    fun clickGuiIcon(
+        matrices: PoseStack,
+        text: String,
+        x: Float,
+        y: Float,
+        color: Int,
+        size: Float,
+        shadow: Boolean = false,
+    ) = drawWithRenderer(matrices, FontManager.clickGuiIcons(size), text, x, y, color, shadow)
+
     fun titleWidth(text: String, size: Float = 15f): Float {
         if (text.isEmpty()) {
             return 0f
@@ -350,6 +370,22 @@ object ExosGuiRenderer {
         }
 
         return FontManager.body(size).getStringWidth(text)
+    }
+
+    fun clickGuiBodyWidth(text: String, size: Float): Float {
+        if (text.isEmpty()) {
+            return 0f
+        }
+
+        return FontManager.clickGuiBody(size).getStringWidth(text)
+    }
+
+    fun clickGuiIconWidth(text: String, size: Float): Float {
+        if (text.isEmpty()) {
+            return 0f
+        }
+
+        return FontManager.clickGuiIcons(size).getStringWidth(text)
     }
 
     fun titleHeight(text: String = "A", size: Float = 15f): Float =
