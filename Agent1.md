@@ -11060,3 +11060,159 @@ task were preserved.
 - First push result: succeeded, `4cf52e364..948da7208 main -> main`, to
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - Post-push documentation update: this commit, final hash reported in the assistant response.
+
+## 2026-07-20 23:35 +07 - KillAura Smart manual-jump critical gate correction
+
+### Checked
+
+Read the live Wraith files requested for this correction: `ModuleKillAura.kt`, `KillAuraClicker.kt`,
+`Clicker.kt`, `ItemCooldown.kt`, `ModuleCriticals.kt`, `CriticalsJump.kt`, `CombatExtensions.kt`,
+`Sequence.kt`, `MixinMinecraftClient.java`, `MixinKeyboardInput.java`, the SprintEvent definitions and
+dispatch points in `GameEvents.kt` and `MixinClientPlayerEntity.java`, current KillAura sprint
+suppression in `ModuleKillAura.kt`, movement sprint handlers in `ModuleSprint.kt`, `MixinKeyBinding.java`,
+`MojangCompatExtensions.kt`, `InputExtensions.kt`, `ItemCooldownProgressTest.kt`, and current focused
+KillAura/Criticals tests. Read `WorkSpace/Client/VCore-0.8/vcore/features/modules/combat/Aura.java`
+completely, including `autoCrit()`, V-Core attack cooldown sampling, SmartCrit/OnlyCrit behavior, and
+V-Core sprint preparation around attacks. V-Core reference source was read-only and untouched.
+
+### User clarification
+
+The standalone `ModuleCriticals` module was disabled in the runtime reproduction. The user manually held
+the normal jump control while KillAura used `Criticals = Smart` and `ItemCooldown = 1.0..1.0`.
+Runtime still produced a sequence of critical hits followed by ordinary hits while the player visibly
+continued jumping.
+
+### Runtime failure after half-tick patch
+
+The half-tick ItemCooldown correction was valid but insufficient. Runtime testing disproved the previous
+claim that cooldown sampling was the complete cause. KillAura Smart still permitted grounded landing
+attacks because it negated `shouldWaitForCrit`, while `shouldWaitForCrit` returned false whenever
+`allowsCriticalHit()` failed due to `onGround`.
+
+### Why ModuleCriticals disabled was irrelevant
+
+The standalone Criticals module being disabled is irrelevant to this path because KillAura Smart invokes
+the wait helper with `ignoreState=true`.
+
+Live Wraith's old Smart path was:
+
+```kotlin
+SMART -> !shouldWaitForCrit(target, ignoreState = true)
+```
+
+`CriticalsJump.shouldWaitForCrit()` returned false for grounded state through this chain:
+
+```text
+player.onGround = true
+allowsCriticalHit() = false
+shouldWaitForCrit() = false
+SMART negates false and permits attack
+```
+
+### Event ordering
+
+`GameTickEvent` is injected at `Minecraft.tick` HEAD. KillAura's tick sequence can therefore run before
+the current tick's keyboard input and movement update. During continuous manual jumping, a cooldown-ready
+landing boundary can be observed as grounded at GameTick HEAD. Vanilla/FCL input then starts the next jump
+later in the tick, so the player looks like they kept jumping even though KillAura had already emitted a
+grounded ordinary attack.
+
+### V-Core source behavior
+
+V-Core `Aura.autoCrit()` uses `mc.options.jumpKey.isPressed()` for manual jump intent. With SmartCrit
+enabled, no held jump key allows a normal Smart attack, but a held jump key in a crit-capable environment
+requires airborne state and positive fall distance. V-Core does not release a grounded landing-boundary
+attack merely because the next jump is about to begin.
+
+### Why 0.85 and 1.0 differ
+
+`0.85` and `1.0` can both produce valid critical damage. The difference is phase alignment, not insufficient
+cooldown. `0.85` usually becomes ready earlier and intersects the falling part of the jump. `1.0` becomes
+ready later, and repeated attack cooldown and jump periods are not guaranteed to remain phase-locked. After
+several cycles, full-cooldown readiness can intersect landing; the old Smart path consumed that ready click
+as a normal hit.
+
+### Previous test gap
+
+The previous hand-authored landing-retention trace in `ItemCooldownProgressTest` was insufficient because
+it selected one fixed phase and was not connected to production behavior. It also asserted the old Smart
+mapping as source text. That trace was removed and replaced with tests that call the same production
+`SmartCriticalDecision` helper used by KillAura Smart.
+
+### Production correction
+
+Added a pure `SmartCriticalDecision` helper. `CriticalsSelectionMode.evaluateCriticalHit()` now builds a
+decision context from live Wraith state and routes all three modes through it.
+
+Preserved mode behavior:
+
+- `Ignore` still always permits attacks.
+- `Always` still requires Wraith's real `wouldDoCriticalHit()` predicate.
+- `Smart` keeps the existing `!shouldWaitForCrit(target, ignoreState = true)` heuristic when manual jump
+  is not held or natural criticals are impossible.
+
+While the user manually holds jump and natural criticals are physically possible, Smart now retains a
+cooldown-ready attack through grounded and rising states and releases it only when the current state
+satisfies Wraith's real natural-critical predicate.
+
+The production manual-jump input is `mc.options.jumpKey.isPressed`. `player.input.playerInput.jump` is
+recorded only for diagnostics and is not used as a fallback, so unrelated module-generated transformed
+jump input does not activate the manual-jump gate.
+
+### Sprint coordination
+
+No direct sprint packets, movement packets, packet criticals, Y spoofing, or arbitrary delay were added.
+KillAura's existing `CriticalsSelectionMode.shouldStopSprinting()` and `ModuleKillAura.sprintHandler`
+remain the sprint ownership path. With a retained click pending, rising/falling ticks still request sprint
+suppression through the existing SprintEvent path; the final attack predicate continues to use
+`wouldDoCriticalHit()` and therefore does not ignore sprint state.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/criticals/SmartCriticalDecision.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/criticals/ModuleCriticals.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/clicking/Clicker.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/clicking/ItemCooldown.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/criticals/SmartCriticalDecisionTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/utils/clicking/ItemCooldownProgressTest.kt`
+- this `Agent1.md` section.
+
+### Tests
+
+- Focused Smart/Cooldown command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.combat.criticals.SmartCriticalDecisionTest --tests net.ccbluex.liquidbounce.utils.clicking.ItemCooldownProgressTest`
+- Result after one visibility/test-shape repair: `BUILD SUCCESSFUL in 35s`.
+- Expanded focused regression command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.combat.criticals.SmartCriticalDecisionTest --tests net.ccbluex.liquidbounce.utils.clicking.ItemCooldownProgressTest --tests net.ccbluex.liquidbounce.features.module.modules.combat.killaura.VCoreAuraFidelityTest --tests net.ccbluex.liquidbounce.features.module.modules.combat.ModuleMaceSwapAutoDisableTest --tests net.ccbluex.liquidbounce.features.module.modules.combat.EMaceFireworkPhaseCoordinatorTest --tests net.ccbluex.liquidbounce.features.module.modules.movement.ModuleElytraMotionFireworkCycleTest --tests net.ccbluex.liquidbounce.features.module.modules.misc.ModuleElytraSwapFireworkPlanTest --tests net.ccbluex.liquidbounce.features.module.modules.movement.VCoreFocusedFullMoveFixTest`
+- Result: `BUILD SUCCESSFUL in 18s`.
+- Same focused Smart/Cooldown command without the exclusion remains blocked in `compileTestKotlin` by the
+  unrelated existing `src/test/kotlin/net/ccbluex/liquidbounce/utils/aiming/PointFindingKtTest.kt`
+  unresolved `math`, `Vec3d`, vector fields, and `toVector3f` references.
+- `git diff --check`: passed.
+
+### Build and JAR hash
+
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL in 2m 4s`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- JAR SHA-256: `9723c3b49755125323b505fe09edf67f987d58dacc5d0be41492bb5ecbc74f95`.
+- Sources JAR SHA-256: `aa80a3df2d46d5578cc94ceaa97e06acee5026ed1b2210bb788e38c8a8be967a`.
+
+### FCL status
+
+Not run in this headless Termux workspace. No runtime success is claimed from compilation. The required
+FCL matrix remains: standalone Criticals disabled; KillAura Smart; ItemCooldown `0.85..0.85`,
+`1.0..1.0`, and `1.05..1.05`; sword-like and slower axe-like weapons; grounded/rising/falling starts;
+sprinting and standing still; knockback; stationary and moving targets; water/Elytra/vehicle and other
+critical-impossible states. Expected while jump is held and natural criticals are possible: grounded and
+rising cooldown-ready ticks retain the click, falling valid critical ticks emit exactly one attack, and
+releasing jump returns Smart to permissive attacks.
+
+### Commits and push result
+
+- Implementation commit: `4f245e32` - `fix(killaura): retain smart attacks for manual jump crits`.
+- Test commit: `ee78e1de` - `test(killaura): cover continuous jump phase drift`.
+- Documentation commit: this commit, final hash reported in the assistant response.
+- Push result: performed after the documentation commit; final result reported in the assistant response.
