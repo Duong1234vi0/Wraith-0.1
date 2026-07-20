@@ -10904,3 +10904,156 @@ pre-Aura boundary and PacketOrderI remains a runtime watch item rather than a co
 - Documentation commit: `9e782947` - `docs(agent1): record emace packet-order bypass`.
 - Push result: succeeded, `254e3f854..9e782947d main -> main`, to
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+
+## 2026-07-20 22:51 +07 - KillAura ItemCooldown 1.0 jump-critical audit
+
+### Checked
+
+Read complete live Wraith sources for KillAura scheduling and packet emission:
+`ModuleKillAura.kt`, `KillAuraClicker.kt`, `Clicker.kt`, `ItemCooldown.kt`,
+`KillAuraRequirements.kt`, `KillAuraTargetTracker.kt`, `KillAuraRotationsConfigurable.kt`,
+and `CombatExtensions.kt`. Read critical logic in `ModuleCriticals.kt`, `CriticalsJump.kt`,
+`CriticalsPacket.kt`, `CriticalsNoGround.kt`, `CriticalsBlink.kt`, and `CriticalsTimer.kt`.
+Read current event ordering in `MixinMinecraftClient.java`, `MixinClientPlayerEntity.java`,
+`MixinKeyboardInput.java`, `MixinLivingEntity.java`, `Sequence.kt`, `EventListener.kt`, and
+`EventManager.kt`. Read compatibility logic for `ModuleMaceSwap.kt`, `ModuleAutoWeapon.kt`,
+`ModuleAutoShieldBreaker.kt`, `ModuleEMaceHelper.kt`, `EMaceFireworkPhaseCoordinator.kt`,
+`ModuleElytraTarget.kt`, `CombatManager.kt`, and `RotationManager.kt`; no production code in
+those modules was changed.
+
+V-Core reference was available under `WorkSpace/Client/VCore-0.8` and was read-only. `Aura.java`
+uses `(((lastAttackedTicks) + 0.5F) / getAttackCooldownProgressPerTick())`, clamped for its own
+readiness helper. Wraith keeps the raw unclamped value because ItemCooldown supports thresholds
+greater than `1.0`.
+
+### Exact user reproduction
+
+- Configuration A: `ItemCooldown = 0.85..0.85`, KillAura enabled, player holds jump continuously.
+  Observed hits remain critical.
+- Configuration B: `ItemCooldown = 1.0..1.0`, KillAura enabled, player holds jump continuously.
+  Observed sequence eventually drifts into normal hits while the player still appears to jump
+  normally.
+
+### 0.85 behavior
+
+The fixed range setting still returns exactly `0.85` in the focused test. For a representative
+`12.5` tick attack period, both old zero-partial sampling and corrected half-tick sampling become
+ready for `0.85` at integer ticker `11`. This matches why `0.85..0.85` did not reproduce the drift.
+
+### 1.0 behavior
+
+For a `12.5` tick attack period, the old Wraith formula produced `12 / 12.5 = 0.96`, so
+`ItemCooldown = 1.0` waited until ticker `13`. Correct vanilla-style sampling produces
+`(12 + 0.5) / 12.5 = 1.0`, so `ItemCooldown = 1.0` becomes ready at ticker `12` and does not require
+ticker `13`.
+
+### ItemCooldown formula
+
+Production now uses one shared helper:
+
+```kotlin
+(lastAttackedTicks + baseTime + 0.5f) / attackCooldownProgressPerTick
+```
+
+The value remains raw and unclamped before comparison with the configured range. `baseTime`,
+random range selection, weapon attack-speed periods, and attack-ticker reset behavior are preserved.
+Invalid or nonpositive periods fail open to positive infinity instead of throwing or blocking the
+scheduler indefinitely.
+
+### Partial-tick verification
+
+Minecraft 26.1.2 reference source in this checkout evaluates combat strength with
+`getAttackStrengthScale(0.5F)` and resets `attackStrengthTicker` on attack. `Player.attack` derives
+`fullStrengthAttack` from that sampled value before checking `canCriticalAttack`. Wraith's old
+ItemCooldown helper omitted that half-tick sample; V-Core's Aura helper includes it. The focused
+test also checks the partial is not applied twice.
+
+### Representative weapon-period math
+
+- Fast weapon, attack speed `4.0`: period `5.0`, `1.0` ready at ticker `5`.
+- Sword-like weapon, attack speed `1.6`: period `12.5`, `1.0` ready at ticker `12`.
+- Slow axe-like weapon, attack speed `1.0`: period `20.0`, `1.0` ready at ticker `20`.
+- Mace-like slow weapon, attack speed `0.6`: period `33.333...`, `1.0` ready at ticker `33`.
+- For the `12.5` period, `1.05` remains supported and becomes ready at ticker `13`.
+
+### Event and jump ordering
+
+`GameTickEvent` is injected at `Minecraft.tick` HEAD. Vanilla keybind handling and the current tick's
+movement input update happen later. KillAura's tick sequence can therefore observe the player's
+pre-input or landing state for the current tick before held jump starts the next movement update.
+With the old `1.0` cooldown sample, readiness could slip from the falling tick to the landing or
+next-jump boundary.
+
+### Smart critical semantics
+
+`Criticals Smart` is not assumed to mean critical-only. Its permissive and waiting branches were
+tested separately, and only the unintended continuous-jump landing transition was changed if the live
+source proved it incorrect.
+
+Live Wraith maps `SMART -> !shouldWaitForCrit(target, ignoreState = true)`, `IGNORE -> true`, and
+`ALWAYS -> wouldDoCriticalHit()`. The focused tests document that Smart is permissive while strict
+natural critical behavior rejects grounded hits. No Smart-to-strict rewrite was made.
+
+### Confirmed root cause
+
+Wraith’s ItemCooldown readiness omitted the vanilla/V-Core half-tick combat sample, causing full
+cooldown values such as 1.0 to become ready one integer tick later for fractional attack periods.
+This allowed the attack cadence to drift against the natural jump-critical window.
+
+### Production correction
+
+`ItemCooldown.cooldownProgress(baseTime)` now delegates to `calculateItemCooldownProgress`, which
+adds the vanilla `0.5f` combat sample exactly once and keeps the existing raw comparison semantics.
+No cooldown reduction, `0.85` hardcode, weapon-specific workaround, packet critical, Y spoof, extra
+movement packet, target validation change, rotation change, or Mace/EMace coordination change was
+added.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/clicking/ItemCooldown.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/utils/clicking/ItemCooldownProgressTest.kt`
+- this `Agent1.md` section.
+
+### Focused tests
+
+- New focused command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.utils.clicking.ItemCooldownProgressTest`
+- Result: `BUILD SUCCESSFUL in 26s`.
+- Broader focused command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/exclude-point-finding-test.init.gradle test --tests net.ccbluex.liquidbounce.utils.clicking.ItemCooldownProgressTest --tests net.ccbluex.liquidbounce.features.module.modules.combat.killaura.VCoreAuraFidelityTest --tests net.ccbluex.liquidbounce.features.module.modules.combat.ModuleMaceSwapAutoDisableTest --tests net.ccbluex.liquidbounce.features.module.modules.combat.EMaceFireworkPhaseCoordinatorTest --tests net.ccbluex.liquidbounce.features.module.modules.movement.VCoreFocusedFullMoveFixTest`
+- Result: `BUILD SUCCESSFUL in 16s`.
+- Unfiltered focused test compilation remains blocked by unrelated existing
+  `src/test/kotlin/net/ccbluex/liquidbounce/utils/aiming/PointFindingKtTest.kt` unresolved
+  `math`, `Vec3d`, vector field, and `toVector3f` references. The established
+  `.codex-tmp/exclude-point-finding-test.init.gradle` was used only to bypass that unrelated blocker.
+
+### Build and JAR hash
+
+- Required command:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Result: `BUILD SUCCESSFUL in 1m 53s`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- JAR SHA-256: `603fa777118d8dab6e4555005d01c547fd4982e03cc08a890354e5cdfb376275`.
+- Sources JAR SHA-256: `3a97c05c7ce5eef502be684c92f4a70f40e28b24311474fb44c0d67bc89de789`.
+
+### FCL runtime status
+
+Not run in this headless Termux workspace. No FCL runtime success is claimed from compilation.
+The requested live runtime matrix for `0.85..0.85`, `1.0..1.0`, `1.05..1.05`, ordinary and slower
+weapons, Smart/strict/permissive critical modes, knockback, stationary and moving targets still needs
+in-game capture of attack ticker, calculated cooldown, onGround, fallDistance, vertical velocity, and
+crit versus normal damage result.
+
+### Deviations
+
+No production Smart critical behavior was changed because live source and tests show Smart is
+permissive by design. The deterministic continuous-jump trace is bounded test code, not a runtime
+logger. The V-Core reference source was not modified. The already dirty worktree files outside this
+task were preserved.
+
+### Commits and push result
+
+- Implementation/test commit: `95a9d64c11ad387619baaf4be27c614125eeedd2` -
+  `fix(killaura): align item cooldown sampling`.
+- Documentation commit: this section, to be reported after commit creation.
+- Push result: pending at entry creation; final assistant report records the actual pushed range.
