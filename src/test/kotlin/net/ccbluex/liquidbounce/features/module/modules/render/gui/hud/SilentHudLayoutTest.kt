@@ -74,7 +74,7 @@ class SilentHudLayoutTest {
     }
 
     @Test
-    fun `HUD manager registers Silent elements once and no old Wyvern variants`() {
+    fun `HUD manager registers Silent elements and one style switching Target HUD`() {
         val manager = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/HudManager.kt")
 
         listOf(
@@ -82,12 +82,12 @@ class SilentHudLayoutTest {
             "SilentWatermarkElement()",
             "SilentHotKeysElement()",
             "SilentInformationElement()",
-            "CelestialTargetHudElement()",
+            "WyvernTargetHudElement()",
             "SilentStaffListElement()",
         ).forEach { token ->
             assertEquals(1, Regex(Regex.escape(token)).findAll(manager).count(), token)
         }
-        listOf("Wyvern", "WatermarkV2", "KeybindsV2", "TargetHUDV2", "Potions", "Inventory").forEach {
+        listOf("CelestialTargetHudElement", "WatermarkV2", "KeybindsV2", "TargetHUDV2", "Potions", "Inventory").forEach {
             assertFalse(manager.contains(it), it)
         }
     }
@@ -100,9 +100,9 @@ class SilentHudLayoutTest {
         assertTrue(source.contains("states.entries.removeIf"))
         assertTrue(source.contains("val contentWidth = sections.sumOf"))
         assertTrue(source.contains("hypot(motion.x, motion.z).toFloat() * 20f"))
-        assertTrue(source.contains("CelestialTargetHealthAnimation"))
+        assertTrue(source.contains("WyvernTargetHealthAnimation"))
         assertFalse(source.contains("drawHealthCircle"))
-        assertFalse(source.contains("drawEquipment"))
+        assertTrue(source.contains("drawEquipment"))
         assertFalse(source.contains("distanceValue"))
         assertTrue(source.contains("entries.removeAll"))
         assertTrue(source.contains("override fun resetState()"))

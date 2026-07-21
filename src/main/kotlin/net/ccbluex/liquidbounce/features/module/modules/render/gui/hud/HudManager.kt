@@ -38,7 +38,7 @@ object HudManager {
         elements += SilentWatermarkElement()
         elements += SilentHotKeysElement()
         elements += SilentInformationElement()
-        elements += CelestialTargetHudElement()
+        elements += WyvernTargetHudElement()
         elements += SilentStaffListElement()
     }
 

@@ -33,6 +33,9 @@ import net.ccbluex.liquidbounce.utils.client.ServerObserver
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.entity.currentFps
 import net.ccbluex.liquidbounce.utils.entity.deltaMovement
+import net.ccbluex.liquidbounce.utils.entity.drawItem
+import net.ccbluex.liquidbounce.utils.entity.drawStackOverlay
+import net.ccbluex.liquidbounce.utils.entity.getActualHealth
 import net.ccbluex.liquidbounce.utils.entity.matrices
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screens.ChatScreen
@@ -104,8 +107,8 @@ object SilentHudLayout {
             SilentHudElementKind.TARGET_HUD,
             10,
             80,
-            CelestialTargetHudLayout.EDITOR_WIDTH,
-            CelestialTargetHudLayout.EDITOR_HEIGHT,
+            WyvernTargetHudLayout.WIDTH.toInt(),
+            WyvernTargetHudLayout.CLASSIC_HEIGHT.toInt(),
             true,
         ),
         SilentHudElementDescriptor("StaffList", SilentHudElementKind.STAFF_LIST, 30, 150, 96, 20, true),
@@ -469,74 +472,70 @@ class SilentInformationElement :
     }
 }
 
-class CelestialTargetHudElement :
+class WyvernTargetHudElement :
     SilentHudElementBase(SilentHudLayout.implementedDescriptors.first { it.kind == SilentHudElementKind.TARGET_HUD }) {
 
-    private var lastTarget: LivingEntity? = null
-    private var lastSeenMs = 0L
-    private var visibility = 0f
-    private var animatedTarget: LivingEntity? = null
-    private val healthAnimation = CelestialTargetHealthAnimation()
+    private var retainedTarget: LivingEntity? = null
+    private val visibility = WyvernFloatAnimation(WyvernTargetHudLayout.VISIBILITY_MS, WyvernEasing.CUBIC_OUT)
+    private val retention = WyvernFloatAnimation(WyvernTargetHudLayout.RETAIN_IN_MS, WyvernEasing.CIRC_OUT)
+    private val healthAnimation = WyvernTargetHealthAnimation()
 
     override fun render(context: DrawContext, isSelected: Boolean) {
-        width = CelestialTargetHudLayout.EDITOR_WIDTH
-        height = CelestialTargetHudLayout.EDITOR_HEIGHT
-
         val now = System.currentTimeMillis()
+        val style = ModuleHud.targetHudStyle
+        width = WyvernTargetHudLayout.WIDTH.toInt()
+        height = WyvernTargetHudLayout.height(style).toInt()
+
         val current = ModuleKillAura.targetTracker.target as? LivingEntity
         val chatPreview = current == null && (mc.screen is ChatScreen || mc.screen is HudScreen)
         val target = current ?: if (chatPreview) mc.player else null
         if (target != null) {
-            lastTarget = target
-            lastSeenMs = now
+            if (retainedTarget !== target) {
+                retainedTarget = target
+                val health = target.getActualHealth(fromScoreboard = true)
+                healthAnimation.reset(health, target.maxHealth, target.absorptionAmount)
+            }
+            retention.update(1f, now, WyvernTargetHudLayout.RETAIN_IN_MS, WyvernEasing.CIRC_OUT)
+            visibility.update(1f, now)
+        } else {
+            visibility.update(0f, now)
+            val retained = retention.update(0f, now, WyvernTargetHudLayout.RETAIN_OUT_MS, WyvernEasing.CIRC_OUT)
+            if (retained <= 0f) {
+                retainedTarget = null
+            }
         }
-        val heldTarget = lastTarget
-        val shouldShow = heldTarget != null && (target != null || SilentHudLayout.targetHoldVisible(now, lastSeenMs))
-        visibility += ((if (shouldShow) 1f else 0f) - visibility) * 0.24f
-        val alpha = visibility.coerceIn(0f, 1f)
-        if (alpha <= 0.01f || heldTarget == null) {
+
+        val heldTarget = retainedTarget ?: return
+        if (retention.current(now) <= 0f) {
             return
         }
+        val alpha = visibility.current(now).coerceIn(0f, 1f)
+        if (alpha <= 0.001f) return
 
         val px = x.toFloat()
         val py = y.toFloat()
-        val nameHeight = ExosGuiRenderer.titleHeight(CelestialTargetHudLayout.NAME_SIZE)
-        val geometry = CelestialTargetHudLayout.geometry(px, py, nameHeight)
-        if (animatedTarget !== heldTarget) {
-            animatedTarget = heldTarget
-            healthAnimation.resetForTarget(heldTarget.health, heldTarget.maxHealth)
-        }
-        val health = healthAnimation.update(heldTarget.health, heldTarget.maxHealth)
-        val accent = SilentHudDraw.accent()
-
-        ExosGuiRenderer.shaderGlow(
-            context.matrices,
-            geometry.panel.x,
-            geometry.panel.y,
-            geometry.panel.width,
-            geometry.panel.height,
-            CelestialTargetHudLayout.PANEL_RADIUS,
-            SilentHudDraw.fade(accent, alpha),
-            CelestialTargetHudLayout.SHADOW_SPREAD,
+        val geometry = WyvernTargetHudLayout.geometry(style, px, py)
+        val health = healthAnimation.update(
+            heldTarget.getActualHealth(fromScoreboard = true),
+            heldTarget.maxHealth,
+            heldTarget.absorptionAmount,
+            now,
         )
+        val primary = ClientTheme.accentA
+        val secondary = ClientTheme.accentB
+        val panelAlpha = if (style == WyvernTargetHudStyle.CLASSIC) 125 else 255
         ExosGuiRenderer.roundedRect(
             context.matrices,
             geometry.panel.x,
             geometry.panel.y,
             geometry.panel.width,
             geometry.panel.height,
-            CelestialTargetHudLayout.PANEL_RADIUS,
-            SilentHudDraw.fade(0xFF080F1C.toInt(), alpha),
-        )
-        ExosGuiRenderer.roundedOutline(
-            context.matrices,
-            geometry.panel.x,
-            geometry.panel.y,
-            geometry.panel.width,
-            geometry.panel.height,
-            CelestialTargetHudLayout.PANEL_RADIUS,
-            SilentHudDraw.fade(accent, alpha),
-            CelestialTargetHudLayout.OUTLINE_WIDTH,
+            if (style == WyvernTargetHudStyle.CLASSIC) {
+                WyvernTargetHudLayout.CLASSIC_RADIUS
+            } else {
+                WyvernTargetHudLayout.V2_RADIUS
+            },
+            ExosGuiRenderer.withAlpha(0xFF000000.toInt(), (panelAlpha * alpha).roundToInt()),
         )
         drawFace(
             context,
@@ -544,80 +543,138 @@ class CelestialTargetHudElement :
             geometry.head.x,
             geometry.head.y,
             geometry.head.width,
+            if (style == WyvernTargetHudStyle.CLASSIC) {
+                WyvernTargetHudLayout.CLASSIC_HEAD_RADIUS
+            } else {
+                WyvernTargetHudLayout.V2_HEAD_RADIUS
+            },
             alpha,
         )
 
-        val name = ModuleNameProtect.replace(
+        val name = WyvernTargetHudLayout.truncateName(ModuleNameProtect.replace(
             if (heldTarget is Player) heldTarget.gameProfile.name else heldTarget.scoreboardName
+        ), style)
+        ExosGuiRenderer.title(
+            context.matrices,
+            name,
+            geometry.textX,
+            geometry.nameY,
+            SilentHudDraw.fade(SilentHudDraw.WHITE, alpha),
+            if (style == WyvernTargetHudStyle.CLASSIC) 8.5f else 8f,
         )
-        val clip = geometry.nameClip
-        context.enableScissor(
-            floor(clip.x).toInt(),
-            floor(clip.y).toInt(),
-            ceil(clip.x + clip.width).toInt(),
-            ceil(clip.y + clip.height).toInt(),
-        )
-        try {
-            ExosGuiRenderer.title(
-                context.matrices,
-                name,
-                geometry.textX,
-                geometry.nameY,
-                SilentHudDraw.fade(SilentHudDraw.WHITE, alpha),
-                CelestialTargetHudLayout.NAME_SIZE,
-            )
-        } finally {
-            context.disableScissor()
-        }
 
+        val healthText = if (style == WyvernTargetHudStyle.CLASSIC) {
+            String.format(Locale.US, "%.1fhp", health.health)
+        } else {
+            buildString {
+                append(String.format(Locale.US, "HP: %.1f", health.health))
+                if (heldTarget.absorptionAmount > 0f) {
+                    append(String.format(Locale.US, " + %.1f", heldTarget.absorptionAmount))
+                }
+            }
+        }
+        val healthTextX = if (style == WyvernTargetHudStyle.CLASSIC) {
+            px + WyvernTargetHudLayout.WIDTH - SilentHudDraw.bodyWidth(healthText, 7f) - 5f
+        } else {
+            geometry.textX
+        }
         SilentHudDraw.body(
             context,
-            String.format(Locale.US, "HP: %.1f", health.health),
-            geometry.textX,
+            healthText,
+            healthTextX,
             geometry.healthTextY,
-            CelestialTargetHudLayout.HEALTH_TEXT_SIZE,
-            SilentHudDraw.fade(SilentHudDraw.WHITE, alpha),
+            7f,
+            ExosGuiRenderer.withAlpha(SilentHudDraw.WHITE, ((if (style == WyvernTargetHudStyle.CLASSIC) 180 else 255) * alpha).roundToInt()),
         )
-        ExosGuiRenderer.roundedRect(
-            context.matrices,
-            geometry.healthTrack.x,
-            geometry.healthTrack.y,
-            geometry.healthTrack.width,
-            geometry.healthTrack.height,
-            CelestialTargetHudLayout.BAR_RADIUS,
-            SilentHudDraw.fade(0xFF232323.toInt(), alpha),
-        )
-        val fillWidth = CelestialTargetHudLayout.fillWidth(geometry.healthTrack.width, health.ratio)
-        if (fillWidth > 0f) {
-            ExosGuiRenderer.roundedRect(
-                context.matrices,
-                geometry.healthTrack.x,
-                geometry.healthTrack.y,
-                fillWidth,
-                geometry.healthFillHeight,
-                CelestialTargetHudLayout.BAR_RADIUS,
-                ExosGuiRenderer.withAlpha(accent, (200f * alpha).roundToInt()),
-            )
+
+        drawBar(context, geometry.bar, health, primary, secondary, alpha)
+        if (heldTarget is Player && (style == WyvernTargetHudStyle.V2 || alpha > 0.01f)) {
+            drawEquipment(context, heldTarget, geometry.equipmentX, geometry.equipmentY, alpha)
         }
 
         renderBackground(context, isSelected)
     }
 
     override fun resetState() {
-        lastTarget = null
-        lastSeenMs = 0L
-        visibility = 0f
-        animatedTarget = null
-        healthAnimation.reset()
+        retainedTarget = null
+        visibility.snap(0f)
+        retention.snap(0f)
+        healthAnimation.reset(0f, 1f, 0f)
     }
 
-    private fun drawFace(context: DrawContext, target: LivingEntity, x: Float, y: Float, size: Float, alpha: Float) {
+    private fun drawBar(
+        context: DrawContext,
+        bar: WyvernTargetHudRect,
+        health: WyvernTargetHealthState,
+        primary: Int,
+        secondary: Int,
+        alpha: Float,
+    ) {
+        gradientBar(context, bar, 1f, darken(secondary, 0.5f), darken(primary, 0.5f), alpha)
+        gradientBar(context, bar, health.outdatedRatio, darken(secondary, 0.35f), darken(primary, 0.35f), alpha)
+        if (health.absorptionRatio < health.currentRatio) {
+            gradientBar(context, bar, health.currentRatio, secondary, primary, alpha)
+        }
+        gradientBar(context, bar, health.absorptionRatio, 0xFFFFD100.toInt(), 0xFFFFF614.toInt(), alpha)
+    }
+
+    private fun gradientBar(
+        context: DrawContext,
+        bar: WyvernTargetHudRect,
+        ratio: Float,
+        left: Int,
+        right: Int,
+        alpha: Float,
+    ) {
+        val width = WyvernTargetHudLayout.width(bar.width, ratio)
+        if (width <= 0f) return
+        ExosGuiRenderer.roundedGradientRect(
+            context.matrices,
+            bar.x,
+            bar.y,
+            width,
+            bar.height,
+            WyvernTargetHudLayout.BAR_RADIUS,
+            SilentHudDraw.fade(left, alpha),
+            SilentHudDraw.fade(right, alpha),
+            SilentHudDraw.fade(right, alpha),
+            SilentHudDraw.fade(left, alpha),
+        )
+    }
+
+    private fun drawEquipment(context: DrawContext, player: Player, startX: Float, startY: Float, alpha: Float) {
+        var iconX = startX + (5f - alpha * 5f)
+        val iconY = startY + (5f - alpha * 5f)
+        for (stack in WyvernTargetHudLayout.equipment(player)) {
+            context.pose().pushMatrix()
+            try {
+                iconX += (WyvernTargetHudLayout.ITEM_STEP - 9.6f) * 0.5f
+                context.pose().translate(iconX, iconY + (WyvernTargetHudLayout.ITEM_STEP - 9.6f) * 0.5f)
+                context.pose().scale(WyvernTargetHudLayout.ITEM_SCALE * alpha, WyvernTargetHudLayout.ITEM_SCALE * alpha)
+                context.drawItem(stack, 0, 0)
+                context.drawStackOverlay(mc.font, stack, 0, 0)
+            } finally {
+                context.pose().popMatrix()
+            }
+            iconX += WyvernTargetHudLayout.ITEM_STEP - (WyvernTargetHudLayout.ITEM_STEP - 9.6f) * 0.5f
+        }
+    }
+
+    private fun drawFace(
+        context: DrawContext,
+        target: LivingEntity,
+        x: Float,
+        y: Float,
+        size: Float,
+        radius: Float,
+        alpha: Float,
+    ) {
         if (target is Player && context.drawRoundedPlayerSkinFace(
                 target,
                 x,
                 y,
                 size,
-                CelestialTargetHudLayout.HEAD_RADIUS,
+                radius,
                 SilentHudDraw.fade(SilentHudDraw.WHITE, alpha),
             )
         ) {
@@ -629,12 +686,20 @@ class CelestialTargetHudElement :
             y,
             size,
             size,
-            CelestialTargetHudLayout.HEAD_RADIUS,
-            SilentHudDraw.fade(0xFF080F1C.toInt(), alpha),
+            radius,
+            SilentHudDraw.fade(0xFF000000.toInt(), alpha),
         )
         val letter = target.scoreboardName.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
         val textW = SilentHudDraw.bodyWidth(letter, 10f)
         SilentHudDraw.body(context, letter, x + (size - textW) * 0.5f, y + 6.5f, 10f, SilentHudDraw.fade(SilentHudDraw.WHITE, alpha))
+    }
+
+    private fun darken(color: Int, amount: Float): Int {
+        val scale = 1f - amount.coerceIn(0f, 1f)
+        return (color and -0x1000000) or
+            (((((color ushr 16) and 0xFF) * scale).roundToInt()) shl 16) or
+            (((((color ushr 8) and 0xFF) * scale).roundToInt()) shl 8) or
+            (((color and 0xFF) * scale).roundToInt())
     }
 }
 

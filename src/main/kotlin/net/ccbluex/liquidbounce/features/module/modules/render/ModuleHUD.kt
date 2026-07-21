@@ -40,6 +40,7 @@ import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudManage
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HotbarStatusHud
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HotbarStatusHudPulseState
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.SilentHudElementKind
+import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.WyvernTargetHudStyle
 import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.minecraft.client.gui.screens.ChatScreen
@@ -73,6 +74,7 @@ object ModuleHud : ClientModule("HUD", Category.RENDER, state = true, hide = tru
     private val hotkeys by boolean("HotKeys", true)
     private val information by boolean("Information", true)
     private val targetHud by boolean("TargetHUD", true)
+    val targetHudStyle by enumChoice("TargetHUDStyle", WyvernTargetHudStyle.CLASSIC)
     private val staffList by boolean("StaffList", true)
     private val totemCounter by boolean("TotemCounter", true)
     private val armorDurability by boolean("ArmorDurability", true)
