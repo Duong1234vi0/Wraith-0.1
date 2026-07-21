@@ -11830,3 +11830,195 @@ Notifications, Staff List, TotemCounter, ArmorDurability, ClickGUI, and gameplay
 - First push result: succeeded, `fe2518f91..50332a372 main -> main`, to
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - Post-push documentation update: this commit; its final hash and push result are reported in the assistant handoff.
+
+## 2026-07-21 - Wyvern-DLC Target HUD, Prediction, TotemPop, KillEffect, Cubes, and LineGlyphs batch
+
+### User request
+
+Port the supplied read-only `WorkSpace/Client/wyvern-dlc` implementations into live Wraith for Minecraft 26.1.2 as
+separate reviewable phases: replace Celestial Target HUD with both Wyvern Target HUD variants, replace the existing
+projectile simulation while preserving ClientBow, delete PopChams and replace it with TotemPop, add independent
+KillEffect, and align Cubes and LineGlyphs with Wyvern.
+
+### Authority and files inspected
+
+The authority order used was the current request, live Wraith APIs/integrations, supplied Wyvern behavior and visuals,
+Minecraft 26.1.2 mappings/dependencies, then historical `Agent1.md` evidence. Read the required Skill workflow,
+evidence, review, and rendering documents plus `Skill/Notes_/WORK_NOTES.md`, and the relevant complete Agent1 history
+for Silent/Celestial HUD, Prediction/ClientBow, PopChams and its corrections, Cubes, LineGlyphs, render compatibility,
+and real GUI pose rules.
+
+The checked Wyvern set included complete `TargetHudComponent.java`, `Interface.java`, `Animation.java`, easing
+implementation, `Predictions.java`, `ClientBow.java`, `TotemPop.java`, its living/player-held-item renderer mixins,
+`KillEffect.java`, `Cubes.java`, `LineGlyphes.java`, `assets/wyvern/icons/glow.png`, and every directly required helper
+used to establish selection, animation, collision, item/skin, model, sound, theme, line, glow, dash, camera, and render
+semantics. The live repository inspection covered the requested HUD, Prediction, PopChams, event, lifecycle, mixin,
+renderer, resource, registration, localization, theme, skin/item, NameProtect, actual-health, FakePlayer, CombatManager,
+FragEffects, Cubes, LineGlyphs, and test paths. The Wyvern tree remained read-only.
+
+Before editing, port evidence was recorded at untracked
+`.codex-tmp/wyvern-render-batch-evidence-20260721.md`; it was not committed.
+
+### Target HUD source behavior and mapping
+
+- Replaced the Celestial renderer/layout with one `WyvernTargetHudElement` and one preserved `TargetHUD` registration.
+- Added the narrow `TargetHUDStyle` choice with only `Classic` and `V2`, defaulting to `Classic`; bounds are exactly
+  `100 x 38` and `100 x 36` respectively.
+- Ported source head, fixed truncation, text, health formatting, track, delayed damage, current health, absorption,
+  equipment geometry/order and packing, including main hand, offhand, helmet, chest/Elytra, leggings, boots.
+- Mapped Aura target to Wraith KillAura tracking, kept local-player chat/editor preview, NameProtect, actual scoreboard
+  health, secure skin/default fallback, saved position, drag/editor/scaling, and real `context.pose()` item transforms.
+- Ported CIRC_OUT retention (`1300/2200 ms`) and CUBIC_OUT visibility/current/delayed/absorption animation
+  (`250/250/650/250 ms`), with lifecycle reset and finite health normalization.
+- Removed `CelestialTargetHudLayout`, its tests, Celestial geometry, and the obsolete Silent fixed 500 ms hold helper.
+
+Wraith has no safe source-equivalent per-widget blur path for 26.1.2. Classic therefore retains source geometry,
+opacity, gradient layers, and outline on the supported HUD surface without raw framebuffer GL or fake rectangle blur.
+
+### Prediction replacement and preserved ClientBow behavior
+
+- Kept the public `Prediction` identity and one registration.
+- Replaced the old Pearl/Item-specific 600-step simulation with Wyvern's 300-step hierarchy-based simulation for
+  persistent projectiles, thrown-item entities, and dropped items.
+- Ported stationary, grounded dropped-item, and water-intersection exclusions; per-kind water/air drag; mapped final
+  entity gravity; collider raycast; expanded living-entity intersection; in-entity/below-world/first-hit termination;
+  theme segment progression; widths `2/4.5/7`; alpha progression; no-depth rendering; endpoint item and one-decimal
+  seconds tag with real GUI pose.
+- Preserved the existing source-backed ClientBow subsection: both-hand bow detection, pull formula and zero-report
+  fallback, no idle preview, 100 steps, `0.99` drag, `0.05` gravity, collider raycast, markers, landing box,
+  `Thickness`, `Markers`, and `LandingBox`. No second ClientBow module was created.
+
+### PopChams deletion
+
+Deleted all PopChams production classes, pure helpers, tests, white texture, four shader files, ModuleManager entry,
+world-render shader hook, shader precompile hook, localization, and stale dependency comments. JAR and source sweeps
+found no PopChams class or resource. Existing `TotemPopEvent`, CombatManager detection, FakePlayer dispatch, and shared
+render infrastructure were preserved.
+
+### TotemPop source behavior and renderer adaptation
+
+- Added one Render `ModuleTotemPop` with only source settings: `Duration=700` (`250..2000`, step `50`), `Rise=2.4`
+  (`0..6`, step `0.1`), and `Self=true`.
+- Reused Wraith's existing `TotemPopEvent`; no raw status-byte parser was added. Every event creates an independent
+  snapshot, including repeated pops by the same player, fixed event-time coordinates and captured pose.
+- Ported wall-clock progress, `0.7 * (1-progress)` alpha, rise, expiry, world/disconnect/disable cleanup, source theme
+  tint, translucent full-bright rendering, correct wide/slim model and skin, outer skin parts, and hidden held items.
+- The safe 26.1.2 adaptation is a scoped direct avatar-model pass using vanilla render offset/state scale,
+  `scale(-1,-1,1)`, `0.9375`, and `-1.501` transform. A thread-local render scope and all temporary live pose changes
+  are cleared/restored in `finally`, including exception paths. This avoids unsafe global state and PopChams shaders.
+  Renderer feature layers such as armor are not invoked during this narrow ghost pass; the source-required skin model
+  layers remain.
+
+### KillEffect source behavior
+
+Added one independent settings-free Render `ModuleKillEffect`; `ModuleFragEffects` remains registered and unchanged.
+Living targets are tracked by entity ID only while alive, refreshed on attack, expire after `4000 ms`, and create one
+effect only after a recent tracked death. Effects start 200 blocks above center-height target position, descend by
+`6 + random*10` with `(random-0.5)*0.8` horizontal offsets, and clamp exactly to the target. Lifetime is `800 ms` with
+the source 15% fade-in/85% fade-out. Render passes are additive `40/24/12/6` with `40/80/130/190` alpha multipliers,
+then normal-blend `4.4` core. Spawn plays local lightning thunder in the weather category at volume/pitch `1/1`; no
+packet or real lightning entity is created. Blend/depth state and lifecycle collections are restored/cleared safely.
+
+### Cubes source behavior and removed Wonderful/custom-shader deviations
+
+- Settings now contain only `Animation` Scatter/Falling, `Shape` Cubes/Triangles, `Count=30` (`5..100`), `Size=1`
+  (`0.1..3`), and `Speed=1` (`0.1..5`). `LifeTime` was removed.
+- Ported source constants/formulas: range `12`, size `0.18`, movement speed `0.25`, glow `1.7`, distance squared `900`,
+  source spawn/lifetimes, Scatter/Falling updates, count maintenance, every-second-render update cadence, fade alpha,
+  camera culling, cube/triangle geometry, face alpha, and dashed edges.
+- Kept both source activation paths (attack-key rising edge and Wraith AttackEntityEvent), with a narrow 75 ms dedupe;
+  ray range is `128`, selection distance squared `1.32`, impulse `0.08*Speed`, vertical addition `0.02`.
+- Copied the exact 180x180 RGBA Wyvern glow to `assets/liquidbounce/icons/glow.png`; its source/destination SHA-256 is
+  `677c6878e4c9c83bb783e680be411542d325cd302816c2a8e6e64176410e759a`.
+- Removed the Wonderful bloom asset/dependency, Iris reflection, shader-world prepass/tracking, extra glow batch, and
+  duplicate render path. TargetESP's unrelated shader hook remains.
+
+### LineGlyphs source behavior and corrected deviations
+
+- Preserved one `LineGlyphs` registration and exactly `Count=50` (`10..200`), `Speed=1` (`0.1..5`), `Glow=true`, and
+  `Thickness=1.5` (`0.5..5`).
+- Completed paths are removed, existing paths update, and exactly one new path is added per update while below Count.
+- Ported `1200 ms` QUAD_IN_OUT alpha, `12 + random.nextInt(15)` points, `0.025*Speed` progress, axis-only signed
+  direction, reverse-dot rejection below `-0.5`, step length `2.5`, removal and moving-endpoint interpolation.
+- Added source first-person first-point camera culling only in first person, per-segment `(index+1)/points.size` alpha,
+  dashed `0.58/0.34` geometry with solid fallback at `<=0.92`, identical geometry for glow/core, exact glow width/alpha
+  multipliers, primary shared theme color, and render-state restoration.
+
+### Files added
+
+- `WyvernTargetHudLayout.kt`, `WyvernPredictionRules.kt`, `ModuleTotemPop.kt`, `TotemPopState.kt`,
+  `ModuleKillEffect.kt`, `KillEffectState.kt`, `WyvernCubesRules.kt`, and `WyvernLineGlyphRules.kt`.
+- Six focused test classes for those rule/state/layout paths.
+- `src/main/resources/assets/liquidbounce/icons/glow.png`.
+
+### Files changed
+
+- `ModuleHUD.kt`, `HudManager.kt`, `SilentHudElements.kt`, `ModulePredictions.kt`, `ModuleCubes.kt`,
+  `ModuleLineGlyphs.kt`, `ModuleManager.kt`, `MixinWorldRenderer.java`, `MixinShaderManager.java`, event/FakePlayer/
+  CombatManager comments and dispatch call shapes, English localization, and the retained Silent HUD test.
+
+### Files deleted and resources deleted
+
+- `CelestialTargetHudLayout.kt` and `CelestialTargetHudLayoutTest.kt`.
+- Entire tracked `render/popchams` implementation, both PopChams tests, `popchams/white.png`, and four PopChams shaders.
+- `resources/liquidbounce/wonderful/particle/bloom.png`.
+
+### Mixin and registration changes
+
+There is exactly one Target HUD element, Prediction module, TotemPop module, KillEffect module, Cubes module, and
+LineGlyphs module registration. PopChams's world-render and shader-manager hooks were removed. Cubes's shader-world
+hook was removed while TargetESP's separate hook remains. No new mixin or access-widener entry was needed.
+
+### Tests and normal test status
+
+- `git diff --check` and every cached diff check passed.
+- `compileKotlin` passed at every phase checkpoint.
+- All six newly added focused suites passed together through the established untracked test source filter:
+  `WyvernTargetHudLayoutTest`, `WyvernPredictionRulesTest`, `TotemPopStateTest`, `KillEffectStateTest`,
+  `WyvernCubesRulesTest`, and `WyvernLineGlyphRulesTest` (`BUILD SUCCESSFUL in 41s`).
+- Normal `compileTestKotlin` was re-run and remains blocked only by unrelated dirty-worktree/test-source mismatches:
+  `SmartCriticalDecisionTest` and `ItemCooldownProgressTest` cannot resolve current cooldown helpers/constants, while
+  `PointFindingKtTest` cannot resolve old `math`/`Vec3d`/vector conversion symbols. Those files were not changed here.
+
+### Clean assembly result
+
+Required command:
+`env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+
+Result: `BUILD SUCCESSFUL in 2m 8s`.
+
+- Main JAR: `build/libs/liquidbounce-0.31.2.jar`
+- Main SHA-256: `64179e823576f7d70c55503cf41bd5c456f02574cd5cf2fb1969f6ec8b45dba4`
+- Sources SHA-256: `bfdd54a9bd5b9e55ebaf2c9a3609564df5adb43a8851f000e5a029eeae63e13c`
+- JAR audit: required module/rule classes and Wyvern glow appear once; PopChams/Celestial/Wonderful classes and
+  resources are absent; no duplicate required module class was found.
+
+### Manual FCL status
+
+Not run in this headless Termux workspace. Every item in the requested Target HUD, Prediction, TotemPop, KillEffect,
+Cubes, and LineGlyphs FCL matrix remains pending; no visual/runtime item is claimed passed from compilation or tests.
+
+### Deviations or blockers
+
+The unavoidable mappings are the Classic blur omission described above, Wraith-supported batched render pipelines in
+place of legacy raw GL, and TotemPop's scoped modern direct avatar-model pass. Normal test compilation is blocked by
+the unrelated sources listed above. No Wyvern behavior was silently replaced with a new setting/mode/effect.
+
+### Commits and push result
+
+- `2051a9169` - `feat(hud): port wyvern target hud`
+- `4386b1817` - `feat(render): replace prediction with wyvern simulation`
+- `d56bba69e` - `feat(render): replace popchams with wyvern totem pop`
+- `50c522ef2` - `feat(render): port wyvern kill effect`
+- `39abf45e4` - `refactor(render): align cubes and line glyphs with wyvern`
+- `8647509fa` - `test(render): remove obsolete celestial hold coverage`
+- Documentation commit: this entry; recorded by the post-push update.
+- Push result: pending at entry creation; the post-push update records the actual remote verification.
+
+### Older Agent1 entries superseded by this batch
+
+- Celestial Target HUD visuals and its fixed 500 ms retention are superseded completely.
+- Old projectile-simulation behavior is superseded; the preserved ClientBow behavior is not superseded.
+- Every PopChams implementation/fix entry is historical only after complete deletion.
+- Wonderful/customized Cubes behavior, asset, Iris hook, and custom shader prepass are superseded by Wyvern Cubes.
+- Old approximate LineGlyphs behavior is superseded by Wyvern gradual spawning, culling, animation, and dashes.
