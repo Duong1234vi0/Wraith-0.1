@@ -53,6 +53,7 @@ internal class KillEffectTracking<T> {
 }
 
 internal data class KillEffectRenderPass(val width: Float, val alphaMaximum: Int, val additive: Boolean)
+internal data class KillEffectLineNormal(val x: Float, val y: Float, val z: Float)
 
 internal object KillEffectRules {
     const val TRACK_TIMEOUT_MS = 4_000L
@@ -94,5 +95,16 @@ internal object KillEffectRules {
         }
         if (points.last() != target) points += target
         return points
+    }
+
+    fun lineNormal(x1: Float, y1: Float, z1: Float, x2: Float, y2: Float, z2: Float): KillEffectLineNormal? {
+        val dx = x1 - x2
+        val dy = y1 - y2
+        val dz = z1 - z2
+        val lengthSquared = dx * dx + dy * dy + dz * dz
+        if (!lengthSquared.isFinite() || lengthSquared <= 1.0E-12f) return null
+        val inverseLength = 1f / kotlin.math.sqrt(lengthSquared)
+        val normal = KillEffectLineNormal(dx * inverseLength, dy * inverseLength, dz * inverseLength)
+        return normal.takeIf { it.x.isFinite() && it.y.isFinite() && it.z.isFinite() }
     }
 }

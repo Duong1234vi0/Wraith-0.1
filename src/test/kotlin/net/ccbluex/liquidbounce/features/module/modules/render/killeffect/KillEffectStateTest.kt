@@ -93,6 +93,35 @@ class KillEffectStateTest {
             ),
             KillEffectRules.renderPasses,
         )
+        assertEquals(4, KillEffectRules.renderPasses.count { it.additive })
+        assertFalse(KillEffectRules.renderPasses.last().additive)
+        assertEquals(5, KillEffectBatchRenderer.LOGICAL_PASS_COUNT)
+        assertEquals(1, KillEffectBatchRenderer.MAX_RENDER_PASSES)
+    }
+
+    @Test
+    fun `line normals are finite and zero length segments are rejected`() {
+        assertEquals(null, KillEffectRules.lineNormal(1f, 2f, 3f, 1f, 2f, 3f))
+        assertEquals(null, KillEffectRules.lineNormal(Float.NaN, 0f, 0f, 1f, 0f, 0f))
+        val normal = requireNotNull(KillEffectRules.lineNormal(0f, 0f, 0f, 0f, 3f, 4f))
+        assertTrue(normal.x.isFinite() && normal.y.isFinite() && normal.z.isFinite())
+        assertClose(1f, kotlin.math.sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z))
+    }
+
+    @Test
+    fun `renderer batches all segments into five native line draws`() {
+        val module = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/killeffect/ModuleKillEffect.kt")
+        val renderer = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/killeffect/KillEffectBatchRenderer.kt")
+        assertFalse(module.contains("drawLines("))
+        assertTrue(module.contains("KillEffectBatchRenderer.appendLine("))
+        assertTrue(module.contains("KillEffectBatchRenderer.flush("))
+        assertTrue(renderer.contains("DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH"))
+        assertTrue(renderer.contains("RenderPipelines.LINES_SNIPPET"))
+        assertTrue(renderer.contains("BlendFunction.LIGHTNING"))
+        assertTrue(renderer.contains("BlendFunction.TRANSLUCENT"))
+        assertEquals(1, Regex("createRenderPass\\(").findAll(renderer).count())
+        assertEquals(1, Regex("drawIndexed\\(").findAll(renderer).count())
+        assertTrue(renderer.indexOf("uploaded += upload") < renderer.indexOf("createRenderPass("))
     }
 
     @Test
@@ -106,12 +135,14 @@ class KillEffectStateTest {
         assertTrue(module.contains("1f,\n            1f,\n            false"))
         assertTrue(module.contains("handler<WorldChangeEvent> { clearRuntime() }"))
         assertTrue(module.contains("handler<DisconnectEvent> { clearRuntime() }"))
-        assertTrue(module.contains("RenderSystem.defaultBlendFunc()"))
+        assertTrue(module.contains("KillEffectBatchRenderer.flush(event.matrixStack.last().pose())"))
+        assertTrue(module.contains("private val effects = ArrayList<LightningEffect>()"))
         assertFalse(module.contains("Clientbound"))
         assertFalse(module.contains("LightningBolt"))
         assertFalse(module.contains(" by boolean("))
         assertFalse(module.contains(" by float("))
         assertFalse(module.contains(" by int("))
+        assertFalse(module.contains("CopyOnWriteArrayList"))
     }
 
     @Test
@@ -122,6 +153,19 @@ class KillEffectStateTest {
         assertEquals(1, Regex("ModuleFragEffects,").findAll(manager).count())
         assertFalse(frag.contains("ModuleKillEffect"))
         assertFalse(frag.contains("KillEffectRules"))
+    }
+
+    @Test
+    fun `Wyvern has KillEffect but no HitEffect and Wraith HitEffect remains independent`() {
+        val wyvernRoot = Path.of("WorkSpace/Client/wyvern-dlc/src/main/java")
+        val wyvernFiles = Files.walk(wyvernRoot).use { stream ->
+            stream.filter(Files::isRegularFile).map { it.fileName.toString() }.toList()
+        }
+        assertTrue("KillEffect.java" in wyvernFiles)
+        assertFalse(wyvernFiles.any { it.equals("HitEffect.java", ignoreCase = true) })
+        val hitEffect = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleHitEffect.kt")
+        assertTrue(hitEffect.contains("Xyeta/Wild HitEffect port"))
+        assertFalse(hitEffect.contains("KillEffectRules"))
     }
 
     private fun source(path: String): String = Files.readString(Path.of(path))
