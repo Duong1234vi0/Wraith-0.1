@@ -327,19 +327,34 @@ class SilentClickGuiSettings {
         choices.forEachIndexed { index, choice ->
             val optionRect = optionRect(rect, index)
             val active = choice in value.get()
-            val checkColor = if (active) fade(ClientTheme.accentA, alpha) else fade(0x35FFFFFF, alpha)
-            ExosGuiRenderer.roundedRect(context.matrices, optionRect.x, optionRect.y + 2f, 7f, 7f, 2f, checkColor)
+            val checkbox = SilentClickGuiSettingsMath.checkboxGeometry(optionRect)
+            ExosGuiRenderer.roundedRect(
+                context.matrices,
+                checkbox.outer.x,
+                checkbox.outer.y,
+                checkbox.outer.w,
+                checkbox.outer.h,
+                2f,
+                fade(0x35FFFFFF, alpha)
+            )
             if (active) {
-                ExosGuiRenderer.clickGuiBody(context.matrices, "v", optionRect.x + 1.8f, optionRect.y + 0.6f,
-                    fade(0xFFFFFFFF.toInt(), alpha), 5.2f)
+                ExosGuiRenderer.roundedRect(
+                    context.matrices,
+                    checkbox.inner.x,
+                    checkbox.inner.y,
+                    checkbox.inner.w,
+                    checkbox.inner.h,
+                    1f,
+                    fade(ClientTheme.accentA, alpha)
+                )
             }
             ExosGuiRenderer.clickGuiBody(
                 context.matrices,
-                truncate(optionName(choice), optionRect.w - 11f, 5.4f),
-                optionRect.x + 10f,
-                optionRect.y + 1f,
+                truncate(optionName(choice), optionRect.right - checkbox.textX - 1f, checkbox.textSize),
+                checkbox.textX,
+                checkbox.textY,
                 fade(if (active) 0xFFEFF7FF.toInt() else 0x99FFFFFF.toInt(), alpha),
-                5.4f
+                checkbox.textSize
             )
         }
     }
@@ -450,18 +465,15 @@ class SilentClickGuiSettings {
 
         choices.forEachIndexed { index, choice ->
             val optionRect = optionRect(rect, index)
+            val geometry = SilentClickGuiSettingsMath.modeOptionGeometry(optionRect)
             val selected = choice == active || choice === active
-            if (selected) {
-                ExosGuiRenderer.roundedRect(context.matrices, optionRect.x, optionRect.y + 1.5f,
-                    optionRect.w, 8f, 3.5f, fade(0x26FFFFFF, alpha))
-            }
             ExosGuiRenderer.clickGuiBody(
                 context.matrices,
-                truncate(optionName(choice), optionRect.w - 4f, 5.4f),
-                optionRect.x + 3f,
-                optionRect.y + 1f,
+                truncate(optionName(choice), optionRect.right - geometry.textX - 1f, geometry.textSize),
+                geometry.textX,
+                geometry.textY,
                 fade(if (selected) ClientTheme.accentA else 0x99FFFFFF.toInt(), alpha),
-                5.4f
+                geometry.textSize
             )
         }
     }

@@ -18,6 +18,7 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.render.gui
 
+import net.ccbluex.liquidbounce.render.font.msdf.MsdfTextRenderer
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -35,6 +36,22 @@ object SilentClickGuiSettingsMath {
         START,
         END
     }
+
+    data class ModeOptionGeometry(
+        val hitRect: SilentRect,
+        val textX: Float,
+        val textY: Float,
+        val textSize: Float,
+    )
+
+    data class CheckboxGeometry(
+        val hitRect: SilentRect,
+        val outer: SilentRect,
+        val inner: SilentRect,
+        val textX: Float,
+        val textY: Float,
+        val textSize: Float,
+    )
 
     fun maxScroll(contentHeight: Float, viewportHeight: Float): Float {
         val safeContent = contentHeight.takeIf { it.isFinite() && it > 0f } ?: return 0f
@@ -118,6 +135,47 @@ object SilentClickGuiSettingsMath {
         } else {
             RangeHandle.END
         }
+    }
+
+    fun centeredBodyTextY(rowY: Float, rowHeight: Float, textSize: Float): Float {
+        val visibleHeight = MsdfTextRenderer.visualHeight(textSize)
+        return rowY + (rowHeight - visibleHeight) * 0.5f
+    }
+
+    fun modeOptionGeometry(hitRect: SilentRect, textSize: Float = 5.5f): ModeOptionGeometry =
+        ModeOptionGeometry(
+            hitRect = hitRect,
+            textX = hitRect.x + 6f,
+            textY = centeredBodyTextY(hitRect.y, hitRect.h, textSize),
+            textSize = textSize,
+        )
+
+    fun checkboxGeometry(
+        hitRect: SilentRect,
+        outerSize: Float = 8f,
+        innerSize: Float = 4f,
+        textSize: Float = 6f,
+    ): CheckboxGeometry {
+        val outer = SilentRect(
+            hitRect.x + 8f,
+            hitRect.y + (hitRect.h - outerSize) * 0.5f,
+            outerSize,
+            outerSize,
+        )
+        val inner = SilentRect(
+            outer.x + (outer.w - innerSize) * 0.5f,
+            outer.y + (outer.h - innerSize) * 0.5f,
+            innerSize,
+            innerSize,
+        )
+        return CheckboxGeometry(
+            hitRect = hitRect,
+            outer = outer,
+            inner = inner,
+            textX = outer.right + 4f,
+            textY = centeredBodyTextY(hitRect.y, hitRect.h, textSize),
+            textSize = textSize,
+        )
     }
 
 }
