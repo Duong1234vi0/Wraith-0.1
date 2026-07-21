@@ -55,12 +55,6 @@ class SilentHudLayoutTest {
     }
 
     @Test
-    fun `target hold expires at Silent source duration`() {
-        assertTrue(SilentHudLayout.targetHoldVisible(1500L, 1000L))
-        assertFalse(SilentHudLayout.targetHoldVisible(1501L, 1000L))
-    }
-
-    @Test
     fun `notification stacking is deterministic and non overlapping`() {
         assertClose(200f, SilentHudLayout.notificationY(200f, 0, 18f, 3f))
         assertClose(221f, SilentHudLayout.notificationY(200f, 1, 18f, 3f))

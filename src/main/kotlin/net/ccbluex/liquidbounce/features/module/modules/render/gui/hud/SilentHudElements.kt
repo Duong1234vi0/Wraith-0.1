@@ -125,9 +125,6 @@ object SilentHudLayout {
         implemented = false,
     )
 
-    fun targetHoldVisible(nowMs: Long, lastSeenMs: Long, holdMs: Long = 500L): Boolean =
-        nowMs - lastSeenMs <= holdMs
-
     fun notificationY(baseY: Float, index: Int, rowHeight: Float, spacing: Float): Float =
         baseY + index * (rowHeight + spacing)
 
