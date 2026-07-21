@@ -85,7 +85,7 @@ internal object CubesBatchRenderer {
             .build()
     }
 
-    private val vertexBuffers = HashMap<VertexFormat, StreamingBuffer>()
+    private val vertexBuffers = HashMap<VertexFormat, CubesStreamingBuffer>()
     private val shaderColor = Vector4f(1f, 1f, 1f, 1f)
     private val modelOffset = Vector3f()
     private val textureMatrix = Matrix4f()
@@ -226,7 +226,7 @@ internal object CubesBatchRenderer {
         try {
             val state = mesh.drawState()
             val vertexSlice = vertexBuffers.getOrPut(state.format()) {
-                StreamingBuffer("LiquidBounce Cubes VBO for ${state.format()}", GpuBuffer.USAGE_VERTEX)
+                CubesStreamingBuffer("LiquidBounce Cubes VBO for ${state.format()}", GpuBuffer.USAGE_VERTEX)
             }.upload(mesh.vertexBuffer())
             val sequential = RenderSystem.getSequentialBuffer(state.mode())
             val indexType = sequential.type()
@@ -264,7 +264,7 @@ internal object CubesBatchRenderer {
     )
 }
 
-private class StreamingBuffer(
+private class CubesStreamingBuffer(
     private val label: String,
     private val usage: @GpuBuffer.Usage Int,
 ) {

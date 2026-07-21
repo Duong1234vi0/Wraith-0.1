@@ -10,7 +10,9 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.render
 
-internal data class GlyphDash(val start: Double, val end: Double)
+import kotlin.math.sqrt
+
+internal data class LineGlyphNormal(val x: Float, val y: Float, val z: Float)
 
 internal object WyvernLineGlyphRules {
     const val ALPHA_DURATION_MS = 1_200f
@@ -44,15 +46,33 @@ internal object WyvernLineGlyphRules {
 
     fun acceptsDirection(dotWithPrevious: Double): Boolean = dotWithPrevious >= REVERSE_DOT_LIMIT
 
-    fun dashedIntervals(length: Double): List<GlyphDash> {
-        if (length <= 0.0) return emptyList()
-        if (length <= DASH_LENGTH + GAP_LENGTH + 1.0E-9) return listOf(GlyphDash(0.0, length))
-        val result = ArrayList<GlyphDash>()
+    fun dashCount(length: Double): Int {
+        if (!length.isFinite() || length <= 0.0) return 0
+        if (length <= DASH_LENGTH + GAP_LENGTH + 1.0E-9) return 1
+        var count = 0
         var distance = 0.0
         while (distance < length) {
-            result += GlyphDash(distance, minOf(length, distance + DASH_LENGTH))
+            count++
             distance += DASH_LENGTH + GAP_LENGTH
         }
-        return result
+        return count
+    }
+
+    @Suppress("LongParameterList")
+    fun lineNormal(x1: Float, y1: Float, z1: Float, x2: Float, y2: Float, z2: Float): LineGlyphNormal? {
+        if (!x1.isFinite() || !y1.isFinite() || !z1.isFinite() ||
+            !x2.isFinite() || !y2.isFinite() || !z2.isFinite()
+        ) return null
+        val dx = x2 - x1
+        val dy = y2 - y1
+        val dz = z2 - z1
+        val length = sqrt(dx * dx + dy * dy + dz * dz)
+        if (!length.isFinite() || length <= 1.0E-6f) return null
+        return LineGlyphNormal(dx / length, dy / length, dz / length)
+    }
+
+    fun maxLineVertices(pathCount: Int, maxPoints: Int, passCount: Int = 5): Long {
+        if (pathCount <= 0 || maxPoints < 2 || passCount <= 0) return 0
+        return pathCount.toLong() * (maxPoints - 1) * dashCount(STEP_LENGTH) * 2L * passCount
     }
 }

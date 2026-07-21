@@ -18,8 +18,6 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.render
 
-import com.mojang.blaze3d.vertex.DefaultVertexFormat
-import com.mojang.blaze3d.vertex.VertexFormat
 import net.ccbluex.liquidbounce.event.events.GameTickEvent
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
@@ -27,13 +25,6 @@ import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.ClientTheme
-import net.ccbluex.liquidbounce.render.WorldRenderEnvironment
-import net.ccbluex.liquidbounce.render.compat.GlStateManager
-import net.ccbluex.liquidbounce.render.compat.RenderSystem
-import net.ccbluex.liquidbounce.render.compat.ShaderProgramKeys
-import net.ccbluex.liquidbounce.render.drawCustomMesh
-import net.ccbluex.liquidbounce.render.renderEnvironmentForWorld
-import net.ccbluex.liquidbounce.render.vertex
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.entity.*
 import net.minecraft.client.CameraType
@@ -54,6 +45,7 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
 
     private val random = Random()
     private val paths = ArrayList<Path>(200)
+    private val frameGeometry = LineGlyphFrameGeometry()
 
     @Suppress("unused")
     private val tickHandler = handler<GameTickEvent> {
@@ -73,6 +65,8 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
     @Suppress("unused")
     private val worldChangeHandler = handler<WorldChangeEvent> {
         paths.clear()
+        frameGeometry.clear()
+        LineGlyphBatchRenderer.clearFrame()
     }
 
     @Suppress("unused")
@@ -81,82 +75,69 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
             return@handler
         }
 
-        renderEnvironmentForWorld(event.matrixStack) {
-            RenderSystem.enableBlend()
-            RenderSystem.enableDepthTest()
-            RenderSystem.disableCull()
-            RenderSystem.depthMask(false)
-
-            try {
-                if (glow) {
-                    RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE)
-                    RenderSystem.enableAdditive()
-                    drawPathPass(event.camera.position(), event.partialTicks, 8.0f, 0.04f)
-                    drawPathPass(event.camera.position(), event.partialTicks, 5.0f, 0.08f)
-                    drawPathPass(event.camera.position(), event.partialTicks, 2.5f, 0.15f)
-                    drawPathPass(event.camera.position(), event.partialTicks, 1.35f, 0.22f)
+        try {
+            prepareFrameGeometry(event.camera.position(), event.partialTicks)
+            if (frameGeometry.lineCount == 0) return@handler
+            LineGlyphBatchRenderer.beginFrame()
+            if (glow) {
+                WyvernLineGlyphRules.glowPasses.forEachIndexed { index, (width, alpha) ->
+                    appendPreparedPass(index, thickness * width, alpha)
                 }
-
-                RenderSystem.defaultBlendFunc()
-                drawPathPass(event.camera.position(), event.partialTicks, 1.0f, 1.0f)
-            } finally {
-                RenderSystem.lineWidth(1.0f)
-                RenderSystem.depthMask(true)
-                RenderSystem.enableDepthTest()
-                RenderSystem.enableCull()
-                RenderSystem.defaultBlendFunc()
-                RenderSystem.disableBlend()
             }
+            appendPreparedPass(LineGlyphBatchRenderer.LOGICAL_PASS_COUNT - 1, thickness, 1f)
+            LineGlyphBatchRenderer.flush(event.matrixStack.last().pose())
+        } finally {
+            LineGlyphBatchRenderer.clearFrame()
         }
     }
 
     override fun disable() {
         paths.clear()
+        frameGeometry.clear()
+        LineGlyphBatchRenderer.clearFrame()
         super.disable()
     }
 
-    private fun WorldRenderEnvironment.drawPathPass(cameraPos: Vec3, tickDelta: Float, widthMul: Float, alphaMul: Float) {
-        val lineWidth = thickness * widthMul
-        val baseColor = ClientTheme.accentA
-        if (paths.none { it.pointCount >= 2 && it.alpha > 0.005f }) {
-            return
+    private fun prepareFrameGeometry(cameraPos: Vec3, tickDelta: Float) {
+        frameGeometry.clear()
+        val firstPerson = mc.options.cameraType == CameraType.FIRST_PERSON
+        val cameraLook = cameraLookVector()
+        for (path in paths) {
+            val pathAlpha = path.alpha
+            if (path.pointCount < 2 || pathAlpha <= 0.005f) continue
+
+            val progress = path.renderProgress(tickDelta)
+            val firstPoint = path.point(0, progress)
+            if (WyvernLineGlyphRules.shouldCullFirstPerson(
+                    firstPerson,
+                    firstPoint.subtract(cameraPos).dot(cameraLook),
+                )
+            ) {
+                continue
+            }
+
+            for (index in 0 until path.pointCount - 1) {
+                val segmentAlpha = WyvernLineGlyphRules.segmentAlpha(pathAlpha, index, path.pointCount)
+                if (segmentAlpha <= 0.005f) continue
+                appendPreparedDashes(
+                    path.point(index, progress),
+                    path.point(index + 1, progress),
+                    cameraPos,
+                    segmentAlpha,
+                )
+            }
         }
+    }
 
-        RenderSystem.lineWidth(lineWidth)
-        drawCustomMesh(
-            VertexFormat.Mode.DEBUG_LINES,
-            DefaultVertexFormat.POSITION_COLOR,
-            ShaderProgramKeys.POSITION_COLOR
-        ) { matrix ->
-            for (path in paths) {
-                val alpha = path.alpha * alphaMul
-                if (path.pointCount < 2 || alpha <= 0.005f) {
-                    continue
-                }
-
-                val progress = path.renderProgress(tickDelta)
-                val firstPoint = path.point(0, progress)
-                if (mc.options.cameraType == CameraType.FIRST_PERSON &&
-                    WyvernLineGlyphRules.shouldCullFirstPerson(
-                        true,
-                        firstPoint.subtract(cameraPos).dot(cameraLookVector()),
-                    )
-                ) {
-                    continue
-                }
-
-                val last = path.pointCount - 1
-                for (index in 0 until last) {
-                    val from = path.point(index, progress)
-                    val to = path.point(index + 1, progress)
-                    val segmentAlpha = WyvernLineGlyphRules.segmentAlpha(alpha, index, path.pointCount)
-                    if (segmentAlpha <= 0.005f) {
-                        continue
-                    }
-
-                    val color = withAlpha(baseColor, segmentAlpha)
-                    appendDashedSegment(this, matrix, from, to, cameraPos, color)
-                }
+    private fun appendPreparedPass(passIndex: Int, lineWidth: Float, alphaMultiplier: Float) {
+        val baseColor = ClientTheme.accentA
+        frameGeometry.forEach { x1, y1, z1, x2, y2, z2, sourceAlpha ->
+            val alpha = sourceAlpha * alphaMultiplier
+            if (alpha > 0.005f) {
+                LineGlyphBatchRenderer.appendLine(
+                    passIndex, x1, y1, z1, x2, y2, z2,
+                    withAlpha(baseColor, alpha), lineWidth,
+                )
             }
         }
     }
@@ -198,34 +179,47 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
         return (alphaChannel shl 24) or (color and 0x00FFFFFF)
     }
 
-    private fun appendDashedSegment(
-        buffer: com.mojang.blaze3d.vertex.BufferBuilder,
-        matrix: org.joml.Matrix4f,
+    private fun appendPreparedDashes(
         start: Vec3,
         end: Vec3,
         cameraPos: Vec3,
-        color: Int,
+        alpha: Float,
     ) {
-        val delta = end.subtract(start)
-        val length = sqrt(delta.lengthSqr())
+        val dx = end.x - start.x
+        val dy = end.y - start.y
+        val dz = end.z - start.z
+        val length = sqrt(dx * dx + dy * dy + dz * dz)
         if (length < 0.0001) return
 
-        val direction = delta.scale(1.0 / length)
-        val intervals = WyvernLineGlyphRules.dashedIntervals(length)
-        if (intervals.isEmpty()) return
-        if (intervals.size == 1 && intervals[0].end == length) {
-            val from = start.subtract(cameraPos)
-            val to = end.subtract(cameraPos)
-            buffer.vertex(matrix, from.x.toFloat(), from.y.toFloat(), from.z.toFloat()).setColor(color)
-            buffer.vertex(matrix, to.x.toFloat(), to.y.toFloat(), to.z.toFloat()).setColor(color)
+        if (length <= WyvernLineGlyphRules.DASH_LENGTH + WyvernLineGlyphRules.GAP_LENGTH + 1.0E-9) {
+            frameGeometry.append(
+                (start.x - cameraPos.x).toFloat(),
+                (start.y - cameraPos.y).toFloat(),
+                (start.z - cameraPos.z).toFloat(),
+                (end.x - cameraPos.x).toFloat(),
+                (end.y - cameraPos.y).toFloat(),
+                (end.z - cameraPos.z).toFloat(),
+                alpha,
+            )
             return
         }
 
-        for (interval in intervals) {
-            val from = start.add(direction.scale(interval.start)).subtract(cameraPos)
-            val to = start.add(direction.scale(interval.end)).subtract(cameraPos)
-            buffer.vertex(matrix, from.x.toFloat(), from.y.toFloat(), from.z.toFloat()).setColor(color)
-            buffer.vertex(matrix, to.x.toFloat(), to.y.toFloat(), to.z.toFloat()).setColor(color)
+        val nx = dx / length
+        val ny = dy / length
+        val nz = dz / length
+        var distance = 0.0
+        while (distance < length) {
+            val dashEnd = minOf(length, distance + WyvernLineGlyphRules.DASH_LENGTH)
+            frameGeometry.append(
+                (start.x + nx * distance - cameraPos.x).toFloat(),
+                (start.y + ny * distance - cameraPos.y).toFloat(),
+                (start.z + nz * distance - cameraPos.z).toFloat(),
+                (start.x + nx * dashEnd - cameraPos.x).toFloat(),
+                (start.y + ny * dashEnd - cameraPos.y).toFloat(),
+                (start.z + nz * dashEnd - cameraPos.z).toFloat(),
+                alpha,
+            )
+            distance += WyvernLineGlyphRules.DASH_LENGTH + WyvernLineGlyphRules.GAP_LENGTH
         }
     }
 

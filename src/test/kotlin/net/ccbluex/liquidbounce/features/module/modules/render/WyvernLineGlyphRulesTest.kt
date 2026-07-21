@@ -61,38 +61,78 @@ class WyvernLineGlyphRulesTest {
     }
 
     @Test
-    fun `camera culling segment alpha and dashed geometry match source`() {
+    fun `camera culling segment alpha and direct dashed geometry match source`() {
         assertTrue(WyvernLineGlyphRules.shouldCullFirstPerson(true, -0.01))
         assertFalse(WyvernLineGlyphRules.shouldCullFirstPerson(false, -1.0))
         assertClose(0.2f, WyvernLineGlyphRules.segmentAlpha(1f, 0, 5))
         assertClose(0.8f, WyvernLineGlyphRules.segmentAlpha(1f, 3, 5))
-        assertEquals(listOf(GlyphDash(0.0, 0.92)), WyvernLineGlyphRules.dashedIntervals(0.92))
-        val longDashes = WyvernLineGlyphRules.dashedIntervals(1.5)
-        assertEquals(2, longDashes.size)
-        assertClose(0.58f, longDashes[0].end.toFloat())
-        assertClose(0.92f, longDashes[1].start.toFloat())
-        assertClose(1.5f, longDashes[1].end.toFloat())
+        assertEquals(0, WyvernLineGlyphRules.dashCount(0.0))
+        assertEquals(1, WyvernLineGlyphRules.dashCount(0.92))
+        assertEquals(2, WyvernLineGlyphRules.dashCount(1.5))
+        assertEquals(3, WyvernLineGlyphRules.dashCount(WyvernLineGlyphRules.STEP_LENGTH))
         val module = source()
         assertTrue(module.contains("CameraType.FIRST_PERSON"))
-        assertTrue(module.contains("appendDashedSegment"))
+        assertTrue(module.contains("appendPreparedDashes"))
+        assertTrue(module.contains("while (distance < length)"))
+        assertFalse(module.contains("GlyphDash"))
+        assertFalse(module.contains("dashedIntervals"))
+        assertFalse(module.contains("List<GlyphDash>"))
     }
 
     @Test
-    fun `glow widths theme and render state are restored`() {
+    fun `frame geometry is prepared once then reused for all five passes`() {
         assertEquals(
             listOf(8f to 0.04f, 5f to 0.08f, 2.5f to 0.15f, 1.35f to 0.22f),
             WyvernLineGlyphRules.glowPasses,
         )
         val module = source()
-        assertTrue(module.contains("val lineWidth = thickness * widthMul"))
+        assertEquals(1, Regex("prepareFrameGeometry\\(").findAll(module).count() - 1)
+        assertTrue(module.indexOf("prepareFrameGeometry(event.camera.position(), event.partialTicks)") <
+            module.indexOf("WyvernLineGlyphRules.glowPasses.forEachIndexed"))
+        assertTrue(module.contains("appendPreparedPass(index, thickness * width, alpha)"))
+        assertTrue(module.contains("appendPreparedPass(LineGlyphBatchRenderer.LOGICAL_PASS_COUNT - 1, thickness, 1f)"))
         assertTrue(module.contains("val baseColor = ClientTheme.accentA"))
         assertFalse(module.contains("ClientTheme.accentB"))
-        assertTrue(module.contains("RenderSystem.enableDepthTest()"))
-        assertTrue(module.contains("RenderSystem.depthMask(false)"))
-        assertTrue(module.contains("RenderSystem.depthMask(true)"))
-        assertTrue(module.contains("RenderSystem.disableBlend()"))
+        assertTrue(module.contains("private val frameGeometry = LineGlyphFrameGeometry()"))
+        assertFalse(module.contains("drawCustomMesh"))
+        assertFalse(module.contains("drawLines"))
         val manager = Files.readString(Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/ModuleManager.kt"))
         assertEquals(1, Regex("ModuleLineGlyphs,").findAll(manager).count())
+    }
+
+    @Test
+    fun `native line renderer has four additive draws one normal draw and one render pass`() {
+        val renderer = Files.readString(Path.of(RENDERER))
+        assertEquals(5, LineGlyphBatchRenderer.LOGICAL_PASS_COUNT)
+        assertEquals(1, LineGlyphBatchRenderer.MAX_RENDER_PASSES)
+        assertTrue(renderer.contains("RenderPipelines.LINES_SNIPPET"))
+        assertTrue(renderer.contains("DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH"))
+        assertTrue(renderer.contains("BlendFunction.LIGHTNING"))
+        assertTrue(renderer.contains("BlendFunction.TRANSLUCENT"))
+        assertTrue(renderer.contains("DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false)"))
+        assertTrue(renderer.contains(".withCull(false)"))
+        assertEquals(1, Regex("createRenderPass\\(").findAll(renderer).count())
+        assertFalse(renderer.contains("RenderSystem.lineWidth"))
+        assertFalse(renderer.contains("DEBUG_LINES"))
+        assertFalse(renderer.contains("drawCustomMesh"))
+    }
+
+    @Test
+    fun `line normals reject invalid and zero length segments`() {
+        assertEquals(null, WyvernLineGlyphRules.lineNormal(0f, 0f, 0f, 0f, 0f, 0f))
+        assertEquals(null, WyvernLineGlyphRules.lineNormal(Float.NaN, 0f, 0f, 1f, 0f, 0f))
+        val normal = requireNotNull(WyvernLineGlyphRules.lineNormal(0f, 0f, 0f, 2f, 3f, 6f))
+        assertTrue(normal.x.isFinite() && normal.y.isFinite() && normal.z.isFinite())
+        assertClose(1f, kotlin.math.sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z))
+    }
+
+    @Test
+    fun `vertex budgets remain bounded for source counts`() {
+        assertEquals(7_500L, WyvernLineGlyphRules.maxLineVertices(10, 26))
+        assertEquals(37_500L, WyvernLineGlyphRules.maxLineVertices(50, 26))
+        assertEquals(150_000L, WyvernLineGlyphRules.maxLineVertices(200, 26))
+        assertEquals(0L, WyvernLineGlyphRules.maxLineVertices(200, 1))
+        assertEquals(0L, WyvernLineGlyphRules.maxLineVertices(0, 26))
     }
 
     private fun source(): String = Files.readString(Path.of(MODULE))
@@ -103,5 +143,6 @@ class WyvernLineGlyphRulesTest {
 
     private companion object {
         const val MODULE = "src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleLineGlyphs.kt"
+        const val RENDERER = "src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/LineGlyphBatchRenderer.kt"
     }
 }
