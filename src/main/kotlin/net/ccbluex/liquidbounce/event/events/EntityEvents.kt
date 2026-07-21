@@ -47,7 +47,7 @@ class SwingHandEvent(val hand: InteractionHand) : CancellableEvent()
  *
  * #Edit By Claude 2026-06-14: port of VCore `vcore.events.impl.TotemPopEvent`. VCore fires this
  * from its `CombatManager` (on a real status-35 `EntityStatusS2CPacket`) and from its `FakePlayer`
- * module, decoupling pop detection from consumers like PopChams / TotemCounter. We keep that
+ * module, decoupling pop detection from consumers like TotemPop / TotemCounter. We keep that
  * decoupling: [net.ccbluex.liquidbounce.utils.combat.CombatManager] fires it for real pops and
  * [net.ccbluex.liquidbounce.features.module.modules.misc.fakeplayer.ModuleFakePlayer] fires it for
  * the client-side fake player (which never produces a network packet).

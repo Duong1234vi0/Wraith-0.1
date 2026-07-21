@@ -75,10 +75,10 @@ import kotlin.math.sin
  * #Edit By Claude 2026-06-14.
  *
  * Spawns a single client-side dummy player for testing PvP modules (AutoTotem,
- * combat, PopChams, …). It copies the local player's position/inventory, keeps a
+ * combat, TotemPop, …). It copies the local player's position/inventory, keeps a
  * totem in the off-hand, and estimates damage from incoming crystal explosions and
  * from your own melee attacks. When it would die with a totem available it "pops":
- * it heals back up and fires a [TotemPopEvent] so PopChams / totem counters react,
+ * it heals back up and fires a [TotemPopEvent] so TotemPop / totem counters react,
  * exactly as a real totem pop would (VCore did the same via its `TotemPopEvent`).
  *
  * VCore → fork mapping notes:
@@ -240,7 +240,7 @@ object ModuleFakePlayer : ClientModule("FakePlayer", Category.MISC) {
 
     private fun handleTotemPop(clone: FakePlayer) {
         // Mimic a totem pop: consume the totem, heal, re-apply the brief regen/absorption a real
-        // totem grants, then announce the pop so PopChams / counters react (VCore fired TotemPopEvent).
+        // totem grants, then announce the pop so TotemPop / counters react (VCore fired TotemPopEvent).
         clone.setItemInHand(InteractionHand.OFF_HAND, ItemStack.EMPTY)
         clone.health = 1.0f
         clone.absorptionAmount = 0f

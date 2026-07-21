@@ -10,7 +10,6 @@ import net.ccbluex.liquidbounce.features.module.modules.render.ModuleBetterWorld
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleCubes;
 import net.ccbluex.liquidbounce.features.module.modules.combat.backtrack.ModuleBacktrack;
 import net.ccbluex.liquidbounce.features.module.modules.render.alphadlc.AlphaProjection;
-import net.ccbluex.liquidbounce.features.module.modules.render.popchams.ModulePopChams;
 import net.ccbluex.liquidbounce.features.module.modules.render.targetesp.ModuleTargetESP;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
@@ -138,8 +137,6 @@ public abstract class MixinWorldRenderer {
         // #Edit By Codex 2026-06-13: let TargetESP render before Iris/Complementary final composite
         // so shaderpack bloom can see the emissive ghost pixels. The normal WorldRenderEvent fires too late.
         ModuleTargetESP.renderShaderWorldPass(levelRenderState.cameraRenderState.pos);
-        // #Edit By Claude 2026-06-14: same Iris shader-world pass for PopChams totem-pop chams.
-        ModulePopChams.renderShaderWorldPass(levelRenderState.cameraRenderState.pos);
         // #Edit By Codex 2026-06-19: Cubes glow also needs the pre-composite shader-world path.
         ModuleCubes.renderShaderWorldPass(levelRenderState.cameraRenderState.pos);
     }

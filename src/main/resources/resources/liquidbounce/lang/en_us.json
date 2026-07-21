@@ -13,7 +13,7 @@
   "liquidbounce.module.macroAnchor.whileUse.description": "Pauses the macro while eating or using a shield.",
   "liquidbounce.module.crystalOptimizer.description": "Removes attacked crystals client-side faster.",
   "liquidbounce.module.autoHitCrystal.description": "Automatically builds an obsidian crystal hit sequence and times crystal breaks.",
-  "liquidbounce.module.popChams.description": "Renders a rising, fading silhouette of a player when they pop a totem.",
+  "liquidbounce.module.totemPop.description": "Renders a rising, fading theme-tinted ghost when a player pops a totem.",
   "liquidbounce.module.totemParticles.description": "Replaces the vanilla totem pop particles with MasEffects-style revive rings and returning sparks.",
   "liquidbounce.module.fakePlayer.description": "Spawns a client-side dummy player for testing PvP modules.",
   "liquidbounce.module.chunkAnimator.description": "Animates newly loaded chunks sliding or rising into place.",

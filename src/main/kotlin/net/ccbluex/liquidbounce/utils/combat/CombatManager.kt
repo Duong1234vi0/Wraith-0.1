@@ -123,7 +123,7 @@ object CombatManager : EventListener {
 
     // #Edit By Claude 2026-06-14: ported from VCore CombatManager.onPacketReceive. A real totem pop
     // arrives as an EntityStatusS2CPacket / ClientboundEntityEventPacket with status 35. We count it
-    // per player name and post a TotemPopEvent so consumers (e.g. PopChams) react without each one
+    // per player name and post a TotemPopEvent so consumers (e.g. TotemPop) react without each one
     // re-parsing raw packets — exactly VCore's decoupling.
     @Suppress("unused")
     val totemPopHandler = handler<PacketEvent> { event ->

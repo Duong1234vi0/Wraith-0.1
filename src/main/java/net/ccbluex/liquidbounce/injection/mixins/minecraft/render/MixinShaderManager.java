@@ -32,7 +32,6 @@ import net.ccbluex.liquidbounce.features.module.modules.render.handshader.HandSh
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.NameTagsBackgroundShader;
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.NameTagsBlur;
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.NameTagsBlurPipelines;
-import net.ccbluex.liquidbounce.features.module.modules.render.popchams.PopChamsPipelines;
 import net.ccbluex.liquidbounce.features.module.modules.render.targetesp.BabkaTargetEspPipelines;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleTotemParticles;
 import net.minecraft.client.renderer.ShaderManager;
@@ -60,7 +59,6 @@ public abstract class MixinShaderManager {
         RoundedTextureShader.INSTANCE.precompile();
         MsdfFontShader.INSTANCE.precompile();
         AlphaDlcRenderPipelines.INSTANCE.precompile();
-        PopChamsPipelines.INSTANCE.precompile();
         BabkaTargetEspPipelines.INSTANCE.precompile();
         IrisExactHandMaskPipeline.INSTANCE.precompile();
         HandShaderPipeline.INSTANCE.precompile();

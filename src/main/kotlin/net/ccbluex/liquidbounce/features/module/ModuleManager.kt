@@ -60,9 +60,9 @@ import net.ccbluex.liquidbounce.features.module.modules.render.hats.ModuleHats
 import net.ccbluex.liquidbounce.features.module.modules.render.hats.ModuleSantaHat
 import net.ccbluex.liquidbounce.features.module.modules.render.ghostplayer.ModuleGhostPlayer
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.ModuleNameTags
-import net.ccbluex.liquidbounce.features.module.modules.render.popchams.ModulePopChams
 import net.ccbluex.liquidbounce.features.module.modules.render.skeletonesp.ModuleSkeletonESP
 import net.ccbluex.liquidbounce.features.module.modules.render.targetesp.ModuleTargetESP
+import net.ccbluex.liquidbounce.features.module.modules.render.totempop.ModuleTotemPop
 import net.ccbluex.liquidbounce.features.module.modules.render.trajectories.ModulePredictions
 import net.ccbluex.liquidbounce.features.module.modules.world.*
 import net.ccbluex.liquidbounce.features.module.modules.world.fucker.ModuleFucker
@@ -282,7 +282,7 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleCubes,
             ModuleLineGlyphs,
             ModuleTargetESP,
-            ModulePopChams,
+            ModuleTotemPop,
             ModuleGhostPlayer,
             ModuleWings,
             ModuleNameTags,
