@@ -11708,3 +11708,117 @@ stacking/expiry, resource reload, and FPS/resource-leak checks.
 - Documentation commit: `8619c3c63da50bd959f953cdb19eab615af9843e` - `docs(agent1): record silent hud port`.
 - Push result: succeeded, `415333371..8619c3c63 main -> main`, to `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - Post-push documentation update: this commit, final hash reported in the assistant response.
+
+## 2026-07-21 - Celestial Target HUD visual replacement
+
+### Request and source limitation
+
+The user confirmed the recently ported Silent HUD worked but disliked Silent's Target HUD appearance. Only the supplied
+`else if (type.get("Celestial"))` Java render branch was available; it was not the complete original Target HUD class.
+The branch depended on external `alphaAnimation`, `healthTextAnimation`, `healthBarAnimation`, `hurtAnimation`,
+`spacing`, `getDisplayName`, `RoundHeadUtils`, `DisplayUtils`, `ScissorUtil`, `Fonts.celestial`, `ThemeManager`, target
+selection, retention, and reset behavior.
+
+The live repository and read-only reference workspaces were searched for the exact branch and those helpers. No complete
+Celestial Target HUD or directly used helper implementations were found. An unrelated Babka TargetESP hurt animation
+was not treated as Celestial behavior evidence. This change is therefore a constrained reconstruction of the supplied
+visible branch over Wraith-native systems, not a byte-for-byte/full-class Celestial port.
+
+### Checked
+
+- Required Skill workflow, rendering, evidence, and review documents plus the latest Silent HUD/Target HUD Agent1 history.
+- Live `SilentHudElements.kt`, `HudElement.kt`, `HudManager.kt`, `HudConfig.kt`, `HudScreen.kt`, `ModuleHUD.kt`,
+  `ExosGuiRenderer.kt`, `ClientTheme.kt`, `ClickGuiTheme.kt`, `SkinFaceGui.kt`, current MSDF renderer/font manager,
+  `KillAuraTargetTracker.kt`, `ModuleNameProtect.kt`, rounded/glow GUI primitives, and current HUD tests.
+- Minecraft/Fabric target from live `gradle.properties`: Minecraft `26.1.2`, Fabric `0.146.1+26.1.2`.
+
+### Previous Wraith Target HUD
+
+The previous `SilentTargetHudElement` rendered a `140 x 46` card with a `20 x 20` avatar, distance text, segmented
+circular health and absorption rings, centered numeric health, six equipment/empty-slot markers, and an alpha-driven
+`0.85 -> 1.0` scale effect. It already owned Wraith's KillAura target, chat preview, `lastTarget`, `lastSeenMs`, 500 ms
+retention, visibility interpolation, NameProtect path, player skin/default fallback, mob fallback, and reset lifecycle.
+
+### Changed
+
+- Renamed the renderer class to `CelestialTargetHudElement`; the element/config key remains exactly `TargetHUD`.
+- Updated `HudManager` to register exactly one Celestial renderer in the same position; all other Silent HUD registrations
+  remain unchanged.
+- Added pure `CelestialTargetHudLayout` geometry/health helpers and finite health animation state.
+- Removed the old distance, circular health, absorption ring, centered circle value, equipment row/empty markers, and
+  Silent-specific scale animation.
+- Added theme glow, dark navy panel, theme outline, rounded head, clipped NameProtect-aware name, animated locale-stable
+  `HP: x.x`, dark track, and theme-colored animated horizontal health fill.
+- Preserved Wraith's KillAura target source, held target, approximately 500 ms retention, alpha fade, world/disconnect/
+  disable reset, saved `TargetHUD` position, editor dragging/selection, global HUD scale, OverlayRenderEvent, secure player
+  skin/default-skin fallback, and non-player letter fallback. HUD editor preview now explicitly accepts `HudScreen` as
+  well as chat while retaining the same local-player preview source.
+
+### Celestial geometry
+
+- Render panel: `170f / 1.5f` (`113.333336`) by `57f / 1.5f` (`38`).
+- Editor/hit bounds: `114 x 38`.
+- `spacing`: inferred as `4f`; the original owning field was unavailable.
+- Head: `32 x 32` at panel `+4,+3`, radius `3`.
+- Text X: panel `+38`; name Y: `+6`; HP Y: `+20`.
+- Bar: panel `+37,+27.5`, width `73.333336`, track height `8`, fill height `7.5`, radius `2`.
+- Panel radius `5`, Wraith glow spread `6`, supported outline width `0.8`.
+
+### Font and helper mappings / deviations
+
+- Missing `Fonts.celestial[17/13]` maps to Wraith's existing MSDF title/body fonts at `17/1.5` and `13/1.5`; no font
+  resource was downloaded or invented.
+- Celestial ThemeManager maps to Wraith `ClientTheme.accentA`.
+- `DisplayUtils` maps to Wraith's batched SDF glow, rounded rectangle, and outline primitives.
+- The unproven negative outline argument `-0.3f` maps to supported positive `0.8f` stroke.
+- `ScissorUtil` maps to the real `DrawContext.enableScissor` coordinate space with balanced `try/finally`; no manual
+  double transformation is applied.
+- Player heads use `drawRoundedPlayerSkinFace`, including secure/default skin selection, missing-texture rejection, face,
+  and hat. Existing non-player fallback remains.
+- Exact `RoundHeadUtils` hurt behavior was unavailable, and no proven Wraith equivalent existed, so no hurt distortion,
+  shader, rotation, or particle behavior was invented.
+- The invisible-target `isFT()` condition was omitted because `isFT()` semantics and an exact Wraith equivalent were not
+  available.
+- The supplied branch has no absorption fill, so no absorption visualization remains.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/CelestialTargetHudLayout.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/SilentHudElements.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/HudManager.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/CelestialTargetHudLayoutTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/SilentHudLayoutTest.kt`
+- this `Agent1.md` entry.
+
+### Tests and build
+
+- `git diff --check`: passed.
+- Production `compileKotlin`: `BUILD SUCCESSFUL in 41s`.
+- Direct focused HUD command was blocked before execution by unrelated live test-source errors in
+  `SmartCriticalDecisionTest.kt`, `ItemCooldownProgressTest.kt`, and `PointFindingKtTest.kt`.
+- Focused `CelestialTargetHudLayoutTest`, `SilentHudLayoutTest`, and `HotbarStatusHudTest` passed using a temporary
+  untracked source filter that excluded only those three unrelated broken test files: `BUILD SUCCESSFUL in 35s`.
+- Normal `test` was attempted and remains blocked by the same unrelated test compilation errors; none were modified.
+- Required clean assembly: `BUILD SUCCESSFUL in 2m 10s`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- JAR SHA-256: `650f13fa722a3470d86c539516e7c4504e27a737320f319cc48d758f49ba4c8b`.
+
+### FCL status
+
+Not run in the headless Termux workspace. No visual/runtime success is claimed from compilation. The requested FCL
+matrix remains pending: one compact HUD, 32 px player face/hat and fallback, mob fallback, long-name clipping,
+NameProtect, HP text/bar damage/heal animation, zero/max edge cases, target replacement, hold/fade, chat/editor preview,
+theme changes, drag persistence, HUD scales `0.7/1.0/1.2`, screen edges, removed old visuals, and glow performance.
+
+### Commits and push status
+
+- Implementation: `ae7d23a9d50541bfcdcba03b67e69d70921c8230` -
+  `feat(hud): replace silent target hud with celestial layout`.
+- Tests: `8ce2494c18f4bc9583e0358dccc57c57ba939d59` -
+  `test(hud): cover celestial target geometry`.
+- Documentation commit and push result are recorded in the post-push update after this entry is committed and pushed.
+
+### Supersedes
+
+The previous Silent HUD port entry is superseded only for Target HUD visuals. Watermark, HotKeys, Information,
+Notifications, Staff List, TotemCounter, ArmorDurability, ClickGUI, and gameplay behavior remain unchanged.
