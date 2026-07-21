@@ -169,6 +169,12 @@ data class SilentTransform(
             ((mouseY.toFloat() - centerY) / totalScale) + SilentClickGuiLayout.REFERENCE_HEIGHT * 0.5f
         )
 
+    fun localToScreen(point: SilentPoint): SilentPoint =
+        SilentPoint(
+            centerX + (point.x - SilentClickGuiLayout.REFERENCE_WIDTH * 0.5f) * totalScale,
+            centerY + (point.y - SilentClickGuiLayout.REFERENCE_HEIGHT * 0.5f) * totalScale
+        )
+
     fun localToScreen(rect: SilentRect): ScreenRect {
         val x0 = centerX + (rect.x - SilentClickGuiLayout.REFERENCE_WIDTH * 0.5f) * totalScale
         val y0 = centerY + (rect.y - SilentClickGuiLayout.REFERENCE_HEIGHT * 0.5f) * totalScale

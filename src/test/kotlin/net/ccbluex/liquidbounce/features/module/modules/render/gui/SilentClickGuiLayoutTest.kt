@@ -91,6 +91,42 @@ class SilentClickGuiLayoutTest {
     }
 
     @Test
+    fun `FCL scaled screen keeps Silent panel inside safe margins`() {
+        val transform = SilentClickGuiLayout.transform(535, 243, 1f, 8f)
+        assertClose(0.8937008f, transform.fitScale)
+
+        val topLeft = transform.localToScreen(SilentPoint(0f, 0f))
+        val bottomRight = transform.localToScreen(
+            SilentPoint(SilentClickGuiLayout.REFERENCE_WIDTH, SilentClickGuiLayout.REFERENCE_HEIGHT)
+        )
+
+        assertClose(89.6535f, topLeft.x, 0.0015f)
+        assertClose(8.0f, topLeft.y)
+        assertClose(445.3465f, bottomRight.x, 0.0015f)
+        assertClose(235.0f, bottomRight.y)
+
+        val contentTopLeft = transform.localToScreen(SilentPoint(SilentClickGuiLayout.content.x, SilentClickGuiLayout.content.y))
+        val contentBottomRight = transform.localToScreen(
+            SilentPoint(SilentClickGuiLayout.content.right, SilentClickGuiLayout.content.bottom)
+        )
+        assertClose(167.4055f, contentTopLeft.x, 0.0015f)
+        assertClose(37.4921f, contentTopLeft.y, 0.0015f)
+        assertClose(441.3248f, contentBottomRight.x, 0.0015f)
+        assertClose(230.5315f, contentBottomRight.y, 0.0015f)
+    }
+
+    @Test
+    fun `local and screen coordinates stay inverse during opening animation`() {
+        val transform = SilentClickGuiLayout.transform(535, 243, 0.37f, 8f)
+        val local = SilentPoint(191.5f, 82.25f)
+        val screen = transform.localToScreen(local)
+        val roundTrip = transform.screenToLocal(screen.x.toDouble(), screen.y.toDouble())
+
+        assertClose(local.x, roundTrip.x)
+        assertClose(local.y, roundTrip.y)
+    }
+
+    @Test
     fun `small screens still produce a safe positive fit scale`() {
         assertTrue(SilentClickGuiLayout.fitScale(1, 1) > 0f)
     }
@@ -120,8 +156,8 @@ class SilentClickGuiLayoutTest {
         assertClose(expected.h, actual.h)
     }
 
-    private fun assertClose(expected: Float, actual: Float) {
-        assertTrue(abs(expected - actual) < 0.001f, "expected <$expected> but was <$actual>")
+    private fun assertClose(expected: Float, actual: Float, tolerance: Float = 0.001f) {
+        assertTrue(abs(expected - actual) < tolerance, "expected <$expected> but was <$actual>")
     }
 
 }

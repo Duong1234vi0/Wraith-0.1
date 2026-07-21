@@ -56,6 +56,36 @@ class SilentClickGuiStaticTest {
     }
 
     @Test
+    fun `ClickGUI shell transform uses real GUI pose stack`() {
+        val source = Files.readString(
+            Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt")
+        )
+
+        assertTrue(source.contains("val pose = context.pose()"))
+        assertTrue(source.contains("pose.pushMatrix()"))
+        assertTrue(source.contains("pose.translate(transform.centerX, transform.centerY)"))
+        assertTrue(source.contains("pose.scale(transform.totalScale, transform.totalScale)"))
+        assertTrue(source.contains("pose.popMatrix()"))
+        assertFalse(source.contains("matrices.pushPose()"))
+        assertFalse(source.contains("matrices.translate(transform.centerX"))
+        assertFalse(source.contains("matrices.scale(transform.totalScale"))
+    }
+
+    @Test
+    fun `ClickGUI local scissor relies on GuiGraphicsExtractor pose transform`() {
+        val source = Files.readString(
+            Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt")
+        )
+
+        assertTrue(source.contains("private inline fun withLocalScissor"))
+        assertTrue(source.contains("context.enableScissor("))
+        assertTrue(source.contains("floor(rect.x).toInt()"))
+        assertTrue(source.contains("ceil(rect.right).toInt()"))
+        assertFalse(source.contains("transform.localToScreen(rect)"))
+        assertFalse(source.contains("context.enableScissor(screen.x0"))
+    }
+
+    @Test
     fun `ClickGUI source does not render old or copied branding strings`() {
         val source = Files.readString(
             Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt")

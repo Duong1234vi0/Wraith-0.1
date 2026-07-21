@@ -19,6 +19,8 @@
 package net.ccbluex.liquidbounce.features.module.modules.render.gui
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import kotlin.math.abs
 
@@ -93,6 +95,44 @@ class SilentClickGuiSettingsMathTest {
             SilentClickGuiSettingsMath.RangeHandle.END,
             SilentClickGuiSettingsMath.nearestRangeHandle(0.2f, 0.8f, 0.7f)
         )
+    }
+
+    @Test
+    fun `settings scrollbar thumb is safe for animated tiny viewports`() {
+        listOf(0f, 0.1f, 2.443882f, 13.999f, 14f, 150f).forEach { viewportHeight ->
+            val thumb = SilentClickGuiSettingsMath.scrollbarThumb(viewportHeight, 500f, 12f)
+            if (viewportHeight <= 0f) {
+                assertNull(thumb)
+                return@forEach
+            }
+
+            val actual = requireNotNull(thumb) { "expected thumb for viewport $viewportHeight" }
+            assertTrue(actual.height >= 0f)
+            assertTrue(actual.height <= viewportHeight)
+            assertTrue(actual.height.isFinite())
+            assertTrue(actual.offsetY >= 0f)
+            assertTrue(actual.offsetY <= viewportHeight - actual.height + 0.001f)
+            assertTrue(actual.offsetY.isFinite())
+        }
+    }
+
+    @Test
+    fun `settings scrollbar thumb is absent when content does not overflow`() {
+        assertNull(SilentClickGuiSettingsMath.scrollbarThumb(150f, 0f, 0f))
+        assertNull(SilentClickGuiSettingsMath.scrollbarThumb(150f, 120f, 0f))
+        assertNull(SilentClickGuiSettingsMath.scrollbarThumb(150f, 150f, 0f))
+    }
+
+    @Test
+    fun `settings scrollbar thumb handles large content and non finite inputs`() {
+        val thumb = requireNotNull(SilentClickGuiSettingsMath.scrollbarThumb(150f, 1500f, 250f))
+        assertTrue(thumb.height >= 0f)
+        assertTrue(thumb.height <= 150f)
+        assertTrue(thumb.height.isFinite())
+        assertTrue(thumb.offsetY.isFinite())
+
+        assertNull(SilentClickGuiSettingsMath.scrollbarThumb(Float.NaN, 1500f, 0f))
+        assertNull(SilentClickGuiSettingsMath.scrollbarThumb(150f, Float.POSITIVE_INFINITY, 0f))
     }
 
     private fun assertClose(expected: Float, actual: Float) {
