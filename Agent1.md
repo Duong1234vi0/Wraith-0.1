@@ -12022,3 +12022,10 @@ the unrelated sources listed above. No Wyvern behavior was silently replaced wit
 - Every PopChams implementation/fix entry is historical only after complete deletion.
 - Wonderful/customized Cubes behavior, asset, Iris hook, and custom shader prepass are superseded by Wyvern Cubes.
 - Old approximate LineGlyphs behavior is superseded by Wyvern gradual spawning, culling, animation, and dashes.
+
+## 2026-07-21 - Wyvern render batch post-push update
+
+- Documentation commit: `d9723ebcf` - `docs(agent1): record wyvern render batch`.
+- First push result: succeeded, `2e0745b36..d9723ebcf main -> main`, to
+  `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+- The post-push documentation commit and final remote-equality verification are reported in the assistant handoff.
