@@ -59,6 +59,7 @@ import net.ccbluex.liquidbounce.features.module.modules.render.handshader.Module
 import net.ccbluex.liquidbounce.features.module.modules.render.hats.ModuleHats
 import net.ccbluex.liquidbounce.features.module.modules.render.hats.ModuleSantaHat
 import net.ccbluex.liquidbounce.features.module.modules.render.ghostplayer.ModuleGhostPlayer
+import net.ccbluex.liquidbounce.features.module.modules.render.killeffect.ModuleKillEffect
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.ModuleNameTags
 import net.ccbluex.liquidbounce.features.module.modules.render.skeletonesp.ModuleSkeletonESP
 import net.ccbluex.liquidbounce.features.module.modules.render.targetesp.ModuleTargetESP
@@ -261,6 +262,7 @@ object ModuleManager : EventListener, Iterable<ClientModule> by modules {
             ModuleSmoothCamera,
             ModuleCustomModels,
             ModuleFragEffects,
+            ModuleKillEffect,
             ModuleParticles,
             ModuleTotemParticles,
             ModuleESP,
