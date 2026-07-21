@@ -98,6 +98,76 @@ class SilentClickGuiSettingsMathTest {
     }
 
     @Test
+    fun `mode option text is centered from visible MSDF body height`() {
+        val row = SilentRect(12f, 34f, 96f, 10f)
+        val geometry = SilentClickGuiSettingsMath.modeOptionGeometry(row)
+
+        assertEquals(row, geometry.hitRect)
+        assertClose(18f, geometry.textX)
+        assertClose(5.5f, geometry.textSize)
+        assertClose(34f + (10f - 5.5f * 0.7f) * 0.5f, geometry.textY)
+        assertTrue(geometry.textY > row.y)
+        assertTrue(geometry.textY < row.bottom)
+    }
+
+    @Test
+    fun `selected and unselected mode rows share the same baseline geometry`() {
+        val selectedRow = SilentRect(12f, 34f, 96f, 10f)
+        val unselectedRow = SilentRect(12f, 45f, 96f, 10f)
+        val selected = SilentClickGuiSettingsMath.modeOptionGeometry(selectedRow)
+        val unselected = SilentClickGuiSettingsMath.modeOptionGeometry(unselectedRow)
+
+        assertClose(11f, unselected.hitRect.y - selected.hitRect.y)
+        assertClose(11f, unselected.textY - selected.textY)
+        assertClose(selected.textSize, unselected.textSize)
+        assertClose(selected.textX, unselected.textX)
+    }
+
+    @Test
+    fun `multi checkbox indicator is centered geometry`() {
+        val row = SilentRect(12f, 34f, 96f, 10f)
+        val geometry = SilentClickGuiSettingsMath.checkboxGeometry(row)
+
+        assertEquals(row, geometry.hitRect)
+        assertClose(8f, geometry.outer.w)
+        assertClose(8f, geometry.outer.h)
+        assertClose(4f, geometry.inner.w)
+        assertClose(4f, geometry.inner.h)
+        assertClose(geometry.outer.x + (geometry.outer.w - geometry.inner.w) * 0.5f, geometry.inner.x)
+        assertClose(geometry.outer.y + (geometry.outer.h - geometry.inner.h) * 0.5f, geometry.inner.y)
+        assertClose(geometry.outer.right + 4f, geometry.textX)
+    }
+
+    @Test
+    fun `setting widget geometry remains finite when globally scaled`() {
+        val scale = 0.7f
+        val row = SilentRect(12f, 34f, 96f, 10f)
+        val mode = SilentClickGuiSettingsMath.modeOptionGeometry(row)
+        val checkbox = SilentClickGuiSettingsMath.checkboxGeometry(row)
+
+        listOf(mode.hitRect, checkbox.hitRect, checkbox.outer, checkbox.inner).forEach { rect ->
+            assertTrue((rect.x * scale).isFinite())
+            assertTrue((rect.y * scale).isFinite())
+            assertTrue((rect.w * scale) > 0f)
+            assertTrue((rect.h * scale) > 0f)
+        }
+    }
+
+    @Test
+    fun `click hit rectangles align with rendered option rows`() {
+        val row = SilentRect(12f, 34f, 96f, 10f)
+        val mode = SilentClickGuiSettingsMath.modeOptionGeometry(row)
+        val checkbox = SilentClickGuiSettingsMath.checkboxGeometry(row)
+
+        assertTrue(mode.textY >= mode.hitRect.y)
+        assertTrue(mode.textY <= mode.hitRect.bottom)
+        assertTrue(checkbox.outer.x >= checkbox.hitRect.x)
+        assertTrue(checkbox.outer.right <= checkbox.hitRect.right)
+        assertTrue(checkbox.outer.y >= checkbox.hitRect.y)
+        assertTrue(checkbox.outer.bottom <= checkbox.hitRect.bottom)
+    }
+
+    @Test
     fun `settings scrollbar thumb is safe for animated tiny viewports`() {
         listOf(0f, 0.1f, 2.443882f, 13.999f, 14f, 150f).forEach { viewportHeight ->
             val thumb = SilentClickGuiSettingsMath.scrollbarThumb(viewportHeight, 500f, 12f)

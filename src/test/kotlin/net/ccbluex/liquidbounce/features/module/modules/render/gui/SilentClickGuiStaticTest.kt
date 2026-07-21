@@ -110,4 +110,25 @@ class SilentClickGuiStaticTest {
         assertFalse(guiSources.contains("AutoBuy"))
     }
 
+    @Test
+    fun `Silent mode selector does not draw a selected rounded background`() {
+        val source = Files.readString(
+            Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiSettings.kt")
+        )
+
+        assertTrue(source.contains("SilentClickGuiSettingsMath.modeOptionGeometry"))
+        assertFalse(source.contains("fade(0x26FFFFFF"))
+    }
+
+    @Test
+    fun `Silent multi checkbox active indicator is not a body-font glyph`() {
+        val source = Files.readString(
+            Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiSettings.kt")
+        )
+
+        assertTrue(source.contains("SilentClickGuiSettingsMath.checkboxGeometry"))
+        assertFalse(source.contains("\"v\""))
+        assertFalse(source.contains("\"✓\""))
+    }
+
 }
