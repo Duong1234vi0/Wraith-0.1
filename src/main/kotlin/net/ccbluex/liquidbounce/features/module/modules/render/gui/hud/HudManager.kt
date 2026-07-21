@@ -38,7 +38,7 @@ object HudManager {
         elements += SilentWatermarkElement()
         elements += SilentHotKeysElement()
         elements += SilentInformationElement()
-        elements += SilentTargetHudElement()
+        elements += CelestialTargetHudElement()
         elements += SilentStaffListElement()
     }
 

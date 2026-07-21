@@ -31,30 +31,21 @@ import net.ccbluex.liquidbounce.features.module.modules.render.gui.ExosGuiRender
 import net.ccbluex.liquidbounce.render.gui.drawRoundedPlayerSkinFace
 import net.ccbluex.liquidbounce.utils.client.ServerObserver
 import net.ccbluex.liquidbounce.utils.client.mc
-import net.ccbluex.liquidbounce.utils.entity.armorItems
 import net.ccbluex.liquidbounce.utils.entity.currentFps
 import net.ccbluex.liquidbounce.utils.entity.deltaMovement
-import net.ccbluex.liquidbounce.utils.entity.drawItem
-import net.ccbluex.liquidbounce.utils.entity.drawStackOverlay
 import net.ccbluex.liquidbounce.utils.entity.matrices
-import net.ccbluex.liquidbounce.utils.entity.mainHandStack
-import net.ccbluex.liquidbounce.utils.entity.offHandStack
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screens.ChatScreen
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.player.Player
-import net.minecraft.world.item.ItemStack
 import org.lwjgl.glfw.GLFW
 import java.util.Locale
-import kotlin.math.PI
 import kotlin.math.ceil
-import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 enum class SilentHudElementKind {
     WATERMARK,
@@ -76,11 +67,6 @@ data class SilentHudElementDescriptor(
     val allowDragX: Boolean = draggable,
     val allowDragY: Boolean = draggable,
     val implemented: Boolean = true,
-)
-
-data class SilentHudHealthState(
-    val healthRatio: Float,
-    val absorptionRatio: Float,
 )
 
 data class SilentHotKeyRow(
@@ -113,7 +99,15 @@ object SilentHudLayout {
         SilentHudElementDescriptor("Watermark", SilentHudElementKind.WATERMARK, 10, 6, 180, 24, false, false, false),
         SilentHudElementDescriptor("HotKeys", SilentHudElementKind.HOTKEYS, 30, 30, 92, 20, true),
         SilentHudElementDescriptor("Information", SilentHudElementKind.INFORMATION, 5, 5, 120, 20, false, false, false),
-        SilentHudElementDescriptor("TargetHUD", SilentHudElementKind.TARGET_HUD, 10, 80, 140, 46, true),
+        SilentHudElementDescriptor(
+            "TargetHUD",
+            SilentHudElementKind.TARGET_HUD,
+            10,
+            80,
+            CelestialTargetHudLayout.EDITOR_WIDTH,
+            CelestialTargetHudLayout.EDITOR_HEIGHT,
+            true,
+        ),
         SilentHudElementDescriptor("StaffList", SilentHudElementKind.STAFF_LIST, 30, 150, 96, 20, true),
     )
 
@@ -127,16 +121,6 @@ object SilentHudLayout {
         true,
         implemented = false,
     )
-
-    fun normalizeHealth(health: Float, maxHealth: Float, absorption: Float): SilentHudHealthState {
-        val safeMax = maxHealth.takeIf { it.isFinite() && it > 0f } ?: 20f
-        val healthRatio = (health.takeIf { it.isFinite() } ?: 0f).coerceAtLeast(0f) / safeMax
-        val absorptionRatio = (absorption.takeIf { it.isFinite() } ?: 0f).coerceAtLeast(0f) / 20f
-        return SilentHudHealthState(
-            healthRatio.coerceIn(0f, 1f),
-            absorptionRatio.coerceIn(0f, 1f),
-        )
-    }
 
     fun targetHoldVisible(nowMs: Long, lastSeenMs: Long, holdMs: Long = 500L): Boolean =
         nowMs - lastSeenMs <= holdMs
@@ -485,20 +469,22 @@ class SilentInformationElement :
     }
 }
 
-class SilentTargetHudElement :
+class CelestialTargetHudElement :
     SilentHudElementBase(SilentHudLayout.implementedDescriptors.first { it.kind == SilentHudElementKind.TARGET_HUD }) {
 
     private var lastTarget: LivingEntity? = null
     private var lastSeenMs = 0L
     private var visibility = 0f
-    private var healthRatio = 1f
-    private var absorptionRatio = 0f
-    private var distanceValue = 0f
+    private var animatedTarget: LivingEntity? = null
+    private val healthAnimation = CelestialTargetHealthAnimation()
 
     override fun render(context: DrawContext, isSelected: Boolean) {
+        width = CelestialTargetHudLayout.EDITOR_WIDTH
+        height = CelestialTargetHudLayout.EDITOR_HEIGHT
+
         val now = System.currentTimeMillis()
         val current = ModuleKillAura.targetTracker.target as? LivingEntity
-        val chatPreview = current == null && mc.screen is ChatScreen
+        val chatPreview = current == null && (mc.screen is ChatScreen || mc.screen is HudScreen)
         val target = current ?: if (chatPreview) mc.player else null
         if (target != null) {
             lastTarget = target
@@ -514,42 +500,104 @@ class SilentTargetHudElement :
 
         val px = x.toFloat()
         val py = y.toFloat()
-        val totalWidth = 140f
-        val totalHeight = 46f
-        width = totalWidth.toInt()
-        height = totalHeight.toInt()
+        val nameHeight = ExosGuiRenderer.titleHeight(CelestialTargetHudLayout.NAME_SIZE)
+        val geometry = CelestialTargetHudLayout.geometry(px, py, nameHeight)
+        if (animatedTarget !== heldTarget) {
+            animatedTarget = heldTarget
+            healthAnimation.resetForTarget(heldTarget.health, heldTarget.maxHealth)
+        }
+        val health = healthAnimation.update(heldTarget.health, heldTarget.maxHealth)
+        val accent = SilentHudDraw.accent()
 
-        val normalized = SilentHudLayout.normalizeHealth(heldTarget.health, heldTarget.maxHealth, heldTarget.absorptionAmount)
-        healthRatio += (normalized.healthRatio - healthRatio) * 0.1f
-        absorptionRatio += (normalized.absorptionRatio - absorptionRatio) * 0.1f
-        val player = mc.player
-        val distance = if (player != null) roundHalf(player.distanceTo(heldTarget)) else 0f
-        distanceValue += (distance - distanceValue) * 0.5f
+        ExosGuiRenderer.shaderGlow(
+            context.matrices,
+            geometry.panel.x,
+            geometry.panel.y,
+            geometry.panel.width,
+            geometry.panel.height,
+            CelestialTargetHudLayout.PANEL_RADIUS,
+            SilentHudDraw.fade(accent, alpha),
+            CelestialTargetHudLayout.SHADOW_SPREAD,
+        )
+        ExosGuiRenderer.roundedRect(
+            context.matrices,
+            geometry.panel.x,
+            geometry.panel.y,
+            geometry.panel.width,
+            geometry.panel.height,
+            CelestialTargetHudLayout.PANEL_RADIUS,
+            SilentHudDraw.fade(0xFF080F1C.toInt(), alpha),
+        )
+        ExosGuiRenderer.roundedOutline(
+            context.matrices,
+            geometry.panel.x,
+            geometry.panel.y,
+            geometry.panel.width,
+            geometry.panel.height,
+            CelestialTargetHudLayout.PANEL_RADIUS,
+            SilentHudDraw.fade(accent, alpha),
+            CelestialTargetHudLayout.OUTLINE_WIDTH,
+        )
+        drawFace(
+            context,
+            heldTarget,
+            geometry.head.x,
+            geometry.head.y,
+            geometry.head.width,
+            alpha,
+        )
 
-        val scale = 0.85f + alpha * 0.15f
-        val centerX = px + totalWidth * 0.5f
-        val centerY = py + totalHeight * 0.5f
-        context.pose().pushMatrix()
+        val name = ModuleNameProtect.replace(
+            if (heldTarget is Player) heldTarget.gameProfile.name else heldTarget.scoreboardName
+        )
+        val clip = geometry.nameClip
+        context.enableScissor(
+            floor(clip.x).toInt(),
+            floor(clip.y).toInt(),
+            ceil(clip.x + clip.width).toInt(),
+            ceil(clip.y + clip.height).toInt(),
+        )
         try {
-            context.pose().translate(centerX, centerY)
-            context.pose().scale(scale, scale)
-            context.pose().translate(-centerX, -centerY)
-            SilentHudDraw.panel(context, px, py, totalWidth, totalHeight - 5f, 5f, alpha)
-            drawFace(context, heldTarget, px + 6f, py + 6f, 20f, alpha)
-            val name = SilentHudDraw.truncate(ModuleNameProtect.replace(heldTarget.scoreboardName), 62f, 10f)
-            SilentHudDraw.body(context, name, px + 32f, py + 10f, 10f, SilentHudDraw.fade(SilentHudDraw.WHITE, alpha))
-            SilentHudDraw.body(
-                context,
-                String.format(Locale.US, "%.1fm", distanceValue),
-                px + 32f,
-                py + 22f,
-                8f,
-                SilentHudDraw.fade(0xFFB4B4B4.toInt(), alpha)
+            ExosGuiRenderer.title(
+                context.matrices,
+                name,
+                geometry.textX,
+                geometry.nameY,
+                SilentHudDraw.fade(SilentHudDraw.WHITE, alpha),
+                CelestialTargetHudLayout.NAME_SIZE,
             )
-            drawHealthCircle(context, px + totalWidth - 32f, py + 4f, 32f, alpha)
-            drawEquipment(context, heldTarget, px + 24f, py + 28f, alpha)
         } finally {
-            context.pose().popMatrix()
+            context.disableScissor()
+        }
+
+        SilentHudDraw.body(
+            context,
+            String.format(Locale.US, "HP: %.1f", health.health),
+            geometry.textX,
+            geometry.healthTextY,
+            CelestialTargetHudLayout.HEALTH_TEXT_SIZE,
+            SilentHudDraw.fade(SilentHudDraw.WHITE, alpha),
+        )
+        ExosGuiRenderer.roundedRect(
+            context.matrices,
+            geometry.healthTrack.x,
+            geometry.healthTrack.y,
+            geometry.healthTrack.width,
+            geometry.healthTrack.height,
+            CelestialTargetHudLayout.BAR_RADIUS,
+            SilentHudDraw.fade(0xFF232323.toInt(), alpha),
+        )
+        val fillWidth = CelestialTargetHudLayout.fillWidth(geometry.healthTrack.width, health.ratio)
+        if (fillWidth > 0f) {
+            ExosGuiRenderer.roundedRect(
+                context.matrices,
+                geometry.healthTrack.x,
+                geometry.healthTrack.y,
+                fillWidth,
+                geometry.healthFillHeight,
+                CelestialTargetHudLayout.BAR_RADIUS,
+                ExosGuiRenderer.withAlpha(accent, (200f * alpha).roundToInt()),
+            )
         }
 
         renderBackground(context, isSelected)
@@ -559,88 +607,35 @@ class SilentTargetHudElement :
         lastTarget = null
         lastSeenMs = 0L
         visibility = 0f
-        healthRatio = 1f
-        absorptionRatio = 0f
-        distanceValue = 0f
+        animatedTarget = null
+        healthAnimation.reset()
     }
 
     private fun drawFace(context: DrawContext, target: LivingEntity, x: Float, y: Float, size: Float, alpha: Float) {
-        if (target is Player && context.drawRoundedPlayerSkinFace(target, x, y, size, 4f, SilentHudDraw.fade(SilentHudDraw.WHITE, alpha))) {
+        if (target is Player && context.drawRoundedPlayerSkinFace(
+                target,
+                x,
+                y,
+                size,
+                CelestialTargetHudLayout.HEAD_RADIUS,
+                SilentHudDraw.fade(SilentHudDraw.WHITE, alpha),
+            )
+        ) {
             return
         }
-        SilentHudDraw.panel(context, x, y, size, size, 4f, alpha)
+        ExosGuiRenderer.roundedRect(
+            context.matrices,
+            x,
+            y,
+            size,
+            size,
+            CelestialTargetHudLayout.HEAD_RADIUS,
+            SilentHudDraw.fade(0xFF080F1C.toInt(), alpha),
+        )
         val letter = target.scoreboardName.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
         val textW = SilentHudDraw.bodyWidth(letter, 10f)
         SilentHudDraw.body(context, letter, x + (size - textW) * 0.5f, y + 6.5f, 10f, SilentHudDraw.fade(SilentHudDraw.WHITE, alpha))
     }
-
-    private fun drawHealthCircle(context: DrawContext, x: Float, y: Float, size: Float, alpha: Float) {
-        val cx = x + size * 0.5f
-        val cy = y + size * 0.5f
-        val radius = size * 0.42f
-        val segments = 34
-        for (index in 0 until segments) {
-            val progress = index.toFloat() / segments
-            val angle = -PI.toFloat() * 0.5f + progress * PI.toFloat() * 2f
-            val sx = cx + cos(angle) * radius
-            val sy = cy + sin(angle) * radius
-            ExosGuiRenderer.roundedRect(
-                context.matrices,
-                sx - 1f,
-                sy - 1f,
-                2f,
-                2f,
-                1f,
-                SilentHudDraw.fade(0xFF343434.toInt(), alpha)
-            )
-            if (progress <= healthRatio) {
-                ExosGuiRenderer.roundedRect(
-                    context.matrices,
-                    sx - 1f,
-                    sy - 1f,
-                    2f,
-                    2f,
-                    1f,
-                    SilentHudDraw.fade(SilentHudDraw.accent(), alpha)
-                )
-            }
-            if (progress <= absorptionRatio) {
-                ExosGuiRenderer.roundedRect(
-                    context.matrices,
-                    sx - 0.7f,
-                    sy - 0.7f,
-                    1.4f,
-                    1.4f,
-                    0.7f,
-                    SilentHudDraw.fade(0xFFFFD66B.toInt(), alpha)
-                )
-            }
-        }
-        val text = (healthRatio * 20f).roundToInt().toString()
-        val textW = SilentHudDraw.bodyWidth(text, 8f)
-        SilentHudDraw.body(context, text, cx - textW * 0.5f, cy - 3f, 8f, SilentHudDraw.fade(SilentHudDraw.WHITE, alpha))
-    }
-
-    private fun drawEquipment(context: DrawContext, target: LivingEntity, x: Float, y: Float, alpha: Float) {
-        val stacks = buildList {
-            add(target.mainHandStack)
-            add(target.offHandStack)
-            addAll(target.armorItems.toList().asReversed())
-        }
-        var slotX = x
-        stacks.take(6).forEach { stack ->
-            ExosGuiRenderer.roundedRect(context.matrices, slotX, y, 12f, 12f, 2f, SilentHudDraw.fade(0x52000000, alpha))
-            if (stack.isEmpty) {
-                SilentHudDraw.body(context, "x", slotX + 4f, y + 2.2f, 7f, SilentHudDraw.fade(0xFF8C8C8C.toInt(), alpha))
-            } else {
-                SilentHudDraw.drawScaledItem(context, stack, slotX + 2f, y + 2f, 0.5f, alpha)
-            }
-            slotX += 14f
-        }
-    }
-
-    private fun roundHalf(value: Float): Float =
-        (value * 2f).roundToInt() / 2f
 }
 
 class SilentStaffListElement :
@@ -968,37 +963,6 @@ private object SilentHudDraw {
         return ExosGuiRenderer.withAlpha(color, (baseAlpha * alpha.coerceIn(0f, 1f)).roundToInt())
     }
 
-    fun truncate(text: String, maxWidth: Float, size: Float): String {
-        if (maxWidth <= 0f || bodyWidth(text, size) <= maxWidth) {
-            return text
-        }
-
-        var end = text.length
-        while (end > 1) {
-            val candidate = text.take(end) + "..."
-            if (bodyWidth(candidate, size) <= maxWidth) {
-                return candidate
-            }
-            end--
-        }
-        return "..."
-    }
-
-    fun drawScaledItem(context: DrawContext, stack: ItemStack, x: Float, y: Float, scale: Float, alpha: Float) {
-        if (stack.isEmpty || alpha <= 0.01f || scale <= 0.01f) {
-            return
-        }
-
-        context.pose().pushMatrix()
-        try {
-            context.pose().translate(x, y)
-            context.pose().scale(scale, scale)
-            context.drawItem(stack, 0, 0)
-            context.drawStackOverlay(mc.font, stack, 0, 0)
-        } finally {
-            context.pose().popMatrix()
-        }
-    }
 }
 
 private data class SilentRect(val x: Float, val y: Float, val w: Float, val h: Float) {
