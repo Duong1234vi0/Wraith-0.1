@@ -11504,3 +11504,201 @@ releasing jump returns Smart to permissive attacks.
 - Push result: succeeded, `7c262e12f..0dde40d6d main -> main`, to
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - Post-push documentation update: this commit, final hash reported in the assistant response.
+
+## 2026-07-21 - Silent ClickGUI widget alignment and Silent HUD shell port
+
+### User request
+
+Fix the remaining Silent-style ClickGUI widget defects shown in the current FCL screenshot and port Silent Client's HUD
+visual/interaction shell onto Wraith's native Minecraft `26.1.2` module, event, config, rendering, target, notification,
+theme, skin, item, and HUD-editor systems. The port is source-driven, not a generic Silent-inspired redesign.
+
+### Screenshot symptoms
+
+- Expanded Mode/choice rows showed a selected rounded highlight whose vertical center did not match the selected text
+  baseline. The screenshot example was `InventoryMove` -> `Behavior` -> selected `Normal`.
+- Multi-select checkbox rows rendered a body-font `"v"` mark with manual offsets, so the mark was not centered in the
+  checkbox.
+
+### Sources inspected
+
+- Workflow and authority docs: `Skill/README.md`, `Skill/Agen.md`, `Skill/AGENT1_USAGE.md`,
+  `Skill/CODEBASE_RULES.md`, `Skill/CLAUDE_PORT_SKID_MODULE_GUIDE.md`, `Skill/PORT_EVIDENCE_TEMPLATE.md`,
+  `Skill/PORT_REVIEW_CHECKLIST.md`, `Skill/RENDER_PORTING_GUIDE.md`.
+- Agent1 history: Silent ClickGUI visual-shell port, ClickGUI real-pose/scissor/runtime crash fix, HUD delete/revert
+  history, Wyvern HUD cleanup, V-Core hotbar HUD overlay notes.
+- Live ClickGUI files: `SilentClickGuiSettings.kt`, `SilentClickGuiSettingsMath.kt`, `ClickGuiScreen.kt`,
+  `SilentClickGuiLayout.kt`, `ExosGuiRenderer.kt`, `MsdfFontGui.kt`, `MsdfTextRenderer.kt`, `FontRenderer.kt`, existing
+  focused ClickGUI tests.
+- Silent ClickGUI references: `ModeSettingComponent.java`, `MultiBooleanSettingComponent.java`,
+  `BooleanSettingComponent.java`, `Fonts.java`, `Font.java`, `FontData.java`, `Glyph.java`, `TextRenderer.java`.
+- Silent HUD references: `Hud.java`, `WatermarkRenderer.java`, `HotKeysRenderer.java`, `InformationRenderer.java`,
+  `TargetHudRenderer.java`, `StaffListRenderer.java`, `NotificationRenderer.java`, `MediaPlayerRenderer.java`,
+  `DragComponent.java`, `DragPositionManager.java`, `Animation.java`, `Easing.java`, `ClientUtility.java`, Silent
+  `Category.java`, and the MediaPlayerInfo jar class list/decompiled entry points needed for the compatibility audit.
+- Live Wraith HUD/render/data files: `ModuleHUD.kt`, `HudManager.kt`, `HudElement.kt`, `HudScreen.kt`, `HudConfig.kt`,
+  previous `WyvernHudElements.kt`, `HotbarStatusHud.kt`, `SkinFaceGui.kt`, `GuiAndItemCompatExtensions.kt`,
+  `ServerObserver.kt`, `ClientEvents.kt`, `ClientModule.kt`, `ModuleManager.kt`, `InputBind.kt`, `LiquidBounce.kt`,
+  `ClientTheme.kt`, and `ModuleKillAura.kt` target tracker call sites.
+
+### ClickGUI evidence and root causes
+
+- Silent `ModeSettingComponent` uses row text only for option state. The selected state is text-color based
+  (`100,200,100` in source), and no selected rounded row background is drawn.
+- Wraith had added a selected rounded background at `optionRect.y + 1.5f`, height `8f`, while text was drawn at
+  `optionRect.y + 1f`, size `5.4f`; those independent offsets ignored Wraith MSDF visible-height behavior.
+- Silent `MultiBooleanSettingComponent` draws an `8 x 8` rounded outer box and, when active, a centered `4 x 4` inner
+  fill at `outer + 2`. It does not draw a glyph, Unicode check mark, emoji, or letter `"v"`.
+- Wraith rendered a `7 x 7` active-colored outer box and body-font `"v"` with manually chosen offsets, causing the
+  checkbox mark to drift from the geometric center.
+
+### ClickGUI changes
+
+- Removed the Wraith-added selected rounded background from Mode/choice dropdown rows to match Silent source behavior.
+- Kept selected Mode state as text color only, mapped through Wraith's existing ClickGUI accent color.
+- Added metrics-aware mode row geometry in `SilentClickGuiSettingsMath.kt`, using Wraith MSDF visible height to center
+  option text inside the existing row/hit rectangle.
+- Replaced the glyph checkbox mark with a shared outer/inner rectangle primitive: `8 x 8` outer, `4 x 4` centered inner
+  fill, active fill using Wraith accent mapping.
+- Preserved option row spacing, expansion, hit rectangles, selection updates, multi-value semantics, and row click
+  behavior.
+
+### Silent HUD source behavior
+
+`Hud.java` registers these elements in source order:
+
+1. Media Player
+2. Notifications
+3. Watermark
+4. HotKeys
+5. Information
+6. Target HUD
+7. Staff List
+
+Implemented over Wraith systems:
+
+- Watermark
+- HotKeys
+- Information
+- Notifications
+- Target HUD
+- Staff List
+
+Blocked/deviated:
+
+- Media Player is not implemented. Silent depends on `dev.redstones.mediaplayerinfo.MediaPlayerInfo`; its jar contains
+  Windows native DLL code and Linux DBus session code. On Android/FCL there is no proven supported Wraith media-session
+  API, Wraith excludes JNA, and copying that dependency would risk desktop/native startup or runtime failures. No fake
+  song/player data was added.
+- Silent weather/profile/social/link data has no proven Wraith equivalent and was omitted. Watermark uses Wraith-native
+  client/version/build text, username, server address, FPS, and `ServerObserver.tps`.
+- Silent per-widget blur was not copied. The old raw GL/framebuffer blur path was not revived; compact dark rounded
+  panels are used through Wraith's supported batched GUI primitives.
+
+### Wraith mappings
+
+- Module lifecycle and settings remain in `ModuleHud`; Wraith's bind behavior is unchanged.
+- Rendering stays on `OverlayRenderEvent`, `DrawContext`, real `context.pose()` for scaling, and the existing MSDF/SDF
+  GUI primitives.
+- HUD editor/chat drag and `HudConfig` persistence remain Wraith-owned. Silent fixed/draggable flags are adapted into
+  `HudElement` and `HudScreen`; fixed Watermark/Information runtime positions do not save animated coordinates.
+- Notifications use Wraith `NotificationEvent` and `HudNotificationSink`; no second global notification bus was added.
+- Target HUD uses `ModuleKillAura.targetTracker.target` and chat-preview fallback; no Silent Aura/target manager was
+  imported.
+- TPS uses `ServerObserver.tps`; FPS uses `mc.currentFps`; server copy and coordinate copy use
+  `mc.keyboardHandler.clipboard`.
+- Player faces use Wraith's existing skin-face helper; items use Wraith/Minecraft `DrawContext` item rendering.
+- Staff list reads Minecraft `connection.onlinePlayers` and only maps the Silent prefix set inspected from source.
+- Existing independent `TotemCounter` and `ArmorDurability` hotbar overlays are preserved.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiSettings.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiSettingsMath.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleHUD.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/HudElement.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/HudManager.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/HudScreen.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/SilentHudElements.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiSettingsMathTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiStaticTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/SilentHudLayoutTest.kt`
+- this `Agent1.md` section.
+
+### Files deleted
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/WyvernHudElements.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/HudSurfaceRenderer.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/HudMaterial.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/HudAnimations.kt`
+
+### Removed old/dead HUD registrations and settings
+
+- Removed `HudMode`, `Hud1`, `Hud2`, old `Material`, `Density`, `BackgroundAlpha`, `PanelRadius`, `Shadow`, `Outline`,
+  `Potions`, and `Inventory` HUD settings/branches from `ModuleHud`.
+- Removed duplicate old Watermark/Keybinds/TargetHUD/Notification/Inventory/Potions registrations from `HudManager`.
+- Removed unreachable Wyvern element implementations and old HUD surface/material/animation helpers.
+- Preserved unrelated fixed hotbar status widgets and settings: `TotemCounter` and `ArmorDurability`.
+
+### Tests
+
+Added focused tests for:
+
+- Mode row text geometry and identical selected/unselected baselines.
+- Absence of the old selected rounded Mode background.
+- Checkbox outer/inner sizes and exact inner centering.
+- Geometry validity under current HUD/ClickGUI global scaling assumptions.
+- Hit rectangle alignment with rendered rows.
+- No production ClickGUI checkbox `"v"` or check glyph path.
+- Silent HUD registration order, implemented element set, default positions, fixed/draggable flags.
+- Target health/absorption normalization and 500 ms hold behavior.
+- Notification stacking and small-screen clamp helpers.
+- Static regressions for no old Wyvern registrations, no duplicate HUD elements, no MediaPlayerInfo dependency, no
+  desktop/AWT/shell clipboard in HUD sources, and preserved Wraith target/clipboard mappings.
+
+### Verification
+
+- `git diff --check`: passed.
+- Focused test command attempted:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache test --tests 'net.ccbluex.liquidbounce.features.module.modules.render.gui.SilentClickGuiSettingsMathTest' --tests 'net.ccbluex.liquidbounce.features.module.modules.render.gui.SilentClickGuiStaticTest' --tests 'net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.SilentHudLayoutTest'`
+- Focused tests did not execute because `compileTestKotlin` is blocked by unrelated existing test sources:
+  `SmartCriticalDecisionTest.kt` missing `calculateItemCooldownProgress`, `PointFindingKtTest.kt` missing
+  `Vec3d`/`toVector3f`, and `ItemCooldownProgressTest.kt` missing `calculateItemCooldownProgress` and
+  `ITEM_COOLDOWN_SAMPLE_TICK_DELTA`.
+- Normal test task:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache test`
+- Normal test result: same unrelated `compileTestKotlin` blockers above.
+- Production compile:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache compileKotlin`
+- Production compile result: `BUILD SUCCESSFUL`.
+- Required clean assembly:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Assembly result: `BUILD SUCCESSFUL in 2m 25s`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `1d084386b05f66427c77100a2f5e8215bb6ed0bd1ad66dcb743789eccd1dc539`.
+
+### FCL manual status
+
+Not run from this headless Termux workspace. Compilation and assembly do not prove visual fidelity. The requested FCL
+manual matrix remains pending for ClickGUI Mode rows, multi-checkbox centering, scroll/hitboxes, GUI scale `2`, scaled
+approximately `535 x 243`, HUD visibility/drag/persistence, Watermark in server states, HotKeys animation, Information
+BPS/chat movement/copy, Target HUD acquire/hold/loss/absorption/equipment, Staff List reset, Notifications
+stacking/expiry, resource reload, and FPS/resource-leak checks.
+
+### Commits
+
+- ClickGUI widget fix: `dd3ab6fb4863b0037780b1b699c0a2dd5a1148c3` -
+  `fix(clickgui): align silent choice and checkbox widgets`.
+- Silent HUD source port: `45eb788cd33b1799dc77c57b45df66539dbc4bfe` -
+  `feat(hud): port silent visual shell`.
+- Focused tests: `6c880c621c6b95fc9ab1ed689cf802fc4b6bf2e0` -
+  `test(ui): cover silent widgets and hud behavior`.
+- Documentation commit: this entry; final hash reported in the assistant response.
+- Push result: pending at entry creation; final assistant response reports the actual push result.
+
+### Superseded notes
+
+- The previous Silent ClickGUI shell notes remain valid for the real-pose/scissor crash fix, but their Mode dropdown
+  selected-pill behavior is superseded by the strict Silent source evidence: selected Mode options are color-only.
+- Previous HUD delete/revert/Wyvern cleanup notes are superseded for the main card-style HUD set. The V-Core hotbar
+  overlay note is not superseded; `TotemCounter` and `ArmorDurability` remain independent and preserved.
