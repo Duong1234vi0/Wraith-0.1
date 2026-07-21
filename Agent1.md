@@ -11702,3 +11702,9 @@ stacking/expiry, resource reload, and FPS/resource-leak checks.
   selected-pill behavior is superseded by the strict Silent source evidence: selected Mode options are color-only.
 - Previous HUD delete/revert/Wyvern cleanup notes are superseded for the main card-style HUD set. The V-Core hotbar
   overlay note is not superseded; `TotemCounter` and `ArmorDurability` remain independent and preserved.
+
+## 2026-07-21 - Silent HUD port post-push update
+
+- Documentation commit: `8619c3c63da50bd959f953cdb19eab615af9843e` - `docs(agent1): record silent hud port`.
+- Push result: succeeded, `415333371..8619c3c63 main -> main`, to `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+- Post-push documentation update: this commit, final hash reported in the assistant response.
