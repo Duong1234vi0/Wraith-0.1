@@ -55,17 +55,6 @@ class SilentHudLayoutTest {
     }
 
     @Test
-    fun `target health and absorption normalize to valid ratios`() {
-        val state = SilentHudLayout.normalizeHealth(12f, 20f, 6f)
-        assertClose(0.6f, state.healthRatio)
-        assertClose(0.3f, state.absorptionRatio)
-
-        val clamped = SilentHudLayout.normalizeHealth(Float.NaN, -1f, 30f)
-        assertClose(0f, clamped.healthRatio)
-        assertClose(1f, clamped.absorptionRatio)
-    }
-
-    @Test
     fun `target hold expires at Silent source duration`() {
         assertTrue(SilentHudLayout.targetHoldVisible(1500L, 1000L))
         assertFalse(SilentHudLayout.targetHoldVisible(1501L, 1000L))
@@ -93,7 +82,7 @@ class SilentHudLayoutTest {
             "SilentWatermarkElement()",
             "SilentHotKeysElement()",
             "SilentInformationElement()",
-            "SilentTargetHudElement()",
+            "CelestialTargetHudElement()",
             "SilentStaffListElement()",
         ).forEach { token ->
             assertEquals(1, Regex(Regex.escape(token)).findAll(manager).count(), token)
@@ -111,10 +100,10 @@ class SilentHudLayoutTest {
         assertTrue(source.contains("states.entries.removeIf"))
         assertTrue(source.contains("val contentWidth = sections.sumOf"))
         assertTrue(source.contains("hypot(motion.x, motion.z).toFloat() * 20f"))
-        assertTrue(source.contains("SilentHudLayout.normalizeHealth"))
-        assertTrue(source.contains("target.mainHandStack"))
-        assertTrue(source.contains("target.offHandStack"))
-        assertTrue(source.contains("target.armorItems.toList().asReversed()"))
+        assertTrue(source.contains("CelestialTargetHealthAnimation"))
+        assertFalse(source.contains("drawHealthCircle"))
+        assertFalse(source.contains("drawEquipment"))
+        assertFalse(source.contains("distanceValue"))
         assertTrue(source.contains("entries.removeAll"))
         assertTrue(source.contains("override fun resetState()"))
     }
