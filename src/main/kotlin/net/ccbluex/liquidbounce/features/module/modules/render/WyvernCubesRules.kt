@@ -10,8 +10,6 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.render
 
-internal data class CubesDash(val start: Float, val end: Float)
-
 internal object WyvernCubesRules {
     const val SPAWN_RADIUS = 12f
     const val BASE_SIZE = 0.18f
@@ -38,14 +36,17 @@ internal object WyvernCubesRules {
     fun isVisible(distanceSquared: Double, cameraDot: Double): Boolean =
         distanceSquared <= MAX_RENDER_DISTANCE_SQ && cameraDot >= -1.0
 
-    fun dashedIntervals(length: Float, dashLength: Float, gapLength: Float): List<CubesDash> {
-        if (length <= 0f || dashLength <= 0f || gapLength < 0f) return emptyList()
-        val result = ArrayList<CubesDash>()
+    fun dashCount(length: Float, dashLength: Float, gapLength: Float): Int {
+        if (length <= 0f || dashLength <= 0f || gapLength < 0f) return 0
+        var count = 0
         var position = 0f
         while (position < length) {
-            result += CubesDash(position, minOf(length, position + dashLength))
+            count++
             position += dashLength + gapLength
         }
-        return result
+        return count
     }
+
+    fun cubeVerticesPerParticle(size: Float): Int =
+        12 + 24 + 12 * dashCount(size * 2f, size * 0.3f, size * 0.25f) * 2
 }

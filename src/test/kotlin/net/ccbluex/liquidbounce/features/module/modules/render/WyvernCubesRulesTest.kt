@@ -50,15 +50,49 @@ class WyvernCubesRulesTest {
 
     @Test
     fun `dash segmentation and render passes match source`() {
-        assertEquals(listOf(CubesDash(0f, 0.3f), CubesDash(0.55f, 0.85f)),
-            WyvernCubesRules.dashedIntervals(1f, 0.3f, 0.25f))
+        assertEquals(2, WyvernCubesRules.dashCount(1f, 0.3f, 0.25f))
+        assertEquals(0, WyvernCubesRules.dashCount(1f, 0f, 0.25f))
         assertEquals(listOf(10f, 6f, 3.5f), WyvernCubesRules.glowScales)
         assertEquals(listOf(0.06f, 0.14f, 0.25f), WyvernCubesRules.glowAlphas)
         val module = source(MODULE)
-        assertTrue(module.contains("p.renderAlpha * 0.4F"))
+        assertTrue(module.contains("p.renderAlpha * 0.4f"))
         assertTrue(module.contains("val dashLen = s * 0.3F"))
         assertTrue(module.contains("val gapLen = s * 0.25F"))
         assertTrue(module.contains("shape == Shape.CUBES"))
+    }
+
+    @Test
+    fun `production geometry is allocation bounded and submitted as three local batches`() {
+        val module = source(MODULE)
+        val renderer = source(RENDERER)
+        assertFalse(module.contains("CubesDash"))
+        assertFalse(module.contains("dashedIntervals("))
+        assertFalse(module.contains("floatArrayOf("))
+        assertFalse(module.contains("arrayOf(\n            // front"))
+        assertTrue(module.contains("var position = 0f"))
+        assertTrue(module.contains("position += dashLen + gapLen"))
+        assertTrue(module.contains("private val localMatrix = Matrix4f()"))
+        assertFalse(module.contains("IMPULSE_DEBOUNCE_MS"))
+        assertFalse(module.contains("lastImpulseAt"))
+        assertEquals(3, CubesBatchRenderer.LOGICAL_BATCH_COUNT)
+        assertEquals(1, CubesBatchRenderer.MAX_RENDER_PASSES)
+        assertTrue(renderer.contains("DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH"))
+        assertTrue(renderer.contains("BlendFunction.LIGHTNING"))
+        assertTrue(renderer.contains("BlendFunction.TRANSLUCENT"))
+        assertEquals(1, Regex("createRenderPass\\(").findAll(renderer).count())
+        assertTrue(renderer.indexOf("buildAndUpload(glowBuilder") < renderer.indexOf("createRenderPass("))
+        assertTrue(renderer.contains("mc.textureManager.getTexture(glowTexture)"))
+    }
+
+    @Test
+    fun `vertex budgets remain finite at source count limits and minimum size`() {
+        val perParticle = WyvernCubesRules.cubeVerticesPerParticle(WyvernCubesRules.BASE_SIZE * 0.1f)
+        assertTrue(perParticle in 1..256)
+        for (count in listOf(5, 30, 100)) {
+            val vertices = perParticle.toLong() * count
+            assertTrue(vertices in 1..25_600)
+        }
+        assertEquals(0, WyvernCubesRules.cubeVerticesPerParticle(0f) - 36)
     }
 
     @Test
@@ -101,5 +135,6 @@ class WyvernCubesRulesTest {
 
     private companion object {
         const val MODULE = "src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/ModuleCubes.kt"
+        const val RENDERER = "src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/CubesBatchRenderer.kt"
     }
 }

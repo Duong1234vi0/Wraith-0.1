@@ -18,9 +18,6 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.render
 
-import com.mojang.blaze3d.vertex.BufferBuilder
-import com.mojang.blaze3d.vertex.DefaultVertexFormat
-import com.mojang.blaze3d.vertex.VertexFormat
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.event.events.AttackEntityEvent
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
@@ -29,19 +26,13 @@ import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.ClientTheme
-import net.ccbluex.liquidbounce.render.WorldRenderEnvironment
-import net.ccbluex.liquidbounce.render.compat.GlStateManager
-import net.ccbluex.liquidbounce.render.compat.RenderSystem
-import net.ccbluex.liquidbounce.render.compat.ShaderProgramKeys
-import net.ccbluex.liquidbounce.render.drawCustomMesh
-import net.ccbluex.liquidbounce.render.renderEnvironmentForWorld
-import net.ccbluex.liquidbounce.render.vertex
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.entity.*
 import net.minecraft.resources.Identifier
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.phys.Vec3
 import org.joml.Matrix4f
+import org.joml.Vector3f
 import java.util.Random
 import kotlin.math.cos
 import kotlin.math.sin
@@ -60,8 +51,6 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
     private val count by int("Count", 30, 5..100)
     private val size by float("Size", 1.0F, 0.1F..3.0F)
     private val speed by float("Speed", 1.0F, 0.1F..5.0F)
-
-    private const val IMPULSE_DEBOUNCE_MS = 75L
 
     private val GLOW_SCALES = WyvernCubesRules.glowScales
     private val GLOW_ALPHA_SCALES = WyvernCubesRules.glowAlphas
@@ -95,18 +84,22 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
     private var cg = 0.0F
     private var cb = 0.0F
     private var updateCounter = 0
-    private var lastImpulseAt = 0L
+    private val localMatrix = Matrix4f()
+    private val billboardRight = Vector3f()
+    private val billboardUp = Vector3f()
 
     override fun enable() {
         cubes.clear()
         visibleCubes.clear()
         updateCounter = 0
         lastAttackPressed = false
+        CubesBatchRenderer.clearFrame()
     }
 
     override fun disable() {
         cubes.clear()
         visibleCubes.clear()
+        CubesBatchRenderer.clearFrame()
     }
 
     @Suppress("unused")
@@ -125,9 +118,7 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
             updateCubes(player)
         }
 
-        renderEnvironmentForWorld(event.matrixStack) {
-            renderCubes(this)
-        }
+        renderCubes(event)
     }
 
     @Suppress("unused")
@@ -141,17 +132,13 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
         visibleCubes.clear()
         updateCounter = 0
         lastAttackPressed = false
+        CubesBatchRenderer.clearFrame()
     }
 
     private fun applyHitImpulseFromCrosshair() {
         if (cubes.isEmpty()) {
             return
         }
-        val now = System.currentTimeMillis()
-        if (now - lastImpulseAt < IMPULSE_DEBOUNCE_MS) {
-            return
-        }
-
         val camera = mc.gameRenderer.camera
         val origin = camera.position()
         val look = org.joml.Vector3f(0.0F, 0.0F, -1.0F).rotate(camera.rotation)
@@ -184,7 +171,6 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
         }
 
         best?.let { p ->
-            lastImpulseAt = now
             val force = WyvernCubesRules.IMPULSE_FORCE * speed
             p.vx = (p.vx + dirX * force).toFloat()
             p.vy = (p.vy + (dirY * force + WyvernCubesRules.IMPULSE_VERTICAL)).toFloat()
@@ -242,9 +228,9 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
         }
     }
 
-    private fun renderCubes(env: WorldRenderEnvironment) {
-        val cam = env.camera.position()
-        val camera = mc.gameRenderer.camera
+    private fun renderCubes(event: WorldRenderEvent) {
+        val cam = event.camera.position()
+        val camera = event.camera
         val s = WyvernCubesRules.BASE_SIZE * size
         updateThemeColor()
         prepareVisibleCubes(cam, camera)
@@ -253,41 +239,23 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
             return
         }
 
-        RenderSystem.enableBlend()
-        RenderSystem.disableCull()
-        RenderSystem.disableDepthTest()
-        RenderSystem.depthMask(false)
-
+        val isCubes = shape == Shape.CUBES
         try {
-            // Pass 1: Wyvern glow billboards (additive).
-            RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE)
-            RenderSystem.enableAdditive()
-            RenderSystem.setShaderTexture(0, glowTexture)
-            drawGlowBatch(env, s)
-
-            // Pass 2: faces.
-            val isCubes = shape == Shape.CUBES
-            RenderSystem.defaultBlendFunc()
-            RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE_MINUS_SRC_ALPHA)
+            CubesBatchRenderer.beginFrame(isCubes)
+            appendGlowBatch(cam, camera, s)
             if (isCubes) {
-                drawCubeFaces(env, s)
+                appendCubeFacesBatch(cam, s)
             } else {
-                drawTriangleFaces(env, s)
+                appendTriangleFacesBatch(cam, s)
             }
-
-            // Pass 3: dashed wireframe edges (additive).
-            RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE)
-            RenderSystem.enableAdditive()
             if (isCubes) {
-                drawCubeDashedEdges(env, s)
+                appendCubeDashedEdgesBatch(cam, s)
             } else {
-                drawTriangleDashedEdges(env, s)
+                appendTriangleDashedEdgesBatch(cam, s)
             }
+            CubesBatchRenderer.flush(event.matrixStack.last().pose(), glowTexture)
         } finally {
-            RenderSystem.depthMask(true)
-            RenderSystem.enableDepthTest()
-            RenderSystem.defaultBlendFunc()
-            RenderSystem.enableCull()
+            CubesBatchRenderer.clearFrame()
         }
     }
 
@@ -320,38 +288,29 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
         }
     }
 
-    private fun drawGlowBatch(env: WorldRenderEnvironment, s: Float) {
-        val cam = env.camera.position()
-        val rotation = mc.gameRenderer.camera.rotation
-        val right = org.joml.Vector3f(1.0F, 0.0F, 0.0F).rotate(rotation)
-        val up = org.joml.Vector3f(0.0F, 1.0F, 0.0F).rotate(rotation)
-
-        env.drawCustomMesh(
-            VertexFormat.Mode.QUADS,
-            DefaultVertexFormat.POSITION_TEX_COLOR,
-            ShaderProgramKeys.POSITION_TEX_COLOR
-        ) { matrix ->
-            for (p in visibleCubes) {
-                val px = (p.x - cam.x).toFloat()
-                val py = (p.y - cam.y).toFloat()
-                val pz = (p.z - cam.z).toFloat()
-                for (i in 0 until 3) {
-                    val scale = s * GLOW_SCALES[i] * WyvernCubesRules.GLOW_MULTIPLIER
-                    val a = (p.renderAlpha * GLOW_ALPHA_SCALES[i] * WyvernCubesRules.GLOW_MULTIPLIER)
-                        .coerceIn(0.0F, 1.0F)
-                    val argb = colorToInt(cr, cg, cb, a)
-                    val hs = scale * 0.5F
-                    val rx = right.x * hs
-                    val ry = right.y * hs
-                    val rz = right.z * hs
-                    val ux = up.x * hs
-                    val uy = up.y * hs
-                    val uz = up.z * hs
-                    vertex(matrix, px - rx + ux, py - ry + uy, pz - rz + uz).setUv(0.0F, 1.0F).setColor(argb)
-                    vertex(matrix, px + rx + ux, py + ry + uy, pz + rz + uz).setUv(1.0F, 1.0F).setColor(argb)
-                    vertex(matrix, px + rx - ux, py + ry - uy, pz + rz - uz).setUv(1.0F, 0.0F).setColor(argb)
-                    vertex(matrix, px - rx - ux, py - ry - uy, pz - rz - uz).setUv(0.0F, 0.0F).setColor(argb)
-                }
+    private fun appendGlowBatch(cam: Vec3, camera: net.minecraft.client.Camera, s: Float) {
+        billboardRight.set(1f, 0f, 0f).rotate(camera.rotation)
+        billboardUp.set(0f, 1f, 0f).rotate(camera.rotation)
+        for (p in visibleCubes) {
+            val px = (p.x - cam.x).toFloat()
+            val py = (p.y - cam.y).toFloat()
+            val pz = (p.z - cam.z).toFloat()
+            for (index in GLOW_SCALES.indices) {
+                val scale = s * GLOW_SCALES[index] * WyvernCubesRules.GLOW_MULTIPLIER
+                val alpha = (p.renderAlpha * GLOW_ALPHA_SCALES[index] * WyvernCubesRules.GLOW_MULTIPLIER)
+                    .coerceIn(0f, 1f)
+                val color = colorToInt(cr, cg, cb, alpha)
+                val half = scale * 0.5f
+                val rx = billboardRight.x * half
+                val ry = billboardRight.y * half
+                val rz = billboardRight.z * half
+                val ux = billboardUp.x * half
+                val uy = billboardUp.y * half
+                val uz = billboardUp.z * half
+                CubesBatchRenderer.appendGlow(px - rx + ux, py - ry + uy, pz - rz + uz, 0f, 1f, color)
+                CubesBatchRenderer.appendGlow(px + rx + ux, py + ry + uy, pz + rz + uz, 1f, 1f, color)
+                CubesBatchRenderer.appendGlow(px + rx - ux, py + ry - uy, pz + rz - uz, 1f, 0f, color)
+                CubesBatchRenderer.appendGlow(px - rx - ux, py - ry - uy, pz - rz - uz, 0f, 0f, color)
             }
         }
     }
@@ -360,133 +319,86 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
         return WyvernCubesRules.alpha(p.life, p.maxLife)
     }
 
-    private fun drawCubeFaces(env: WorldRenderEnvironment, s: Float) {
-        if (visibleCubes.none { it.renderAlpha >= 0.025F }) {
-            return
-        }
-        val cam = env.camera.position()
-        env.drawCustomMesh(
-            VertexFormat.Mode.QUADS,
-            DefaultVertexFormat.POSITION_COLOR,
-            ShaderProgramKeys.POSITION_COLOR
-        ) { matrix ->
-            for (p in visibleCubes) {
-                val a = p.renderAlpha * 0.4F
-                if (a < 0.01F) {
-                    continue
-                }
-                val m = p.localMatrix(matrix, cam)
-                appendCubeFaces(this, m, s, colorToInt(cr, cg, cb, a))
-            }
+    private fun appendCubeFacesBatch(cam: Vec3, s: Float) {
+        for (p in visibleCubes) {
+            val alpha = p.renderAlpha * 0.4f
+            if (alpha < 0.01f) continue
+            p.setLocalMatrix(localMatrix, cam)
+            appendCubeFaces(localMatrix, s, colorToInt(cr, cg, cb, alpha))
         }
     }
 
-    private fun drawTriangleFaces(env: WorldRenderEnvironment, s: Float) {
-        if (visibleCubes.none { it.renderAlpha >= 0.025F }) {
-            return
-        }
-        val cam = env.camera.position()
-        env.drawCustomMesh(
-            VertexFormat.Mode.TRIANGLES,
-            DefaultVertexFormat.POSITION_COLOR,
-            ShaderProgramKeys.POSITION_COLOR
-        ) { matrix ->
-            for (p in visibleCubes) {
-                val a = p.renderAlpha * 0.4F
-                if (a < 0.01F) {
-                    continue
-                }
-                val m = p.localMatrix(matrix, cam)
-                appendTriangleFaces(this, m, s, colorToInt(cr, cg, cb, a))
-            }
+    private fun appendTriangleFacesBatch(cam: Vec3, s: Float) {
+        for (p in visibleCubes) {
+            val alpha = p.renderAlpha * 0.4f
+            if (alpha < 0.01f) continue
+            p.setLocalMatrix(localMatrix, cam)
+            appendTriangleFaces(localMatrix, s, colorToInt(cr, cg, cb, alpha))
         }
     }
 
-    private fun drawCubeDashedEdges(env: WorldRenderEnvironment, s: Float) {
-        val cam = env.camera.position()
-        env.drawCustomMesh(
-            VertexFormat.Mode.DEBUG_LINES,
-            DefaultVertexFormat.POSITION_COLOR,
-            ShaderProgramKeys.POSITION_COLOR
-        ) { matrix ->
-            for (p in visibleCubes) {
-                val m = p.localMatrix(matrix, cam)
-                appendCubeDashedEdges(this, m, s, p.renderAlpha)
-            }
+    private fun appendCubeDashedEdgesBatch(cam: Vec3, s: Float) {
+        for (p in visibleCubes) {
+            p.setLocalMatrix(localMatrix, cam)
+            appendCubeDashedEdges(localMatrix, s, p.renderAlpha)
         }
     }
 
-    private fun drawTriangleDashedEdges(env: WorldRenderEnvironment, s: Float) {
-        val cam = env.camera.position()
-        env.drawCustomMesh(
-            VertexFormat.Mode.DEBUG_LINES,
-            DefaultVertexFormat.POSITION_COLOR,
-            ShaderProgramKeys.POSITION_COLOR
-        ) { matrix ->
-            for (p in visibleCubes) {
-                val m = p.localMatrix(matrix, cam)
-                appendTriangleDashedEdges(this, m, s, p.renderAlpha)
-            }
+    private fun appendTriangleDashedEdgesBatch(cam: Vec3, s: Float) {
+        for (p in visibleCubes) {
+            p.setLocalMatrix(localMatrix, cam)
+            appendTriangleDashedEdges(localMatrix, s, p.renderAlpha)
         }
     }
 
-    private fun appendCubeFaces(buffer: BufferBuilder, m: Matrix4f, s: Float, color: Int) {
-        // 6 faces, 4 verts each (QUADS).
-        val v = arrayOf(
-            // front (+z)
-            floatArrayOf(-s, -s, s), floatArrayOf(s, -s, s), floatArrayOf(s, s, s), floatArrayOf(-s, s, s),
-            // back (-z)
-            floatArrayOf(s, -s, -s), floatArrayOf(-s, -s, -s), floatArrayOf(-s, s, -s), floatArrayOf(s, s, -s),
-            // top (+y)
-            floatArrayOf(-s, s, s), floatArrayOf(s, s, s), floatArrayOf(s, s, -s), floatArrayOf(-s, s, -s),
-            // bottom (-y)
-            floatArrayOf(-s, -s, -s), floatArrayOf(s, -s, -s), floatArrayOf(s, -s, s), floatArrayOf(-s, -s, s),
-            // right (+x)
-            floatArrayOf(s, -s, s), floatArrayOf(s, -s, -s), floatArrayOf(s, s, -s), floatArrayOf(s, s, s),
-            // left (-x)
-            floatArrayOf(-s, -s, -s), floatArrayOf(-s, -s, s), floatArrayOf(-s, s, s), floatArrayOf(-s, s, -s)
-        )
-        for (p in v) {
-            buffer.vertex(m, p[0], p[1], p[2]).setColor(color)
-        }
+    private fun appendCubeFaces(m: Matrix4f, s: Float, color: Int) {
+        face(m, -s, -s, s, color); face(m, s, -s, s, color); face(m, s, s, s, color); face(m, -s, s, s, color)
+        face(m, s, -s, -s, color); face(m, -s, -s, -s, color); face(m, -s, s, -s, color); face(m, s, s, -s, color)
+        face(m, -s, s, s, color); face(m, s, s, s, color); face(m, s, s, -s, color); face(m, -s, s, -s, color)
+        face(m, -s, -s, -s, color); face(m, s, -s, -s, color); face(m, s, -s, s, color); face(m, -s, -s, s, color)
+        face(m, s, -s, s, color); face(m, s, -s, -s, color); face(m, s, s, -s, color); face(m, s, s, s, color)
+        face(m, -s, -s, -s, color); face(m, -s, -s, s, color); face(m, -s, s, s, color); face(m, -s, s, -s, color)
     }
 
-    private fun appendTriangleFaces(buffer: BufferBuilder, m: Matrix4f, s: Float, color: Int) {
+    private fun appendTriangleFaces(m: Matrix4f, s: Float, color: Int) {
         val bottom = -s
         val halfBase = s * 0.866F
-        val apex = floatArrayOf(0.0F, s, 0.0F)
-        val c1 = floatArrayOf(-halfBase, bottom, halfBase)
-        val c2 = floatArrayOf(halfBase, bottom, halfBase)
-        val c3 = floatArrayOf(halfBase, bottom, -halfBase)
-        val c4 = floatArrayOf(-halfBase, bottom, -halfBase)
-        // 4 side triangles + 2 base triangles.
-        val tris = arrayOf(
-            apex, c1, c2,
-            apex, c2, c3,
-            apex, c3, c4,
-            apex, c4, c1,
-            c1, c2, c3,
-            c1, c3, c4
-        )
-        for (p in tris) {
-            buffer.vertex(m, p[0], p[1], p[2]).setColor(color)
-        }
+        triangle(m, 0f, s, 0f, -halfBase, bottom, halfBase, halfBase, bottom, halfBase, color)
+        triangle(m, 0f, s, 0f, halfBase, bottom, halfBase, halfBase, bottom, -halfBase, color)
+        triangle(m, 0f, s, 0f, halfBase, bottom, -halfBase, -halfBase, bottom, -halfBase, color)
+        triangle(m, 0f, s, 0f, -halfBase, bottom, -halfBase, -halfBase, bottom, halfBase, color)
+        triangle(m, -halfBase, bottom, halfBase, halfBase, bottom, halfBase, halfBase, bottom, -halfBase, color)
+        triangle(m, -halfBase, bottom, halfBase, halfBase, bottom, -halfBase, -halfBase, bottom, -halfBase, color)
     }
 
-    private fun appendCubeDashedEdges(buffer: BufferBuilder, m: Matrix4f, s: Float, alpha: Float) {
+    private fun face(m: Matrix4f, x: Float, y: Float, z: Float, color: Int) =
+        CubesBatchRenderer.appendFace(m, x, y, z, color)
+
+    @Suppress("LongParameterList")
+    private fun triangle(
+        m: Matrix4f,
+        x1: Float, y1: Float, z1: Float,
+        x2: Float, y2: Float, z2: Float,
+        x3: Float, y3: Float, z3: Float,
+        color: Int,
+    ) {
+        face(m, x1, y1, z1, color); face(m, x2, y2, z2, color); face(m, x3, y3, z3, color)
+    }
+
+    private fun appendCubeDashedEdges(m: Matrix4f, s: Float, alpha: Float) {
         val color = colorToInt(minOf(1.0F, cr * 1.5F), minOf(1.0F, cg * 1.5F), minOf(1.0F, cb * 1.5F), alpha)
         val dashLen = s * 0.3F
         val gapLen = s * 0.25F
         for (edge in CUBE_EDGES) {
             dashedSegment(
-                buffer, m, color, dashLen, gapLen,
+                m, color, dashLen, gapLen,
                 edge[0] * s, edge[1] * s, edge[2] * s,
                 edge[3] * s, edge[4] * s, edge[5] * s
             )
         }
     }
 
-    private fun appendTriangleDashedEdges(buffer: BufferBuilder, m: Matrix4f, s: Float, alpha: Float) {
+    private fun appendTriangleDashedEdges(m: Matrix4f, s: Float, alpha: Float) {
         val color = colorToInt(minOf(1.0F, cr * 1.5F), minOf(1.0F, cg * 1.5F), minOf(1.0F, cb * 1.5F), alpha)
         val dashLen = s * 0.3F
         val gapLen = s * 0.25F
@@ -500,30 +412,33 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
             val x2 = trianglePointX(edge[1].toInt(), halfBase)
             val y2 = if (edge[1].toInt() == 0) top else bottom
             val z2 = trianglePointZ(edge[1].toInt(), halfBase)
-            dashedSegment(buffer, m, color, dashLen, gapLen, x1, y1, z1, x2, y2, z2)
+            dashedSegment(m, color, dashLen, gapLen, x1, y1, z1, x2, y2, z2)
         }
     }
 
     @Suppress("LongParameterList")
     private fun dashedSegment(
-        buffer: BufferBuilder, m: Matrix4f, color: Int, dashLen: Float, gapLen: Float,
+        m: Matrix4f, color: Int, dashLen: Float, gapLen: Float,
         x1: Float, y1: Float, z1: Float, x2: Float, y2: Float, z2: Float
     ) {
         val dx = x2 - x1
         val dy = y2 - y1
         val dz = z2 - z1
         val len = sqrt(dx * dx + dy * dy + dz * dz)
-        if (len < 0.001F) {
-            return
-        }
+        if (len < 0.001f || dashLen <= 0f || gapLen < 0f) return
         val nx = dx / len
         val ny = dy / len
         val nz = dz / len
-        for (interval in WyvernCubesRules.dashedIntervals(len, dashLen, gapLen)) {
-            buffer.vertex(m, x1 + nx * interval.start, y1 + ny * interval.start, z1 + nz * interval.start)
-                .setColor(color)
-            buffer.vertex(m, x1 + nx * interval.end, y1 + ny * interval.end, z1 + nz * interval.end)
-                .setColor(color)
+        var position = 0f
+        while (position < len) {
+            val end = minOf(len, position + dashLen)
+            CubesBatchRenderer.appendEdge(
+                m,
+                x1 + nx * position, y1 + ny * position, z1 + nz * position,
+                x1 + nx * end, y1 + ny * end, z1 + nz * end,
+                color,
+            )
+            position += dashLen + gapLen
         }
     }
 
@@ -606,14 +521,13 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
         val maxLife: Int = life
         var renderAlpha: Float = 0.0F
 
-        /** Camera-relative local matrix with this particle's translate + XYZ rotation. */
-        fun localMatrix(base: Matrix4f, cam: Vec3): Matrix4f {
-            val m = Matrix4f(base)
-            m.translate((x - cam.x).toFloat(), (y - cam.y).toFloat(), (z - cam.z).toFloat())
-            m.rotate(Math.toRadians(rotX.toDouble()).toFloat(), 1.0F, 0.0F, 0.0F)
-            m.rotate(Math.toRadians(rotY.toDouble()).toFloat(), 0.0F, 1.0F, 0.0F)
-            m.rotate(Math.toRadians(rotZ.toDouble()).toFloat(), 0.0F, 0.0F, 1.0F)
-            return m
+        /** Reuses one render-thread scratch matrix for this particle's camera-relative transform. */
+        fun setLocalMatrix(matrix: Matrix4f, cam: Vec3) {
+            matrix.identity()
+                .translate((x - cam.x).toFloat(), (y - cam.y).toFloat(), (z - cam.z).toFloat())
+                .rotate(Math.toRadians(rotX.toDouble()).toFloat(), 1.0F, 0.0F, 0.0F)
+                .rotate(Math.toRadians(rotY.toDouble()).toFloat(), 0.0F, 1.0F, 0.0F)
+                .rotate(Math.toRadians(rotZ.toDouble()).toFloat(), 0.0F, 0.0F, 1.0F)
         }
     }
 
