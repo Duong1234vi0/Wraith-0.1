@@ -19,7 +19,6 @@
 package net.ccbluex.liquidbounce.features.module.modules.render
 import net.ccbluex.liquidbounce.utils.entity.*
 
-import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.event.EventManager
 import net.ccbluex.liquidbounce.event.events.ModuleToggleEvent
 import net.ccbluex.liquidbounce.event.events.MouseButtonEvent
@@ -36,39 +35,17 @@ import net.ccbluex.liquidbounce.features.misc.HideAppearance.isDestructed
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudConfig
-import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudDensity
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudElement
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudManager
-import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudMaterial
-import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudMaterialPreset
-import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudMaterials
-import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HudSurfaceRenderer
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HotbarStatusHud
 import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.HotbarStatusHudPulseState
+import net.ccbluex.liquidbounce.features.module.modules.render.gui.hud.SilentHudElementKind
 import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.minecraft.client.gui.screens.ChatScreen
 import org.lwjgl.glfw.GLFW
 import kotlin.math.max
 import kotlin.math.roundToInt
-
-enum class WyvernHudMode(override val choiceName: String) : NamedChoice {
-    HUD1("Hud1"),
-    HUD2("Hud2")
-}
-
-enum class WyvernHudElement {
-    WATERMARK,
-    ARRAY_LIST,
-    POTIONS,
-    STAFF,
-    NOTIFICATIONS,
-    INFORMATION,
-    KEYBINDS,
-    TARGET_HUD,
-    INVENTORY,
-    HOTBAR
-}
 
 /**
  * Module HUD
@@ -89,24 +66,14 @@ object ModuleHud : ClientModule("HUD", Category.RENDER, state = true, hide = tru
 
     val centeredCrosshair by boolean("CenteredCrosshair", false)
 
-    val wyvernHudMode by enumChoice("HudMode", WyvernHudMode.HUD1)
-    val hudMaterial by enumChoice("Material", HudMaterialPreset.MODERN)
-    val hudDensity by enumChoice("Density", HudDensity.NORMAL)
-    val backgroundAlpha by float("BackgroundAlpha", 1f, 0.55f..1f)
-    val panelRadius by float("PanelRadius", 5f, 3f..9f)
-    val shadow by boolean("Shadow", true)
-    val shadowStrength by float("ShadowStrength", 0.16f, 0f..1f)
-    private val themeEdge by boolean("Outline", true)
-    private val edgeGlow by boolean("EdgeGlow", true)
-    private val edgeStrength by float("OutlineAlpha", 0.45f, 0f..1f)
     val hudScale by float("HUDScale", 1f, 0.7f..1.2f)
 
     private val watermark by boolean("Watermark", true)
-    private val potions by boolean("Potions", true)
     private val notifications by boolean("Notifications", true)
-    private val keybinds by boolean("Keybinds", true)
+    private val hotkeys by boolean("HotKeys", true)
+    private val information by boolean("Information", true)
     private val targetHud by boolean("TargetHUD", true)
-    private val inventory by boolean("Inventory", false)
+    private val staffList by boolean("StaffList", true)
     private val totemCounter by boolean("TotemCounter", true)
     private val armorDurability by boolean("ArmorDurability", true)
 
@@ -118,29 +85,6 @@ object ModuleHud : ClientModule("HUD", Category.RENDER, state = true, hide = tru
     private var chatDragOffsetY = 0
     private var chatMouseX = 0
     private var chatMouseY = 0
-    
-    val currentMaterial: HudMaterial
-        get() = HudMaterials.preset(hudMaterial).copy(
-            radius = panelRadius,
-        )
-
-    val densityFactor: Float
-        get() = when (hudDensity) {
-            HudDensity.COMPACT -> 0.88f
-            HudDensity.NORMAL -> 1f
-        }
-
-    val shadowEnabled: Boolean
-        get() = shadow
-
-    val themeEdgeEnabled: Boolean
-        get() = themeEdge
-
-    val edgeGlowEnabled: Boolean
-        get() = edgeGlow
-
-    val themeEdgeStrength: Float
-        get() = edgeStrength.coerceIn(0f, 1f)
 
     val isBlurEffectActive: Boolean
         get() = false
@@ -153,18 +97,14 @@ object ModuleHud : ClientModule("HUD", Category.RENDER, state = true, hide = tru
         // Element visibility is read directly from the HUD module values.
     }
 
-    fun isWyvernElementVisible(element: WyvernHudElement): Boolean {
+    fun isSilentElementVisible(element: SilentHudElementKind): Boolean {
         return when (element) {
-            WyvernHudElement.WATERMARK -> watermark
-            WyvernHudElement.ARRAY_LIST -> false
-            WyvernHudElement.POTIONS -> potions
-            WyvernHudElement.STAFF -> false
-            WyvernHudElement.NOTIFICATIONS -> notifications
-            WyvernHudElement.INFORMATION -> false
-            WyvernHudElement.KEYBINDS -> keybinds
-            WyvernHudElement.TARGET_HUD -> targetHud
-            WyvernHudElement.INVENTORY -> inventory
-            WyvernHudElement.HOTBAR -> false
+            SilentHudElementKind.WATERMARK -> watermark
+            SilentHudElementKind.HOTKEYS -> hotkeys
+            SilentHudElementKind.INFORMATION -> information
+            SilentHudElementKind.NOTIFICATIONS -> notifications
+            SilentHudElementKind.TARGET_HUD -> targetHud
+            SilentHudElementKind.STAFF_LIST -> staffList
         }
     }
 
@@ -177,7 +117,6 @@ object ModuleHud : ClientModule("HUD", Category.RENDER, state = true, hide = tru
         // Ensure elements are initialized
         HudManager.initialize()
         syncElementSettings()
-        HudSurfaceRenderer.clearPendingEdges()
 
         // #Edit By Claude: the editor path used to live on ScreenRenderEvent, which
         // is never fired by any mixin, so the HUD vanished while chat was open. The
@@ -199,7 +138,6 @@ object ModuleHud : ClientModule("HUD", Category.RENDER, state = true, hide = tru
                 element.renderPreviewScaled(event.context)
             }
         }
-        HudSurfaceRenderer.flushThemeEdges(event.context)
         HotbarStatusHud.render(
             event.context,
             mc.player,
@@ -222,15 +160,18 @@ object ModuleHud : ClientModule("HUD", Category.RENDER, state = true, hide = tru
     @Suppress("unused")
     private val hotbarStatusWorldChangeHandler = handler<WorldChangeEvent> {
         hotbarStatusPulse.reset()
+        HudManager.resetTransient()
     }
 
     @Suppress("unused")
     private val hotbarStatusDisconnectHandler = handler<DisconnectEvent> {
         hotbarStatusPulse.reset()
+        HudManager.resetTransient()
     }
 
     override fun disable() {
         hotbarStatusPulse.reset()
+        HudManager.resetTransient()
     }
 
     @Suppress("unused")
@@ -260,12 +201,18 @@ object ModuleHud : ClientModule("HUD", Category.RENDER, state = true, hide = tru
         }
 
         val scale = hudScale.coerceIn(0.7f, 1.2f)
-        element.x = (chatMouseX - chatDragOffsetX * scale)
+        val nextX = (chatMouseX - chatDragOffsetX * scale)
             .roundToInt()
             .coerceIn(0, max(0, (mc.window.scaledWidth - element.width * scale).roundToInt()))
-        element.y = (chatMouseY - chatDragOffsetY * scale)
+        val nextY = (chatMouseY - chatDragOffsetY * scale)
             .roundToInt()
             .coerceIn(0, max(0, (mc.window.scaledHeight - element.height * scale).roundToInt()))
+        if (element.allowDragX) {
+            element.x = nextX
+        }
+        if (element.allowDragY) {
+            element.y = nextY
+        }
     }
 
     @Suppress("unused")
@@ -278,11 +225,19 @@ object ModuleHud : ClientModule("HUD", Category.RENDER, state = true, hide = tru
 
         when (event.action) {
             GLFW.GLFW_PRESS -> {
-                val element = HudManager.elements
+                if (HudManager.elements.asReversed().any {
+                        it.isVisibleInHud() && it.onChatClick(chatMouseX, chatMouseY, event.button)
+                    }
+                ) {
+                    return@handler
+                }
+
+                val selected = HudManager.elements
                     .asReversed()
                     .firstOrNull { it.isVisibleInHud() && it.isMouseOver(chatMouseX, chatMouseY) }
+                val element = selected?.takeIf { it.draggable }
 
-                chatSelectedElement = element
+                chatSelectedElement = selected
                 chatDraggingElement = element
                 if (element != null) {
                     val scale = hudScale.coerceIn(0.7f, 1.2f)

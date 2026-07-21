@@ -56,7 +56,9 @@ class HudScreen : Screen(Component.literal("HUD Editor")) {
         
         // Render all HUD elements
         for (element in hudElements) {
-            element.renderScaled(context, element == selectedElement)
+            if (element.isVisibleInHud()) {
+                element.renderScaled(context, element == selectedElement)
+            }
         }
         
         // Render instructions
@@ -113,10 +115,10 @@ class HudScreen : Screen(Component.literal("HUD Editor")) {
         // Find clicked element
         selectedElement = null
         for (element in hudElements.reversed()) { // Check from top to bottom
-            if (element.isMouseOver(intMouseX, intMouseY)) {
+            if (element.isVisibleInHud() && element.isMouseOver(intMouseX, intMouseY)) {
                 selectedElement = element
                 
-                if (button == 0) { // Left click - start dragging
+                if (button == 0 && element.draggable) { // Left click - start dragging
                     isDragging = true
                     val scale = ModuleHud.hudScale.coerceIn(0.7f, 1.2f)
                     dragOffsetX = ((intMouseX - element.x) / scale).toInt()
@@ -138,24 +140,27 @@ class HudScreen : Screen(Component.literal("HUD Editor")) {
 
     fun mouseDragged(mouseX: Double, mouseY: Double, button: Int, deltaX: Double, deltaY: Double): Boolean {
         if (isDragging && selectedElement != null) {
+            val element = selectedElement ?: return false
             val scale = ModuleHud.hudScale.coerceIn(0.7f, 1.2f)
             val newX = (mouseX - dragOffsetX * scale).toInt()
             val newY = (mouseY - dragOffsetY * scale).toInt()
             
             // Snap to grid using config
             val snapped = GuiConfig.getGridSnappedPosition(newX, newY)
-            selectedElement!!.x = snapped.first
-            selectedElement!!.y = snapped.second
+            if (element.allowDragX) {
+                element.x = snapped.first
+            }
+            if (element.allowDragY) {
+                element.y = snapped.second
+            }
             
             // Keep within bounds
-            selectedElement!!.x = selectedElement!!.x.coerceIn(
-                0,
-                (width - selectedElement!!.width * scale).toInt().coerceAtLeast(0)
-            )
-            selectedElement!!.y = selectedElement!!.y.coerceIn(
-                0,
-                (height - selectedElement!!.height * scale).toInt().coerceAtLeast(0)
-            )
+            if (element.allowDragX) {
+                element.x = element.x.coerceIn(0, (width - element.width * scale).toInt().coerceAtLeast(0))
+            }
+            if (element.allowDragY) {
+                element.y = element.y.coerceIn(0, (height - element.height * scale).toInt().coerceAtLeast(0))
+            }
             
             return true
         }
