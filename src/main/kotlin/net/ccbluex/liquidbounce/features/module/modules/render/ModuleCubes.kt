@@ -17,15 +17,13 @@
  * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
  */
 package net.ccbluex.liquidbounce.features.module.modules.render
-import net.ccbluex.liquidbounce.utils.entity.*
 
 import com.mojang.blaze3d.vertex.BufferBuilder
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
-import com.mojang.blaze3d.vertex.VertexConsumer
 import com.mojang.blaze3d.vertex.VertexFormat
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.event.events.AttackEntityEvent
-import net.ccbluex.liquidbounce.event.events.MouseButtonEvent
+import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
@@ -38,80 +36,35 @@ import net.ccbluex.liquidbounce.render.compat.ShaderProgramKeys
 import net.ccbluex.liquidbounce.render.drawCustomMesh
 import net.ccbluex.liquidbounce.render.renderEnvironmentForWorld
 import net.ccbluex.liquidbounce.render.vertex
-import net.ccbluex.liquidbounce.utils.client.logger
 import net.ccbluex.liquidbounce.utils.client.mc
-import net.ccbluex.liquidbounce.utils.client.registerDynamicImageFromResources
-import net.minecraft.client.renderer.rendertype.RenderTypes
-import net.minecraft.client.renderer.texture.OverlayTexture
+import net.ccbluex.liquidbounce.utils.entity.*
 import net.minecraft.resources.Identifier
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.phys.Vec3
 import org.joml.Matrix4f
-import org.lwjgl.glfw.GLFW
 import java.util.Random
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Cubes — skidded 1:1 from wonderful-1.0.0.jar
- * (fun.wonderful.client.modules.impl.render.Cubes).
- *
- * Floating 3D cubes / triangles drifting around the player, with a glow
- * bloom underlay, faint faces and dashed wireframe edges. Two animations
- * (Scatter / Falling) and two shapes (Cubes / Triangles). Attacking pushes
- * the cube under the crosshair away (hit impulse).
- *
- * Wonderful drew with the raw Tessellator + RenderSystem.setShader(
- * field_53880=POSITION_TEX_COLOR / field_53876=POSITION_COLOR); mapped onto
- * the fork's drawCustomMesh paths. Uses wonderful's OWN bloom.png asset.
- *
- * #Edit By Claude 2026-06-11: full skid port.
+ * Wyvern-DLC Cubes behavior adapted to Wraith's supported world renderer.
  */
 @Suppress("MagicNumber", "TooManyFunctions")
 object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
 
-    // #Edit By Codex 2026-06-13: guard Wonderful bloom so missing assets cannot crash ModuleManager startup.
-    private var glowTexture: Identifier? = null
-    private var glowTextureFailed = false
+    private val glowTexture = Identifier.fromNamespaceAndPath("liquidbounce", "icons/glow.png")
 
-    private fun glowTexture(): Identifier? {
-        if (glowTextureFailed) {
-            return null
-        }
-
-        glowTexture?.let { return it }
-
-        val texture = Identifier.fromNamespaceAndPath("liquidbounce", "wonderful-cubes-bloom")
-        return runCatching {
-            texture.apply { registerDynamicImageFromResources("wonderful/particle/bloom.png") }
-        }.onFailure { throwable ->
-            glowTextureFailed = true
-            logger.error("Failed to load Cubes bloom texture; rendering Cubes without the glow pass.", throwable)
-        }.getOrNull()?.also {
-            glowTexture = it
-        }
-    }
-
-    // #Edit By Codex 2026-06-19: Cubes color follows the shared client theme instead of a manual hex setting.
     private val animation by enumChoice("Animation", Animation.SCATTER)
     private val shape by enumChoice("Shape", Shape.CUBES)
     private val count by int("Count", 30, 5..100)
     private val size by float("Size", 1.0F, 0.1F..3.0F)
     private val speed by float("Speed", 1.0F, 0.1F..5.0F)
-    private val lifeTime by float("LifeTime", 1.0F, 0.5F..6.0F)
 
-    private const val SPAWN_RADIUS = 12.0F
-    private const val PARTICLE_SIZE = 0.18F
-    private const val PARTICLE_SPEED = 0.25F
-    private const val GLOW_INTENSITY = 1.7F
-    private const val MAX_RENDER_DISTANCE_SQ = 900.0F
-    private const val FULL_BRIGHT = 0xF000F0
-    private const val THEME_CYCLE_MS = 2200L
     private const val IMPULSE_DEBOUNCE_MS = 75L
 
-    private val GLOW_SCALES = floatArrayOf(10.0F, 6.0F, 3.5F)
-    private val GLOW_ALPHA_SCALES = floatArrayOf(0.06F, 0.14F, 0.25F)
+    private val GLOW_SCALES = WyvernCubesRules.glowScales
+    private val GLOW_ALPHA_SCALES = WyvernCubesRules.glowAlphas
 
     // 12 cube edges as [x1,y1,z1, x2,y2,z2] in unit (-1..1) space.
     private val CUBE_EDGES = arrayOf(
@@ -142,12 +95,13 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
     private var cg = 0.0F
     private var cb = 0.0F
     private var updateCounter = 0
-    private var shaderPassRendered = false
-    private var shaderPassDisabled = false
     private var lastImpulseAt = 0L
 
     override fun enable() {
         cubes.clear()
+        visibleCubes.clear()
+        updateCounter = 0
+        lastAttackPressed = false
     }
 
     override fun disable() {
@@ -167,75 +121,26 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
         lastAttackPressed = attackPressed
 
         updateCounter++
-        if (updateCounter % 2 == 0) {
+        if (WyvernCubesRules.shouldUpdate(updateCounter)) {
             updateCubes(player)
         }
 
-        val skipGlow = shaderPassRendered
-        if (shaderPassRendered) {
-            shaderPassRendered = false
-        }
-
         renderEnvironmentForWorld(event.matrixStack) {
-            renderCubes(this, event, skipGlow)
+            renderCubes(this)
         }
     }
 
     @Suppress("unused")
     private val attackHandler = handler<AttackEntityEvent> {
-        // #Edit By Codex 2026-06-19: restore click-push even when the attack click is consumed by
-        // the normal interaction path before the render-loop key edge can see it.
         applyHitImpulseFromCrosshair()
     }
 
     @Suppress("unused")
-    private val mouseButtonHandler = handler<MouseButtonEvent> { event ->
-        // #Edit By Codex 2026-06-19: Cubes are visual particles, not entities, so empty-space/cube
-        // clicks need the raw attack mouse press in addition to AttackEntityEvent.
-        if (event.action == GLFW.GLFW_PRESS && event.key == mc.options.attackKey.key) {
-            applyHitImpulseFromCrosshair()
-        }
-    }
-
-    @JvmStatic
-    fun renderShaderWorldPass(cameraPos: Vec3) {
-        shaderPassRendered = false
-        if (shaderPassDisabled || !running || cubes.isEmpty() || !IrisShaderPack.inUse()) {
-            return
-        }
-
-        val camera = mc.gameRenderer.camera
-        prepareVisibleCubes(cameraPos, camera)
-        if (visibleCubes.isEmpty()) {
-            return
-        }
-
-        val texture = glowTexture()
-        val provider = mc.renderBuffers().bufferSource()
-        val s = PARTICLE_SIZE * size
-        updateThemeColor()
-
-        runCatching {
-            var rendered = false
-            try {
-                // #Edit By Codex 2026-06-19: shader-world Cubes glow renders before Iris final composite.
-                // The normal WorldRenderEvent still draws the accepted faces/wireframe, but skips its late glow.
-                texture?.let {
-                    drawShaderGlowBatch(
-                        provider.getBuffer(RenderTypes.entityTranslucentEmissive(it, false)),
-                        cameraPos,
-                        s
-                    )
-                    rendered = true
-                }
-            } finally {
-                provider.endBatch()
-            }
-            shaderPassRendered = rendered
-        }.onFailure { throwable ->
-            shaderPassDisabled = true
-            logger.error("Cubes shader world pass failed; falling back to the normal renderer.", throwable)
-        }
+    private val worldChangeHandler = handler<WorldChangeEvent> {
+        cubes.clear()
+        visibleCubes.clear()
+        updateCounter = 0
+        lastAttackPressed = false
     }
 
     private fun applyHitImpulseFromCrosshair() {
@@ -249,9 +154,6 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
 
         val camera = mc.gameRenderer.camera
         val origin = camera.position()
-        // #Edit By Claude 2026-06-11: Camera.yRot/xRot are private on 1.26.2, so derive the look
-        // direction from the camera rotation quaternion (forward = -Z rotated by the camera rotation),
-        // matching the fork's existing TargetESP approach.
         val look = org.joml.Vector3f(0.0F, 0.0F, -1.0F).rotate(camera.rotation)
         val dirX = look.x.toDouble()
         val dirY = look.y.toDouble()
@@ -264,7 +166,7 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
             val opY = p.y - origin.y
             val opZ = p.z - origin.z
             val t = opX * dirX + opY * dirY + opZ * dirZ
-            if (t < 0.0 || t > 128.0) {
+            if (t < 0.0 || t > WyvernCubesRules.RAY_RANGE) {
                 continue
             }
             val cx = origin.x + dirX * t
@@ -274,7 +176,7 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
             val dy = p.y - cy
             val dz = p.z - cz
             val distSq = dx * dx + dy * dy + dz * dz
-            if (distSq > 1.32 || t >= bestT) {
+            if (distSq > WyvernCubesRules.RAY_DISTANCE_SQ || t >= bestT) {
                 continue
             }
             bestT = t
@@ -283,9 +185,9 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
 
         best?.let { p ->
             lastImpulseAt = now
-            val force = 0.08 * speed
+            val force = WyvernCubesRules.IMPULSE_FORCE * speed
             p.vx = (p.vx + dirX * force).toFloat()
-            p.vy = (p.vy + (dirY * force + 0.02)).toFloat()
+            p.vy = (p.vy + (dirY * force + WyvernCubesRules.IMPULSE_VERTICAL)).toFloat()
             p.vz = (p.vz + dirZ * force).toFloat()
         }
     }
@@ -300,10 +202,10 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
             cubes.subList(target, currentSize).clear()
         }
 
-        val spd = PARTICLE_SPEED * speed
+        val spd = WyvernCubesRules.BASE_SPEED * speed
         val falling = animation == Animation.FALLING
         val playerPos = player.position()
-        val maxRSq = SPAWN_RADIUS * SPAWN_RADIUS * 6.25
+        val maxRSq = WyvernCubesRules.SPAWN_RADIUS * WyvernCubesRules.SPAWN_RADIUS * 6.25
 
         for (i in cubes.indices.reversed()) {
             val p = cubes[i]
@@ -340,10 +242,10 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
         }
     }
 
-    private fun renderCubes(env: WorldRenderEnvironment, event: WorldRenderEvent, skipGlow: Boolean = false) {
+    private fun renderCubes(env: WorldRenderEnvironment) {
         val cam = env.camera.position()
         val camera = mc.gameRenderer.camera
-        val s = PARTICLE_SIZE * size
+        val s = WyvernCubesRules.BASE_SIZE * size
         updateThemeColor()
         prepareVisibleCubes(cam, camera)
 
@@ -353,39 +255,44 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
 
         RenderSystem.enableBlend()
         RenderSystem.disableCull()
+        RenderSystem.disableDepthTest()
         RenderSystem.depthMask(false)
 
-        // Pass 1: glow bloom billboards (additive).
-        if (!skipGlow) glowTexture()?.let { texture ->
+        try {
+            // Pass 1: Wyvern glow billboards (additive).
             RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE)
-            RenderSystem.setShaderTexture(0, texture)
+            RenderSystem.enableAdditive()
+            RenderSystem.setShaderTexture(0, glowTexture)
             drawGlowBatch(env, s)
-        }
 
-        // Pass 2: faces.
-        val isCubes = shape == Shape.CUBES
-        RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE_MINUS_SRC_ALPHA)
-        if (isCubes) {
-            drawCubeFaces(env, s)
-        } else {
-            drawTriangleFaces(env, s)
-        }
+            // Pass 2: faces.
+            val isCubes = shape == Shape.CUBES
+            RenderSystem.defaultBlendFunc()
+            RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE_MINUS_SRC_ALPHA)
+            if (isCubes) {
+                drawCubeFaces(env, s)
+            } else {
+                drawTriangleFaces(env, s)
+            }
 
-        // Pass 3: dashed wireframe edges (additive).
-        RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE)
-        if (isCubes) {
-            drawCubeDashedEdges(env, s)
-        } else {
-            drawTriangleDashedEdges(env, s)
+            // Pass 3: dashed wireframe edges (additive).
+            RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE)
+            RenderSystem.enableAdditive()
+            if (isCubes) {
+                drawCubeDashedEdges(env, s)
+            } else {
+                drawTriangleDashedEdges(env, s)
+            }
+        } finally {
+            RenderSystem.depthMask(true)
+            RenderSystem.enableDepthTest()
+            RenderSystem.defaultBlendFunc()
+            RenderSystem.enableCull()
         }
-
-        RenderSystem.depthMask(true)
-        RenderSystem.defaultBlendFunc()
-        RenderSystem.enableCull()
     }
 
     private fun updateThemeColor() {
-        val color = themeColor((System.currentTimeMillis() % THEME_CYCLE_MS).toFloat() / THEME_CYCLE_MS)
+        val color = ClientTheme.accentA
         cr = ((color ushr 16) and 0xFF) / 255.0F
         cg = ((color ushr 8) and 0xFF) / 255.0F
         cb = (color and 0xFF) / 255.0F
@@ -393,7 +300,6 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
 
     private fun prepareVisibleCubes(cam: Vec3, camera: net.minecraft.client.Camera) {
         visibleCubes.clear()
-        // #Edit By Claude 2026-06-11: look dir from rotation quaternion (Camera.yRot/xRot are private).
         val look = org.joml.Vector3f(0.0F, 0.0F, -1.0F).rotate(camera.rotation)
         val lookX = look.x.toDouble()
         val lookY = look.y.toDouble()
@@ -404,7 +310,7 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
             val dy = p.y - cam.y
             val dz = p.z - cam.z
             val distSq = dx * dx + dy * dy + dz * dz
-            if (distSq > MAX_RENDER_DISTANCE_SQ || dx * lookX + dy * lookY + dz * lookZ < -1.0) {
+            if (!WyvernCubesRules.isVisible(distSq, dx * lookX + dy * lookY + dz * lookZ)) {
                 continue
             }
             p.renderAlpha = alphaOf(p)
@@ -412,54 +318,6 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
                 visibleCubes.add(p)
             }
         }
-    }
-
-    private fun drawShaderGlowBatch(consumer: VertexConsumer, cam: Vec3, s: Float) {
-        val rotation = mc.gameRenderer.camera.rotation
-        val right = org.joml.Vector3f(1.0F, 0.0F, 0.0F).rotate(rotation)
-        val up = org.joml.Vector3f(0.0F, 1.0F, 0.0F).rotate(rotation)
-        val matrix = Matrix4f()
-
-        for (p in visibleCubes) {
-            val px = (p.x - cam.x).toFloat()
-            val py = (p.y - cam.y).toFloat()
-            val pz = (p.z - cam.z).toFloat()
-            for (i in 0 until 3) {
-                val scale = s * GLOW_SCALES[i] * GLOW_INTENSITY
-                val a = (p.renderAlpha * GLOW_ALPHA_SCALES[i] * GLOW_INTENSITY).coerceIn(0.0F, 1.0F)
-                val argb = colorToInt(cr, cg, cb, a)
-                val hs = scale * 0.5F
-                val rx = right.x * hs
-                val ry = right.y * hs
-                val rz = right.z * hs
-                val ux = up.x * hs
-                val uy = up.y * hs
-                val uz = up.z * hs
-
-                shaderTexturedVertex(consumer, matrix, px - rx + ux, py - ry + uy, pz - rz + uz, 0.0F, 1.0F, argb)
-                shaderTexturedVertex(consumer, matrix, px + rx + ux, py + ry + uy, pz + rz + uz, 1.0F, 1.0F, argb)
-                shaderTexturedVertex(consumer, matrix, px + rx - ux, py + ry - uy, pz + rz - uz, 1.0F, 0.0F, argb)
-                shaderTexturedVertex(consumer, matrix, px - rx - ux, py - ry - uy, pz - rz - uz, 0.0F, 0.0F, argb)
-            }
-        }
-    }
-
-    private fun shaderTexturedVertex(
-        consumer: VertexConsumer,
-        matrix: Matrix4f,
-        x: Float,
-        y: Float,
-        z: Float,
-        u: Float,
-        v: Float,
-        color: Int
-    ) {
-        consumer.addVertex(matrix, x, y, z)
-            .setUv(u, v)
-            .setColor(color)
-            .setOverlay(OverlayTexture.NO_OVERLAY)
-            .setLight(FULL_BRIGHT)
-            .setNormal(0F, 0F, 1F)
     }
 
     private fun drawGlowBatch(env: WorldRenderEnvironment, s: Float) {
@@ -478,8 +336,9 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
                 val py = (p.y - cam.y).toFloat()
                 val pz = (p.z - cam.z).toFloat()
                 for (i in 0 until 3) {
-                    val scale = s * GLOW_SCALES[i] * GLOW_INTENSITY
-                    val a = (p.renderAlpha * GLOW_ALPHA_SCALES[i] * GLOW_INTENSITY).coerceIn(0.0F, 1.0F)
+                    val scale = s * GLOW_SCALES[i] * WyvernCubesRules.GLOW_MULTIPLIER
+                    val a = (p.renderAlpha * GLOW_ALPHA_SCALES[i] * WyvernCubesRules.GLOW_MULTIPLIER)
+                        .coerceIn(0.0F, 1.0F)
                     val argb = colorToInt(cr, cg, cb, a)
                     val hs = scale * 0.5F
                     val rx = right.x * hs
@@ -498,9 +357,7 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
     }
 
     private fun alphaOf(p: CubeParticle): Float {
-        val lifePct = (p.life.toFloat() / p.maxLife).coerceIn(0.0F, 1.0F)
-        val fadeIn = minOf(1.0F, (p.maxLife - p.life) / 20.0F)
-        return lifePct * fadeIn
+        return WyvernCubesRules.alpha(p.life, p.maxLife)
     }
 
     private fun drawCubeFaces(env: WorldRenderEnvironment, s: Float) {
@@ -662,17 +519,11 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
         val nx = dx / len
         val ny = dy / len
         val nz = dz / len
-        var pos = 0.0F
-        var drawing = true
-        while (pos < len) {
-            val segLen = if (drawing) dashLen else gapLen
-            val end = minOf(pos + segLen, len)
-            if (drawing) {
-                buffer.vertex(m, x1 + nx * pos, y1 + ny * pos, z1 + nz * pos).setColor(color)
-                buffer.vertex(m, x1 + nx * end, y1 + ny * end, z1 + nz * end).setColor(color)
-            }
-            pos = end
-            drawing = !drawing
+        for (interval in WyvernCubesRules.dashedIntervals(len, dashLen, gapLen)) {
+            buffer.vertex(m, x1 + nx * interval.start, y1 + ny * interval.start, z1 + nz * interval.start)
+                .setColor(color)
+            buffer.vertex(m, x1 + nx * interval.end, y1 + ny * interval.end, z1 + nz * interval.end)
+                .setColor(color)
         }
     }
 
@@ -689,11 +540,10 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
     }
 
     private fun spawnCube(player: LivingEntity): CubeParticle {
-        val r = SPAWN_RADIUS
+        val r = WyvernCubesRules.SPAWN_RADIUS
         val falling = animation == Animation.FALLING
         val baseLife = if (falling) 260 + random.nextInt(220) else 420 + random.nextInt(420)
-        // #Edit By Codex 2026-06-19: LifeTime is a multiplier over Wonderful's original random life.
-        val life = (baseLife * lifeTime).toInt().coerceAtLeast(40)
+        val life = baseLife
         val x = player.x + (random.nextDouble() * 2.0 - 1.0) * r
         val y = if (falling) {
             player.y + 4.0 + random.nextDouble() * (r * 0.55)
@@ -731,19 +581,6 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
         )
     }
 
-    private fun themeColor(progress: Float): Int =
-        lerpColor(ClientTheme.accentA, ClientTheme.accentB, progress.coerceIn(0.0F, 1.0F))
-
-    private fun lerpColor(from: Int, to: Int, progress: Float): Int {
-        val t = progress.coerceIn(0.0F, 1.0F)
-        val a = (((from ushr 24) and 0xFF) + ((((to ushr 24) and 0xFF) - ((from ushr 24) and 0xFF)) * t)).toInt()
-        val r = (((from ushr 16) and 0xFF) + ((((to ushr 16) and 0xFF) - ((from ushr 16) and 0xFF)) * t)).toInt()
-        val g = (((from ushr 8) and 0xFF) + ((((to ushr 8) and 0xFF) - ((from ushr 8) and 0xFF)) * t)).toInt()
-        val b = ((from and 0xFF) + (((to and 0xFF) - (from and 0xFF)) * t)).toInt()
-
-        return (a shl 24) or (r shl 16) or (g shl 8) or b
-    }
-
     private fun colorToInt(r: Float, g: Float, b: Float, a: Float): Int =
         ((a * 255.0F).toInt() shl 24) or ((r * 255.0F).toInt() shl 16) or
             ((g * 255.0F).toInt() shl 8) or (b * 255.0F).toInt()
@@ -777,31 +614,6 @@ object ModuleCubes : ClientModule("Cubes", Category.RENDER) {
             m.rotate(Math.toRadians(rotY.toDouble()).toFloat(), 0.0F, 1.0F, 0.0F)
             m.rotate(Math.toRadians(rotZ.toDouble()).toFloat(), 0.0F, 0.0F, 1.0F)
             return m
-        }
-    }
-
-    // #Edit By Codex 2026-06-19: reflection-only Iris check, same no-compile-dependency pattern as TargetESP.
-    private object IrisShaderPack {
-        private var loaded = false
-        private var apiInstance: Any? = null
-        private var inUseMethod: java.lang.reflect.Method? = null
-
-        fun inUse(): Boolean {
-            if (!loaded) {
-                loaded = true
-                runCatching {
-                    val apiClass = Class.forName("net.irisshaders.iris.api.v0.IrisApi")
-                    apiInstance = apiClass.getMethod("getInstance").invoke(null)
-                    inUseMethod = apiClass.getMethod("isShaderPackInUse")
-                }.onFailure {
-                    apiInstance = null
-                    inUseMethod = null
-                }
-            }
-
-            val api = apiInstance ?: return false
-            val method = inUseMethod ?: return false
-            return runCatching { method.invoke(api) as? Boolean ?: false }.getOrDefault(false)
         }
     }
 

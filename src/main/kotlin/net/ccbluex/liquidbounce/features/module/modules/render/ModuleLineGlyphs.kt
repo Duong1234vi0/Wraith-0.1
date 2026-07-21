@@ -35,9 +35,12 @@ import net.ccbluex.liquidbounce.render.drawCustomMesh
 import net.ccbluex.liquidbounce.render.renderEnvironmentForWorld
 import net.ccbluex.liquidbounce.render.vertex
 import net.ccbluex.liquidbounce.utils.client.mc
+import net.ccbluex.liquidbounce.utils.entity.*
+import net.minecraft.client.CameraType
 import net.minecraft.world.phys.Vec3
 import java.util.Random
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
  * Wyvern-DLC LineGlyphes behavior ported to this 1.26 render stack.
@@ -59,38 +62,11 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
             return@handler
         }
 
-        val iterator = paths.iterator()
-        while (iterator.hasNext()) {
-            val path = iterator.next()
-            path.update(speed)
-            if (path.isDead()) {
-                iterator.remove()
-            }
-        }
+        paths.removeAll(Path::isDead)
+        paths.forEach { it.update(speed) }
 
-        val target = count.coerceIn(0, MAX_PATHS)
-        var active = 0
-        for (path in paths) {
-            if (!path.removing) {
-                active++
-            }
-        }
-
-        while (active < target) {
+        if (paths.size < count) {
             paths += Path(randomSpawnPos(), 12 + random.nextInt(15))
-            active++
-        }
-
-        if (active > target) {
-            for (path in paths) {
-                if (!path.removing) {
-                    path.remove()
-                    active--
-                    if (active <= target) {
-                        break
-                    }
-                }
-            }
         }
     }
 
@@ -111,22 +87,26 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
             RenderSystem.disableCull()
             RenderSystem.depthMask(false)
 
-            if (glow) {
-                RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE)
-                RenderSystem.enableAdditive()
-                drawPathPass(event.camera.position(), event.partialTicks, 8.0f, 0.04f)
-                drawPathPass(event.camera.position(), event.partialTicks, 5.0f, 0.08f)
-                drawPathPass(event.camera.position(), event.partialTicks, 2.5f, 0.15f)
-                drawPathPass(event.camera.position(), event.partialTicks, 1.35f, 0.22f)
+            try {
+                if (glow) {
+                    RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE)
+                    RenderSystem.enableAdditive()
+                    drawPathPass(event.camera.position(), event.partialTicks, 8.0f, 0.04f)
+                    drawPathPass(event.camera.position(), event.partialTicks, 5.0f, 0.08f)
+                    drawPathPass(event.camera.position(), event.partialTicks, 2.5f, 0.15f)
+                    drawPathPass(event.camera.position(), event.partialTicks, 1.35f, 0.22f)
+                }
+
+                RenderSystem.defaultBlendFunc()
+                drawPathPass(event.camera.position(), event.partialTicks, 1.0f, 1.0f)
+            } finally {
+                RenderSystem.lineWidth(1.0f)
+                RenderSystem.depthMask(true)
+                RenderSystem.enableDepthTest()
+                RenderSystem.enableCull()
+                RenderSystem.defaultBlendFunc()
+                RenderSystem.disableBlend()
             }
-
-            RenderSystem.defaultBlendFunc()
-            drawPathPass(event.camera.position(), event.partialTicks, 1.0f, 1.0f)
-
-            RenderSystem.lineWidth(1.0f)
-            RenderSystem.depthMask(true)
-            RenderSystem.enableCull()
-            RenderSystem.defaultBlendFunc()
         }
     }
 
@@ -136,9 +116,8 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
     }
 
     private fun WorldRenderEnvironment.drawPathPass(cameraPos: Vec3, tickDelta: Float, widthMul: Float, alphaMul: Float) {
-        val lineWidth = (thickness * widthMul).coerceIn(0.5f, 18.0f)
-        val baseColorA = ClientTheme.accentA
-        val baseColorB = ClientTheme.accentB
+        val lineWidth = thickness * widthMul
+        val baseColor = ClientTheme.accentA
         if (paths.none { it.pointCount >= 2 && it.alpha > 0.005f }) {
             return
         }
@@ -149,26 +128,34 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
             DefaultVertexFormat.POSITION_COLOR,
             ShaderProgramKeys.POSITION_COLOR
         ) { matrix ->
-            for (pathIndex in paths.indices) {
-                val path = paths[pathIndex]
+            for (path in paths) {
                 val alpha = path.alpha * alphaMul
                 if (path.pointCount < 2 || alpha <= 0.005f) {
                     continue
                 }
 
                 val progress = path.renderProgress(tickDelta)
+                val firstPoint = path.point(0, progress)
+                if (mc.options.cameraType == CameraType.FIRST_PERSON &&
+                    WyvernLineGlyphRules.shouldCullFirstPerson(
+                        true,
+                        firstPoint.subtract(cameraPos).dot(cameraLookVector()),
+                    )
+                ) {
+                    continue
+                }
+
                 val last = path.pointCount - 1
                 for (index in 0 until last) {
-                    val from = path.point(index, progress).subtract(cameraPos)
-                    val to = path.point(index + 1, progress).subtract(cameraPos)
-                    val segmentAlpha = alpha * ((index + 1).toFloat() / path.pointCount.toFloat())
+                    val from = path.point(index, progress)
+                    val to = path.point(index + 1, progress)
+                    val segmentAlpha = WyvernLineGlyphRules.segmentAlpha(alpha, index, path.pointCount)
                     if (segmentAlpha <= 0.005f) {
                         continue
                     }
 
-                    val color = themeColor(baseColorA, baseColorB, pathIndex + index, segmentAlpha)
-                    this.vertex(matrix, from.x.toFloat(), from.y.toFloat(), from.z.toFloat()).setColor(color)
-                    this.vertex(matrix, to.x.toFloat(), to.y.toFloat(), to.z.toFloat()).setColor(color)
+                    val color = withAlpha(baseColor, segmentAlpha)
+                    appendDashedSegment(this, matrix, from, to, cameraPos, color)
                 }
             }
         }
@@ -184,6 +171,11 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
         )
     }
 
+    private fun cameraLookVector(): Vec3 {
+        val look = org.joml.Vector3f(0f, 0f, -1f).rotate(mc.gameRenderer.camera.rotation)
+        return Vec3(look.x.toDouble(), look.y.toDouble(), look.z.toDouble())
+    }
+
     private fun randomDirection(): Direction3 {
         val sign = if (random.nextBoolean()) 1.0 else -1.0
         return when (random.nextInt(3)) {
@@ -194,29 +186,47 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
     }
 
     private fun nextDirection(lastDirection: Direction3): Direction3 {
-        repeat(12) {
-            val direction = randomDirection()
-            if (direction.dot(lastDirection) >= -0.5) {
-                return direction
-            }
+        var direction: Direction3
+        do {
+            direction = randomDirection()
+        } while (!WyvernLineGlyphRules.acceptsDirection(direction.dot(lastDirection)))
+        return direction
+    }
+
+    private fun withAlpha(color: Int, alpha: Float): Int {
+        val alphaChannel = (alpha.coerceIn(0.0f, 1.0f) * 255.0f).roundToInt().coerceIn(0, 255)
+        return (alphaChannel shl 24) or (color and 0x00FFFFFF)
+    }
+
+    private fun appendDashedSegment(
+        buffer: com.mojang.blaze3d.vertex.BufferBuilder,
+        matrix: org.joml.Matrix4f,
+        start: Vec3,
+        end: Vec3,
+        cameraPos: Vec3,
+        color: Int,
+    ) {
+        val delta = end.subtract(start)
+        val length = sqrt(delta.lengthSqr())
+        if (length < 0.0001) return
+
+        val direction = delta.scale(1.0 / length)
+        val intervals = WyvernLineGlyphRules.dashedIntervals(length)
+        if (intervals.isEmpty()) return
+        if (intervals.size == 1 && intervals[0].end == length) {
+            val from = start.subtract(cameraPos)
+            val to = end.subtract(cameraPos)
+            buffer.vertex(matrix, from.x.toFloat(), from.y.toFloat(), from.z.toFloat()).setColor(color)
+            buffer.vertex(matrix, to.x.toFloat(), to.y.toFloat(), to.z.toFloat()).setColor(color)
+            return
         }
 
-        return randomDirection()
-    }
-
-    private fun themeColor(first: Int, second: Int, offset: Int, alpha: Float): Int {
-        val progress = ((System.currentTimeMillis() / 18L + offset * 9L) % 120L).toFloat() / 119.0f
-        val red = lerpChannel(first shr 16, second shr 16, progress)
-        val green = lerpChannel(first shr 8, second shr 8, progress)
-        val blue = lerpChannel(first, second, progress)
-        val alphaChannel = (alpha.coerceIn(0.0f, 1.0f) * 255.0f).roundToInt().coerceIn(0, 255)
-        return (alphaChannel shl 24) or (red shl 16) or (green shl 8) or blue
-    }
-
-    private fun lerpChannel(from: Int, to: Int, progress: Float): Int {
-        val start = from and 0xFF
-        val end = to and 0xFF
-        return (start + (end - start) * progress).roundToInt().coerceIn(0, 255)
+        for (interval in intervals) {
+            val from = start.add(direction.scale(interval.start)).subtract(cameraPos)
+            val to = start.add(direction.scale(interval.end)).subtract(cameraPos)
+            buffer.vertex(matrix, from.x.toFloat(), from.y.toFloat(), from.z.toFloat()).setColor(color)
+            buffer.vertex(matrix, to.x.toFloat(), to.y.toFloat(), to.z.toFloat()).setColor(color)
+        }
     }
 
     private class Path(start: Vec3, private val maxPoints: Int) {
@@ -247,7 +257,7 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
             }
 
             previousMoveProgress = moveProgress
-            moveProgress += 0.025f * speedMul
+            moveProgress += WyvernLineGlyphRules.MOVEMENT_PROGRESS * speedMul
             if (moveProgress >= 1.0f) {
                 previousMoveProgress = 0.0f
                 moveProgress = 0.0f
@@ -277,7 +287,7 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
             return points[index]
         }
 
-        fun remove() {
+        private fun remove() {
             removing = true
         }
 
@@ -289,32 +299,32 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
             val last = points.lastOrNull() ?: return remove()
             val direction = ModuleLineGlyphs.nextDirection(lastDirection)
             lastDirection = direction
-            points += last.add(direction.x * STEP_LENGTH, direction.y * STEP_LENGTH, direction.z * STEP_LENGTH)
+            points += last.add(
+                direction.x * WyvernLineGlyphRules.STEP_LENGTH,
+                direction.y * WyvernLineGlyphRules.STEP_LENGTH,
+                direction.z * WyvernLineGlyphRules.STEP_LENGTH,
+            )
         }
     }
 
     private class AlphaFade {
         private var from = 0.0f
         private var target = 0.0f
-        private var started = System.nanoTime()
+        private var started = System.currentTimeMillis()
 
         val value: Float
             get() {
-                val elapsed = ((System.nanoTime() - started).toDouble() / 1_000_000_000.0 / ALPHA_SECONDS)
-                    .coerceIn(0.0, 1.0)
-                    .toFloat()
-                val eased = if (target > from) {
-                    elapsed * elapsed
-                } else {
-                    1.0f - (1.0f - elapsed) * (1.0f - elapsed)
-                }
+                val elapsed = ((System.currentTimeMillis() - started).toFloat() /
+                    WyvernLineGlyphRules.ALPHA_DURATION_MS)
+                    .coerceIn(0.0f, 1.0f)
+                val eased = WyvernLineGlyphRules.quadInOut(elapsed)
                 return from + (target - from) * eased
             }
 
         fun snap(value: Float) {
             from = value
             target = value
-            started = System.nanoTime()
+            started = System.currentTimeMillis()
         }
 
         fun target(newTarget: Float) {
@@ -324,7 +334,7 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
 
             from = value
             target = newTarget
-            started = System.nanoTime()
+            started = System.currentTimeMillis()
         }
     }
 
@@ -332,7 +342,4 @@ object ModuleLineGlyphs : ClientModule("LineGlyphs", Category.RENDER, aliases = 
         fun dot(other: Direction3): Double = x * other.x + y * other.y + z * other.z
     }
 
-    private const val MAX_PATHS = 160
-    private const val STEP_LENGTH = 2.5
-    private const val ALPHA_SECONDS = 1.2f
 }

@@ -7,7 +7,6 @@ import com.mojang.blaze3d.resource.ResourceHandle;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleBlockOutline;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleBetterWorld;
-import net.ccbluex.liquidbounce.features.module.modules.render.ModuleCubes;
 import net.ccbluex.liquidbounce.features.module.modules.combat.backtrack.ModuleBacktrack;
 import net.ccbluex.liquidbounce.features.module.modules.render.alphadlc.AlphaProjection;
 import net.ccbluex.liquidbounce.features.module.modules.render.targetesp.ModuleTargetESP;
@@ -137,7 +136,5 @@ public abstract class MixinWorldRenderer {
         // #Edit By Codex 2026-06-13: let TargetESP render before Iris/Complementary final composite
         // so shaderpack bloom can see the emissive ghost pixels. The normal WorldRenderEvent fires too late.
         ModuleTargetESP.renderShaderWorldPass(levelRenderState.cameraRenderState.pos);
-        // #Edit By Codex 2026-06-19: Cubes glow also needs the pre-composite shader-world path.
-        ModuleCubes.renderShaderWorldPass(levelRenderState.cameraRenderState.pos);
     }
 }
