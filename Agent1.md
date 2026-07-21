@@ -11035,6 +11035,157 @@ pre-Aura boundary and PacketOrderI remains a runtime watch item rather than a co
 - Push result: succeeded, `254e3f854..9e782947d main -> main`, to
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 
+## 2026-07-21 - Silent ClickGUI FCL pose/scissor and scrollbar crash fix
+
+### User report and environment
+
+The Silent-style ClickGUI was reported as visually close to the Silent reference on FCL/Android, but the module-card
+waterfall was clipped with the left module column covered/cut away, and Minecraft crashed shortly after opening or
+expanding a module.
+
+Crash-report runtime details were Minecraft `26.1.2`, ClickGUI screen, scaled screen `535 x 243`, absolute screen
+`1069 x 486`, GUI scale factor `2`, and scaled mouse approximately `240.2245, 135`.
+
+Two noisy startup/resource warnings were ruled out as unrelated to the fatal ClickGUI crash:
+
+- ScriptAPI Graal/native-image class warning:
+  `NoClassDefFoundError: org/graalvm/nativeimage/ImageInfo`.
+- Minecraft model baking NativeImage warning for `minecraft:salmon_bucket`:
+  `Cannot compute translucency out of bounds: [-2, 4, 0, 4] in 32x32 image`.
+
+The actual fatal stack was in ClickGUI settings rendering:
+`SilentClickGuiSettings.render(SilentClickGuiSettings.kt:184)` called Kotlin `coerceIn` with an empty range,
+equivalent to `coerceIn(14f, 2.443882f)`, during the first animated settings-expansion frames.
+
+### Root causes
+
+The clipping was a Wraith 26.1.2 GUI coordinate-space mismatch. The port applied the Silent shell transform to
+`context.matrices`, but in this codebase `DrawContext.matrices` is only a WeakHashMap compatibility `PoseStack`.
+Rounded rectangles, rounded textures, MSDF font batches, and GUI render states use the real
+`GuiGraphicsExtractor.pose()` and capture the real scissor stack. As a result, geometry was still emitted in local
+Silent coordinates while `withLocalScissor` manually transformed rectangles through `SilentTransform.localToScreen`.
+At the FCL size, the content clip started near screen x `167`, while geometry was still around local x `87`, hiding
+most of the first `101`-pixel module column.
+
+`GuiGraphicsExtractor.enableScissor` was inspected directly. It creates a `ScreenRectangle` from the supplied GUI
+rectangle and calls `transformAxisAligned(this.pose)`, so scissor inputs must be in the same local coordinate space as
+geometry when the real pose stack is active. Manual local-to-screen conversion would be wrong there.
+
+The crash was a totality bug in scrollbar geometry. `viewport.h * viewport.h / contentHeight` was coerced into
+`14f..viewport.h`, but animated settings viewports can be smaller than `14`, including the captured `2.443882`.
+Kotlin correctly throws when the maximum is below the minimum.
+
+### Files inspected
+
+- Skill workflow and authority docs: `Skill/README.md`, `Skill/Agen.md`, `Skill/AGENT1_USAGE.md`,
+  `Skill/CODEBASE_RULES.md`, `Skill/RENDER_PORTING_GUIDE.md`, plus `CHANGELOG.md`.
+- Historical docs: latest Silent ClickGUI entry in `Agent1.md`.
+- Live ClickGUI: `ClickGuiScreen.kt`, `SilentClickGuiSettings.kt`, `SilentClickGuiSettingsMath.kt`,
+  `SilentClickGuiLayout.kt`, `SilentClickGuiAnimation.kt`.
+- GUI infrastructure: `GuiAndItemCompatExtensions.kt`, `DrawContext.kt`, `GuiGraphicsExtractor.java`,
+  `ExosGuiRenderer.kt`, `RoundedRectGui.kt`, `MsdfFontGui.kt`, and the rounded texture helper used by skin-face
+  rendering.
+- Proven real-pose examples: `HudElement.kt`, `MixinScreen.java`.
+- Existing focused tests: `SilentClickGuiLayoutTest.kt`, `SilentClickGuiSettingsMathTest.kt`,
+  `SilentClickGuiStaticTest.kt`.
+- Previous implementation commits: `71b1f61523d25ef078a5b7c3b82a3352e8d3255c`,
+  `26dd9d0e7d2ec092a8c50bb50c122d9395f68578`,
+  `f85b505af035170d2373ec0dde9696f609ddecbc`,
+  `c4b47f4c752c97a971c2e62628c24d6d84ce15cb`.
+- Silent reference source under `WorkSpace/Client/silent`, including `CsGui.java`, `CategoryComponent.java`,
+  `ModuleComponent.java`, `SettingComponent.java`, `SliderSettingComponent.java`,
+  `BooleanSettingComponent.java`, `Category.java`, and `ThemeCategoryComponent.java`. Reference sources were read-only.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiSettings.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiSettingsMath.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiLayout.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiLayoutTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiSettingsMathTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiStaticTest.kt`
+- this `Agent1.md` section.
+
+### Runtime fixes
+
+`ClickGuiScreen.extractRenderState` now pushes/translates/scales/pops the real `context.pose()` /
+`Matrix3x2fStack`, matching the proven HUD and screen animation patterns. The compatibility `context.matrices` key is
+still available for existing `ExosGuiRenderer` call signatures, but it no longer controls ClickGUI positioning.
+
+`withLocalScissor` now passes local ClickGUI rectangles to `context.enableScissor` and relies on
+`GuiGraphicsExtractor` to transform them through the current real pose. The helper validates finite positive
+rectangles, rounds outward with floor/ceil, and keeps enable/disable balanced with `try/finally` for the outer content
+viewport, description marquee viewport, and per-card settings viewport.
+
+`SilentClickGuiSettingsMath` now owns total scrollbar math. It clamps scroll with finite inputs, returns no scrollbar
+for invalid/zero/non-overflow cases, and produces only finite thumb geometry with height in `0..viewportHeight`.
+`SilentClickGuiSettings.render` uses that helper instead of `coerceIn(14f, viewport.h)`.
+
+### Test additions
+
+- Settings math covers viewport heights `0`, `0.1`, `2.443882`, `13.999`, `14`, and `150`, plus empty content,
+  content shorter than/equal to the viewport, large content, and non-finite inputs. This directly covers the captured
+  crash range.
+- Layout tests cover the FCL `535 x 243` scaled screen with margin `8`:
+  `fitScale ~= 0.8937008`, panel bounds `89.6535, 8.0, 445.3465, 235.0`, and content viewport
+  `167.4055, 37.4921, 441.3248, 230.5315`.
+- Layout tests also cover local-to-screen and screen-to-local alignment during a partial opening animation.
+- Static tests assert that the ClickGUI shell transform uses `context.pose()`, `pushMatrix`, `translate`, `scale`,
+  and `popMatrix`, and that the old `context.matrices.pushPose/translate/scale` shell path and manual
+  `transform.localToScreen(rect)` scissor path do not return.
+
+### Silent visual-fidelity audit
+
+After the runtime fixes, the live implementation remains statically aligned with the intended Silent shell structure:
+`398 x 254` panel, blank upper logo slot, sidebar/header/content geometry, category row spacing and glyph mapping,
+Silent-style MSDF sizing/placement, three-column `101`-wide module waterfall with `103` horizontal step, module header,
+bind, description marquee, inline settings expansion, per-card settings scroll, and global module scroll. Wraith's
+native module, value, config, theme, and cloud systems remain in use.
+
+No Silent module manager, Silent setting classes, Silent `ThemeManager`, AutoBuy, UID/profile/social systems,
+branding text, logos, GIFs, shaders, or sounds were imported. Theme, Config, and Cloud pages remain Wraith-backed.
+
+This audit is static/source-based only. It does not claim pixel-perfect or FCL visual success without an actual
+FCL screenshot/runtime pass.
+
+### Verification
+
+- `git diff --check`: passed.
+- Normal focused Gradle test command without source filtering was still blocked in `compileTestKotlin` by unrelated
+  existing errors in `SmartCriticalDecisionTest.kt`, `ItemCooldownProgressTest.kt`, and `PointFindingKtTest.kt`.
+- Focused ClickGUI test command with temporary untracked source filter:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache -I .codex-tmp/clickgui-focused-test.init.gradle test --tests net.ccbluex.liquidbounce.features.module.modules.render.gui.SilentClickGuiLayoutTest --tests net.ccbluex.liquidbounce.features.module.modules.render.gui.SilentClickGuiSettingsMathTest --tests net.ccbluex.liquidbounce.features.module.modules.render.gui.SilentClickGuiStaticTest`
+- Focused result: `BUILD SUCCESSFUL in 27s`.
+- Required clean assembly:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+- Assembly result: `BUILD SUCCESSFUL in 2m 6s`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- SHA-256: `a3121f187ea6b19a2bd5ebb6492faa62d9e583640deb5f6194d507c001b49952`.
+
+### FCL manual status
+
+Not run in the headless Termux workspace. The requested FCL/Android Minecraft `26.1.2`, GUI scale `2`, scaled
+approximately `535 x 243` manual matrix remains pending: full open animation centered, all three module columns
+visible, left column not clipped, long-description marquee clipping, expanding a module with many settings, no crash in
+early settings-animation frames, per-card settings scroll, global waterfall scroll, repeated collapse/reopen, category
+switching, Theme/Config/Cloud, mouse/touch hitbox alignment, and centered Escape close animation.
+
+### Superseded prior notes
+
+The previous Silent ClickGUI entry's source/test-level implication that inverse transform and scissor alignment were
+already runtime-correct is superseded. The math helpers were internally coherent, but the live renderer used real
+`context.pose()` while the shell transform used fake `context.matrices`, so runtime geometry and clipping were not in
+one coordinate space until this fix.
+
+### Commits and push status
+
+- Runtime fix commit: `d5ea035fd366c19a79e4a54c4660aa660ea02525` -
+  `fix(clickgui): align silent shell pose and scrollbar`.
+- Focused-test commit: `4e4b7de2f833a6074dd68c1d20aaca25a960814f` -
+  `test(clickgui): cover animated viewport and FCL transform`.
+- Documentation commit: this section, exact hash and push result to be recorded after commit and push.
+
 ## 2026-07-20 22:51 +07 - KillAura ItemCooldown 1.0 jump-critical audit
 
 ### Checked
