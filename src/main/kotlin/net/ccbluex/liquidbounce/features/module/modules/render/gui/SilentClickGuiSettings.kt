@@ -38,7 +38,6 @@ import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 import org.lwjgl.glfw.GLFW
 import kotlin.math.abs
-import kotlin.math.max
 import kotlin.math.roundToInt
 
 class SilentClickGuiSettings {
@@ -160,7 +159,7 @@ class SilentClickGuiSettings {
     ): RenderResult {
         val contentHeight = contentHeight(entries)
         val clampedScroll = SilentClickGuiSettingsMath.clampScroll(scroll, contentHeight, viewport.h)
-        val maxScroll = max(0f, contentHeight - viewport.h)
+        val maxScroll = SilentClickGuiSettingsMath.maxScroll(contentHeight, viewport.h)
 
         var y = viewport.y - clampedScroll
         entries.forEach { entry ->
@@ -180,15 +179,13 @@ class SilentClickGuiSettings {
             y += height
         }
 
-        if (maxScroll > 0.5f) {
-            val thumbHeight = (viewport.h * viewport.h / contentHeight).coerceIn(14f, viewport.h)
-            val thumbY = viewport.y + (viewport.h - thumbHeight) * (clampedScroll / maxScroll)
+        SilentClickGuiSettingsMath.scrollbarThumb(viewport.h, contentHeight, clampedScroll)?.let { thumb ->
             ExosGuiRenderer.roundedRect(
                 context.matrices,
                 viewport.right - 3f,
-                thumbY,
+                viewport.y + thumb.offsetY,
                 1.5f,
-                thumbHeight,
+                thumb.height,
                 0.75f,
                 fade(0x80FFFFFF.toInt(), alpha)
             )

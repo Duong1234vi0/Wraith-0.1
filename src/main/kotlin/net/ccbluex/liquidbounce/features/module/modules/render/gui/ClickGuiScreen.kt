@@ -45,6 +45,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.IdentityHashMap
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -136,20 +138,21 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         val localMouse = transform.screenToLocal(mouseX.toDouble(), mouseY.toDouble())
 
         settings.beginFrame()
-        val matrices = context.matrices
-        matrices.pushPose()
-        matrices.translate(transform.centerX, transform.centerY, 0f)
-        matrices.scale(transform.totalScale, transform.totalScale, 1f)
-        matrices.translate(
+        // Ensure ExosGuiRenderer can resolve this DrawContext from the compatibility PoseStack key.
+        context.matrices
+        val pose = context.pose()
+        pose.pushMatrix()
+        pose.translate(transform.centerX, transform.centerY)
+        pose.scale(transform.totalScale, transform.totalScale)
+        pose.translate(
             -SilentClickGuiLayout.REFERENCE_WIDTH * 0.5f,
-            -SilentClickGuiLayout.REFERENCE_HEIGHT * 0.5f,
-            0f
+            -SilentClickGuiLayout.REFERENCE_HEIGHT * 0.5f
         )
 
         try {
             renderShell(context, transform, localMouse, alpha)
         } finally {
-            matrices.popPose()
+            pose.popMatrix()
             settings.finishFrame()
         }
     }
@@ -430,7 +433,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         val waterfall = SilentClickGuiLayout.waterfall(heights, moduleScroll)
 
         moduleHits.clear()
-        withLocalScissor(context, transform, SilentClickGuiLayout.content) {
+        withLocalScissor(context, SilentClickGuiLayout.content) {
             modules.forEachIndexed { index, module ->
                 val card = waterfall.rects[index]
                 if (!card.intersects(SilentClickGuiLayout.content)) {
@@ -496,7 +499,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             val clamped = SilentClickGuiSettingsMath.clampScroll(rawScroll, settings.contentHeight(entries),
                 settingsViewport.h)
             moduleSettingsScroll[module] = clamped
-            withLocalScissor(context, transform, settingsViewport) {
+            withLocalScissor(context, settingsViewport) {
                 settings.render(context, settingsViewport, entries, clamped, mouse.x, mouse.y, alpha)
             }
         }
@@ -526,7 +529,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             descRect.x
         }
 
-        withLocalScissor(context, transform, descRect) {
+        withLocalScissor(context, descRect) {
             ExosGuiRenderer.clickGuiBody(context.matrices, description, x, descRect.y,
                 fade(0x72FFFFFF, alpha), 4.6f)
         }
@@ -538,7 +541,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         themeScroll = themeScroll.coerceIn(0f, maxScroll)
         themeHits.clear()
 
-        withLocalScissor(context, transform, SilentClickGuiLayout.content) {
+        withLocalScissor(context, SilentClickGuiLayout.content) {
             ClickGuiTheme.COLORS.indices.forEach { index ->
                 val rect = SilentClickGuiLayout.themeBoxRect(index, themeScroll)
                 if (!rect.intersects(SilentClickGuiLayout.content)) {
@@ -581,7 +584,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         val maxScroll = max(0f, configListHeight(configs.size) - viewport.h)
         configScroll = configScroll.coerceIn(0f, maxScroll)
 
-        withLocalScissor(context, transform, viewport) {
+        withLocalScissor(context, viewport) {
             if (configs.isEmpty()) {
                 ExosGuiRenderer.clickGuiBody(context.matrices, "No local configs", viewport.x + 6f, viewport.y + 8f,
                     fade(0x88FFFFFF.toInt(), alpha), 6.2f)
@@ -618,7 +621,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     }
 
     private fun renderCloudPage(context: DrawContext, transform: SilentTransform, alpha: Float) {
-        withLocalScissor(context, transform, SilentClickGuiLayout.content) {
+        withLocalScissor(context, SilentClickGuiLayout.content) {
             val centerX = SilentClickGuiLayout.content.x + SilentClickGuiLayout.content.w * 0.5f
             val centerY = SilentClickGuiLayout.content.y + SilentClickGuiLayout.content.h * 0.43f
             ExosGuiRenderer.clickGuiIcon(context.matrices, SilentClickGuiIcons.glyphFor(SilentClickGuiPage.CLOUD),
@@ -970,12 +973,20 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
     private inline fun withLocalScissor(
         context: DrawContext,
-        transform: SilentTransform,
         rect: SilentRect,
         block: () -> Unit,
     ) {
-        val screen = transform.localToScreen(rect)
-        context.enableScissor(screen.x0, screen.y0, screen.x1, screen.y1)
+        if (rect.w <= 0f || rect.h <= 0f ||
+            !rect.x.isFinite() || !rect.y.isFinite() || !rect.right.isFinite() || !rect.bottom.isFinite()) {
+            return
+        }
+
+        context.enableScissor(
+            floor(rect.x).toInt(),
+            floor(rect.y).toInt(),
+            ceil(rect.right).toInt(),
+            ceil(rect.bottom).toInt()
+        )
         try {
             block()
         } finally {

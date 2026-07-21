@@ -26,14 +26,44 @@ import kotlin.math.roundToInt
 
 object SilentClickGuiSettingsMath {
 
+    data class ScrollbarThumb(
+        val offsetY: Float,
+        val height: Float,
+    )
+
     enum class RangeHandle {
         START,
         END
     }
 
+    fun maxScroll(contentHeight: Float, viewportHeight: Float): Float {
+        val safeContent = contentHeight.takeIf { it.isFinite() && it > 0f } ?: return 0f
+        val safeViewport = viewportHeight.takeIf { it.isFinite() && it > 0f } ?: 0f
+        return max(0f, safeContent - safeViewport)
+    }
+
     fun clampScroll(scroll: Float, contentHeight: Float, viewportHeight: Float): Float {
-        val maxScroll = max(0f, contentHeight - viewportHeight)
-        return scroll.coerceIn(0f, maxScroll)
+        val maxScroll = maxScroll(contentHeight, viewportHeight)
+        val safeScroll = scroll.takeIf { it.isFinite() } ?: 0f
+        return safeScroll.coerceIn(0f, maxScroll)
+    }
+
+    fun scrollbarThumb(
+        viewportHeight: Float,
+        contentHeight: Float,
+        scroll: Float,
+        preferredMinHeight: Float = 14f,
+    ): ScrollbarThumb? {
+        val viewport = viewportHeight.takeIf { it.isFinite() && it > 0f } ?: return null
+        val content = contentHeight.takeIf { it.isFinite() && it > viewport } ?: return null
+        val maxScroll = maxScroll(content, viewport).takeIf { it.isFinite() && it > 0.5f } ?: return null
+        val rawHeight = (viewport * viewport / content).takeIf { it.isFinite() && it >= 0f } ?: return null
+        val minHeight = (preferredMinHeight.takeIf { it.isFinite() && it > 0f } ?: 0f).coerceAtMost(viewport)
+        val height = rawHeight.coerceIn(minHeight, viewport)
+        val trackHeight = (viewport - height).coerceAtLeast(0f)
+        val safeScroll = clampScroll(scroll, content, viewport)
+        val progress = (safeScroll / maxScroll).takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
+        return ScrollbarThumb(trackHeight * progress, height)
     }
 
     fun sliderProgress(mouseX: Float, trackX: Float, trackWidth: Float): Float {
