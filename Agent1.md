@@ -12544,3 +12544,18 @@ redesign and supersedes the previous strict Silent `398 x 254`/three-column/inli
 
 Implementation, focused tests, documentation commit, JAR SHA-256, and remote push result are recorded in the final
 handoff after verification. Unrelated worktree files and prior Agent1 history remain preserved and unstaged.
+
+## 2026-07-22 - Compact ClickGUI post-build and push update
+
+- Production `compileKotlin`: `BUILD SUCCESSFUL`.
+- Focused compact ClickGUI tests passed with `.codex-tmp/clickgui-focused-test.init.gradle`; the unfiltered normal
+  test task remains blocked by unrelated `SmartCriticalDecisionTest.kt`, `PointFindingKtTest.kt`, and
+  `ItemCooldownProgressTest.kt` compile errors that were not modified.
+- Required clean assembly completed successfully with the Java 25 Termux command from `WORK_NOTES.md`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`.
+- JAR SHA-256: `9fabbd60e5051b166ed196ef7f317bd3dc18589f5e3d6709513cd08fee9ad2bc`.
+- Implementation/tests/docs commit: `5864057d20d223206cb35ad0d64ef5beef20787f` —
+  `refactor(clickgui): add compact side-settings layout`.
+- Push succeeded to `origin/main`; local `HEAD` equals remote at `5864057d20d223206cb35ad0d64ef5beef20787f`.
+- FCL/Android visual testing remains pending. No design approval or visual success is claimed from compilation; the
+  old Silent shell layout remains explicitly superseded.
