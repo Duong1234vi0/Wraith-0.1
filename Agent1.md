@@ -12029,3 +12029,95 @@ the unrelated sources listed above. No Wyvern behavior was silently replaced wit
 - First push result: succeeded, `2e0745b36..d9723ebcf main -> main`, to
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - The post-push documentation commit and final remote-equality verification are reported in the assistant handoff.
+
+## 2026-07-21 - Wyvern KillEffect, Cubes, and LineGlyphs fidelity/performance correction
+
+### Request and terminology correction
+
+The user reported that enabling Cubes on FCL/Android immediately reduced the game to approximately 0 FPS and that
+disabling it immediately restored FPS. This audit covers Wyvern-DLC `KillEffect`, `Cubes`, and `LineGlyphes`.
+Wyvern-DLC contains no HitEffect source module or class. Wraith `ModuleHitEffect` is a separate Xyeta/Wild terrain-wave
+port: it remains registered once, present in the JAR, and completely unchanged by this work.
+
+### References and pre-edit evidence
+
+Read all required Skill workflow documents, current render-compatibility/world-event history, the complete Wyvern
+`KillEffect.java`, `Cubes.java`, `LineGlyphes.java`, `Animation.java`, `Easing.java`, every directly called helper, and
+the 180x180 RGBA `icons/glow.png` (`677c6878e4c9c83bb783e680be411542d325cd302816c2a8e6e64176410e759a`).
+Inspected all requested live Wraith module/state/rule/render/test files, `RenderShortcuts`, `RenderCompat`, modern
+`HitEffectBatchRenderer` as an API example, `ModuleManager`, relevant mixins, and the single event-dispatch paths.
+The untracked evidence matrix is `.codex-tmp/wyvern-fidelity-performance-audit-20260721.md`; it is not committed.
+
+Before correction, source settings, timing, spawn/update/animation formulas, geometry constants, and resources were
+mostly exact or valid 26.1.2 adaptations, but earlier 1:1 claims are superseded for rendering/performance:
+
+- KillEffect called `drawLines()` inside every segment and pass, producing about 65-170 mesh uploads/RenderPasses for
+  a typical 13-34-segment effect instead of five batched source passes. Its four supposed glow passes also selected the
+  normal translucent compatibility pipeline because `blendFunc(SRC_ALPHA, ONE)` alone does not select additive blend.
+- Cubes allocated an outer face array plus 24 FloatArrays per visible cube, triangle point/face arrays, one dash list
+  and CubesDash objects per edge, and about two Matrix4f objects per particle/frame. At 100 visible cubes this was about
+  2,500 face arrays, 1,200 dash collections plus their objects, and 200 matrices each frame. Three compat calls also
+  opened three independent RenderPasses. Static inspection found one module registration and one world-render handler.
+- LineGlyphs allocated a `List<GlyphDash>` and objects per rendered path segment on every pass and recomputed path
+  interpolation/culling/dashes five times per frame. At Count 200/max 26 points this could approach 75,000 transient
+  dash lists/objects and 150,000 emitted five-pass vertices per frame.
+
+### Corrections and target-version adaptations
+
+- KillEffect now appends every active effect/segment into five native 26.1.2 line batches using
+  `LINES_SNIPPET`/`POSITION_COLOR_NORMAL_LINE_WIDTH`, finite direction normals, and per-vertex widths 40/24/12/6/4.4.
+  Four `LIGHTNING` additive pipelines and one normal `TRANSLUCENT` core are drawn in one RenderPass: five logical GPU
+  draws total per frame, independent of effect/segment count. Zero-length segments are skipped. The effect collection
+  is an ordinary client-thread ArrayList; cleanup behavior remains intact.
+- Cubes now emits fixed face/triangle geometry directly, uses direct dash while-loops, reuses immutable templates and
+  one render-loop scratch Matrix4f, and uses persistent rotating mapped buffers. Glow, faces, and dashed edges remain
+  three exact logical batches and are uploaded before three indexed draws in one RenderPass; the glow texture is bound
+  only for its pipeline. No particle/edge opens a pass. The source-invented 75 ms impulse debounce was removed: exact
+  Wraith dispatch inspection found one AttackEntityEvent, while Wyvern intentionally includes both attack-key rising
+  edge and EventAttack impulses. At minimum Size, cube budgets are 132 vertices/particle: 660/3,960/13,200 vertices for
+  Count 5/30/100. Disable/world cleanup clears particle and temporary frame state.
+- LineGlyphs prepares visible paths, interpolated endpoints, first-person culling, segment alpha, and direct dash
+  coordinates once per frame in reusable primitive storage. No production GlyphDash list remains. Four additive
+  native-width batches plus the normal core are uploaded before five indexed draws in one RenderPass. Source widths,
+  alphas, easing, growth, point range/directions, dashes, and first/third-person behavior remain unchanged. Maximum
+  five-pass bounds at Count 10/50/200 are 7,500/37,500/150,000 vertices.
+- Dedicated module-local renderers preserve depth-test-on/depth-write-off/cull-off behavior without changing global
+  RenderCompat. No async rendering, visual reduction, setting change, mobile mode, skip, throttle, or shader prepass
+  was introduced.
+
+### Files
+
+Added: `KillEffectBatchRenderer.kt`, `CubesBatchRenderer.kt`, and `LineGlyphBatchRenderer.kt`.
+Changed: `ModuleKillEffect.kt`, `KillEffectState.kt`, `ModuleCubes.kt`, `WyvernCubesRules.kt`, `ModuleLineGlyphs.kt`,
+`WyvernLineGlyphRules.kt`, and their three focused tests. Deleted: none. `ModuleHitEffect.kt`, `ModuleFragEffects`,
+global RenderCompat, Wyvern-DLC sources/archives, and unrelated dirty/untracked files were not modified.
+
+### Verification, build, and artifact
+
+- `compileKotlin` passed after each module.
+- KillEffect, Cubes, and LineGlyphs focused suites passed individually and together; combined result was
+  `BUILD SUCCESSFUL in 19s`.
+- Ordinary `test` was re-run and currently stops at unrelated `compileTestKotlin` errors in `PointFindingKtTest`,
+  `SmartCriticalDecisionTest`, and `ItemCooldownProgressTest`; those sources were not changed.
+- Required Java 25 `--no-daemon --no-build-cache clean assemble -x detekt`: `BUILD SUCCESSFUL in 2m 40s`.
+- Main JAR: `build/libs/liquidbounce-0.31.2.jar`; SHA-256
+  `0d4050f2d8d5b5d12fc689609fa61d348fec691588421c7fbf8fdb895a8f2e23`.
+- JAR and ModuleManager audits found exactly one primary class and one registration each for KillEffect, Cubes,
+  LineGlyphs, and the unchanged HitEffect.
+
+### Runtime status, commits, and superseded claims
+
+FCL/Android was not available in this headless Termux environment. The requested FPS/visual/GC/log matrix remains
+pending and no runtime result is inferred from compilation; specifically, compilation alone does not prove the Cubes
+0-FPS report fixed. Temporary diagnostics were limited to static event/render/allocation counts and were not left in
+production.
+
+- `8d3e4eee0` - `fix(render): batch wyvern kill effect lines`
+- `b7f01c516` - `fix(render): eliminate cubes frame allocation stalls`
+- `74a5362fb` - `fix(render): batch wyvern line glyph rendering`
+- Documentation commit: this entry; recorded by the post-push update.
+- Push result: pending at entry creation; the post-push update records the actual remote verification.
+
+Previous entries claiming these ports were source-accurate/1:1 are superseded specifically for KillEffect batching and
+blend selection, Cubes hot-loop allocation/debounce/GPU submission, and LineGlyphs dash allocation/interpolation cache/
+native line format. Their documented visible source formulas remain valid where this audit classified them exact.
