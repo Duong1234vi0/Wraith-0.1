@@ -12627,3 +12627,64 @@ handoff after verification. Unrelated worktree files and prior Agent1 history re
 
 The previous static side-content `-7 px`/`160 ms` transition is superseded as the primary open/close animation by the
 shared module-card-to-settings-panel morph described above. No visual approval is claimed until the user tests FCL.
+
+## Wraith compact ClickGUI runtime repair — 2026-07-22
+
+### Reported runtime defects
+
+- FCL showed ghost-like trails and overlapping translucent layers during the card-to-settings morph.
+- Closing replayed the opening direction instead of travelling from the settings panel back to the source card.
+- Selecting another module replaced the settings contents instantly while the old `SWITCHING` renderer ignored the morph.
+- Enabled cards still had accent fill, outline, and a narrow accent strip despite the name-only selection requirement.
+- Centering the complete `468 px` canvas displaced the `334 px` main panel left by `67` local px (about `57.62` screen px at scale `0.86`).
+
+### Evidence and root causes
+
+The live files checked were `ClickGuiScreen.kt`, `SilentClickGuiLayout.kt`, `SilentClickGuiAnimation.kt`,
+`ModuleSettingsMorphController.kt`, `CompactModuleCardStyle.kt`, `SilentClickGuiSettings.kt`, `ExosGuiRenderer.kt`,
+the current GUI transform/scissor helpers, and all focused ClickGUI tests. The previous close renderer used `1f - progress`
+for rectangle interpolation after defining panel-to-card endpoints, which inverted the travel. `SWITCHING` changed
+`selectedModule` immediately, so `renderSideSettings()` drew the incoming module while `renderMorph()` skipped the phase.
+The closed dock and static destination panel were also rendered underneath the moving surface, while card description,
+bind, chevron, settings rows, and panel controls were drawn in overlapping passes. The old style model selected accent
+fill/outline/strip from `enabled`, and the transform subtracted half of the full canvas rather than the main-panel center.
+
+### Changed
+
+- Replaced the single mixed morph with staged `OPENING`/`OPENING_SETTLE`, `PREPARING_CLOSE`/`CLOSING`/`CLOSING_SETTLE`,
+  and `SWITCH_FADE_OUT`/`SWITCH_OPENING`/`SWITCH_SETTLE` phases.
+- Opening preparation keeps the source rectangle still while secondary card details fade; travel renders exactly one
+  nearly opaque dark rounded surface and neutral outline; settle fades the panel content after arrival.
+- Closing now starts at the side-panel rectangle and directly interpolates to the current source-card rectangle with
+  progress `0 -> 1`; the source card remains hidden through settle and returns only after completion.
+- Module switching retains the old module through a settings fade, restores its card, captures the new card, hides that
+  slot, replays the clean card-to-panel morph, and exposes new settings only during settle/open. Rapid selections are
+  blocked so there is one deterministic pending destination.
+- Removed the closed side dock and all static destination rendering during morph travel. Morph content is clipped with
+  the current local bounds and uses the real GUI pose/scissor path; no extra blur, framebuffer, texture, or trail history was added.
+- Removed `enabledStripColor` and its draw call. Card fills, outlines, widths, bind, description, chevron/control colors,
+  and other surfaces are neutral for enabled/disabled and selected/unselected states. Only `enabled || selected` changes
+  the module-name color to `ClientTheme.accentA`.
+- Centered the root at `(ROOT_ANCHOR_X, ROOT_ANCHOR_Y) = (167, 113)` for pose, inverse mouse transform, local-to-screen
+  conversion, hitboxes, and morph geometry. Fit scale is now asymmetric for the main-plus-right-side extents.
+
+### Tests and verification
+
+- Focused ClickGUI tests passed with `.codex-tmp/clickgui-focused-test.init.gradle`, covering close/open endpoint direction,
+  interrupted opening, staged ownership, rapid switching, card name-only styling, exact FCL centering bounds, inverse transforms,
+  real-pose/scissor usage, and absence of the closed dock/legacy strip.
+- `git diff --check` passed.
+- Unfiltered `test` remains blocked by unrelated existing compile errors in `SmartCriticalDecisionTest.kt`,
+  `PointFindingKtTest.kt`, and `ItemCooldownProgressTest.kt`; those files were not modified.
+- Required Java 25 Termux build passed:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`.
+- Artifact: `build/libs/liquidbounce-0.31.2.jar`; SHA-256 `e0b81d6e45d5a74ffa562789e6cc8986598175eaea9aa969535e140b62ee30b0`.
+- Implementation/test commit: `09ab870f3` — `fix(clickgui): repair compact settings morph and centering`.
+
+### Runtime status and supersession
+
+FCL/Android runtime testing was not available in this headless Termux workspace. Compilation and focused tests do not prove
+animation smoothness, trail absence, touch alignment, or visual approval. The user must test Minecraft `26.1.2`, FCL,
+GUI scale `2`, approximately `535 x 243`, including repeated open/close, switching, scrolling, category/search deferral,
+and interruption cases. This entry supersedes the prior shared morph implementation's inverse close interpolation,
+instant switch, static closed dock, enabled-card accent surfaces, and full-canvas centering claims.
