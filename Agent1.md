@@ -12030,6 +12030,133 @@ the unrelated sources listed above. No Wyvern behavior was silently replaced wit
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - The post-push documentation commit and final remote-equality verification are reported in the assistant handoff.
 
+## 2026-07-22 - GrimTick Sprint continuity correction
+
+### Request and runtime report
+
+The user reported that the preceding GrimTick NoSlow phase correction was successful in the FCL test: no visible
+Grim NoSlow alerts were observed. That successful phase controller had to remain unchanged. The same test exposed a
+Sprint regression while moving and using an item: the Sprint indicator repeatedly toggled, ground speed fell to about
+1--2 BPS, airborne speed was commonly about 3--4 BPS, and repeated airborne toggles could fall back to about
+1--2 BPS. The requested correction was Sprint continuity only, with MainHand and Offhand behavior preserved.
+
+### Checked and authority
+
+Read the required Skill workflow documents, the latest GrimTick phase-latching/natural-tick-end/two-stage-recovery
+entries, the complete current `ModuleNoSlow.kt`, `GrimTickNoSlowController.kt`, `ModuleSprint.kt`,
+`MixinClientPlayerEntity.java`, `MixinKeyboardInput.java`, `GameEvents.kt`, current GrimTick tests, all live
+`SprintEvent` handlers and priorities, and the bounded `[GrimTickDiag]` implementation. Audited ModuleSprint,
+ModuleNoSlow, KillAura, Criticals, InventoryActionMovementGate, InventoryMove, ElytraSwap, Navigation, and other
+final-decision Sprint handlers. Existing unrelated tracked and untracked worktree changes were preserved.
+
+The mapped Minecraft 26.1.2 source was read from
+`.gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-merged-7f56e53844/26.1.2/minecraft-merged-7f56e53844-26.1.2-sources.jar`.
+The supplied Grim 2.0 source was read from `WorkSpace/.../Grim-2.0` and remained read-only.
+
+### Vanilla Sprint evidence
+
+`LocalPlayer.tick()` sends `ServerboundPlayerInputPacket` when `input.keyPresses` changes and then calls
+`sendPosition()` (LocalPlayer.java:230--248). `sendPosition()` calls `sendIsSprintingIfNeeded()` first (266--268).
+`sendIsSprintingIfNeeded()` sends START or STOP only when `isSprinting != wasSprinting`, then updates `wasSprinting`
+(305--313). `modifyInput()` applies `itemUseSpeedMultiplier()` while using an item (method structure around
+565--567 and the input transform), while `isSlowDueToUsingItem()` is the separate `UseEffects.canSprint()` gate
+(561--563). `aiStep()` keeps an already-active Sprint in the normal state machine and only calls `setSprinting(false)`
+through `shouldStopRunSprinting()` (764--825). That stop predicate checks sprint eligibility, forward impulse, and
+hard horizontal collision (918--920); `canStartSprinting()` refuses a new Sprint while `isSlowDueToUsingItem()` is
+true (1133--1139). Therefore item slowdown and an already-active Sprint are independent in vanilla.
+
+`KeyboardInput.tick()` constructs `Input` from the physical key states, including Sprint (KeyboardInput.java:25--38),
+and the 26.1.2 `Input` record carries `sprint` as its seventh field and packet bit (Input.java:6--13, 17--36).
+
+### Grim Sprint and prediction evidence
+
+Grim `NoSlow` checks only checked predictions while `packetStateData.isSlowedByUsingItem()` is true; an invalid checked
+prediction arms `flaggedLastTick`, a consecutive invalid prediction sets back, and a valid slowed prediction rewards
+and clears the latch (`checks/impl/movement/NoSlow.java:25--47`). `ModernInputTransformer` applies the active item
+UseEffects speed multiplier and modern square-input normalization (`.../ModernInputTransformer.java:22--47, 60--66`).
+The supplied prediction path updates the sprinting attribute by +30% when the server-known Sprint state is true
+(`MovementCheckRunner.java:330--368`), and its input search uses `player.isSprinting` and known input to constrain
+forward/backward candidates (`PredictionEngine.java:725--755`). `PacketPlayerSteer` records `Input.sprint` in
+`KnownInput` (`PacketPlayerSteer.java:47--82`), while `PacketEntityAction` updates server Sprint state on START/STOP.
+The modern-version SprintC exemption returns for clients newer than or equal to 1.14.2 except 1.21.4
+(`checks/impl/sprint/SprintC.java:20--25`). BadPacketsF rejects duplicate START/STOP commands, so stable state is
+safer than alternating commands (`checks/impl/badpackets/BadPacketsF.java:25--56`). Packet-order state tracks
+Sprint actions per tick; no new packet manipulation was needed.
+
+### Root cause
+
+The previous NoSlow patch added a final-priority `grimTickSprintRecoveryHandler` in `ModuleNoSlow` which forced
+`event.sprint = false` for `SprintEvent.Source.INPUT`, `MOVEMENT_TICK`, and `NETWORK` during every recovery phase.
+That changed the generated `Input.sprint`, made the inverted `shouldStopRunSprinting()` wrapper stop local Sprint,
+and made `sendIsSprintingIfNeeded()` emit STOP in recovery and START in the next FAST phase. `ModuleSprint` also
+returned early during GrimTick recovery, so its ordinary Sprint decision could not object to this injected false state.
+The old behavior was therefore FAST starts Sprint -> recovery stops Sprint -> next FAST restarts Sprint.
+
+This adaptation was incorrect and is superseded by this entry. Recovery must control only item-use input slowdown;
+it must not alter a legitimate Sprint state.
+
+### Changed
+
+- Removed `grimTickSprintRecoveryHandler` and its recovery-only `event.sprint = false` writes.
+- Removed the recovery-only early return from `ModuleSprint`; its normal Legit/Omnidirectional/Omnirotational,
+  movement, collision, and backward-input rules now run in every GrimTick phase.
+- Added only observational aiStep-end instrumentation in `MixinClientPlayerEntity` and bounded session-level Sprint
+  diagnostics. Diagnostics record initial local/physical/module state, observable network state, phase, local Sprint
+  before/after aiStep, physical input, `Input.sprint`, `ServerboundPlayerInputPacket.sprint`, START/STOP counts,
+  transitions, and a determinable genuine-loss reason. A single compact summary logs boundary, FAST, recovery,
+  START, STOP, and transition counts at session end or diagnostic-budget exhaustion.
+- Added `GrimTickSprintContinuityTest.kt` and updated `GrimTickNoSlowControllerTest.kt` to assert the production
+  recovery override is absent, the exact sequence remains, Sprint stays true through recovery, packet transitions are
+  genuine-state-only, and normal no-movement/backward/collision stops remain possible.
+
+No ModuleNoSlow phase logic, MainHand/Offhand eligibility, item selection, natural tick-end completion, two recovery
+boundaries, fast duty cycle, or diagnostics budget was redesigned. No packet spoofing, manual Sprint packet, manual
+STOP, duplicate START, slot spoof, timer change, movement cancellation, velocity change, or `wasSprinting` mutation
+was added.
+
+### GrimTick sequence and Sprint contract
+
+The controller remains exactly:
+
+`WARMUP recovery -> WARMUP recovery -> FAST -> RECOVERY -> RECOVERY_CONFIRM -> FAST -> RECOVERY -> RECOVERY_CONFIRM -> ...`
+
+Natural `ServerboundClientTickEndPacket` post-send completion remains the only phase boundary; movement POST and
+manual tick-end completion remain absent. FAST returns complete bypass. RECOVERY and RECOVERY_CONFIRM return the real
+item slowdown multiplier and modern normalization. Sprint remains independent: if already true, it stays true across
+FAST, RECOVERY, and RECOVERY_CONFIRM; if ModuleSprint or physical input legitimately requests it, normal handling can
+acquire it; genuine no-movement/backward/collision/hunger/module/world/death conditions can still stop it.
+
+For uninterrupted Sprint, vanilla's state model permits one START at acquisition, no STOP on phase transitions, and
+no repeated START while `isSprinting == wasSprinting == true`. A real stop alone produces one STOP.
+
+### Verification
+
+- `git diff --check`: passed.
+- Focused command with the existing repository test-source exclusion init script:
+  `./gradlew --no-daemon -I .codex-tmp/grimtick-second-focused.init.gradle test --tests '...GrimTickNoSlowControllerTest' --tests '...GrimTickSprintContinuityTest'`:
+  `BUILD SUCCESSFUL`; 20 tests passed.
+- Unfiltered `./gradlew --no-daemon test`: blocked during `compileTestKotlin` by the pre-existing unrelated
+  `SmartCriticalDecisionTest.kt`, `PointFindingKtTest.kt`, and `ItemCooldownProgressTest.kt` unresolved symbols.
+  No task test failure was observed; those tests were not modified.
+- `compileKotlin`: passed.
+- Required clean build:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`:
+  `BUILD SUCCESSFUL in 2m 14s`.
+- Artifact: `build/libs/liquidbounce-0.31.2.jar`; SHA-256
+  `75adcf5693c81c7eb3524cc029314aeef6b5cca31cac9d92cbddd78f684cee76`.
+- Sources JAR SHA-256: `d40effc3f08177c946c533681ceed194fdaae6130a967db84de6fa5b41fdfac9`.
+
+### Runtime status and commits
+
+The corrected JAR has not been run through FCL in this headless Termux environment. Ground/air BPS, MainHand/Offhand
+food and shield, bow/trident/crossbow, physical Sprint, Legit/Omnidirectional/Omnirotational, and the requested
+five-minute same-server NoSlow/Sprint/PacketOrder/BadPackets/Simulation matrix remain pending. No runtime success is
+claimed from compilation or model tests. The prior user-confirmed NoSlow alert-free result remains the behavior this
+patch preserves; the new Sprint continuity is pending FCL confirmation.
+
+- Implementation commit: `a69b392f` (`fix(noslow): preserve sprint through grimtick recovery`).
+- Documentation commit and push result: pending at entry creation; a post-push update will record them.
+
 ## 2026-07-22 - GrimTick NoSlow second runtime-driven correction
 
 ### Request and runtime evidence
