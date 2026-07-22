@@ -29,6 +29,8 @@ object SilentClickGuiLayout {
     const val SAFE_MIN_SCALE = 0.05f
     const val DEFAULT_MARGIN = 12f
     const val MAX_FIT_SCALE = 0.86f
+    const val ROOT_ANCHOR_X = 167f
+    const val ROOT_ANCHOR_Y = 113f
 
     val mainPanel = SilentRect(0f, 0f, 334f, 226f)
     val sidePanel = SilentRect(342f, 0f, 126f, 226f)
@@ -65,9 +67,13 @@ object SilentClickGuiLayout {
         val safeWidth = screenWidth.toFloat().coerceAtLeast(1f)
         val safeHeight = screenHeight.toFloat().coerceAtLeast(1f)
         val safeMargin = margin.coerceAtLeast(0f)
-        val widthScale = ((safeWidth - safeMargin * 2f) / REFERENCE_WIDTH).takeIf { it.isFinite() } ?: SAFE_MIN_SCALE
-        val heightScale = ((safeHeight - safeMargin * 2f) / REFERENCE_HEIGHT).takeIf { it.isFinite() } ?: SAFE_MIN_SCALE
-        return max(SAFE_MIN_SCALE, min(MAX_FIT_SCALE, min(widthScale, heightScale)))
+        val halfWidth = safeWidth * 0.5f - safeMargin
+        val halfHeight = safeHeight * 0.5f - safeMargin
+        val leftScale = (halfWidth / ROOT_ANCHOR_X).takeIf { it.isFinite() } ?: SAFE_MIN_SCALE
+        val rightScale = ((halfWidth) / (REFERENCE_WIDTH - ROOT_ANCHOR_X)).takeIf { it.isFinite() } ?: SAFE_MIN_SCALE
+        val topScale = (halfHeight / ROOT_ANCHOR_Y).takeIf { it.isFinite() } ?: SAFE_MIN_SCALE
+        val bottomScale = (halfHeight / (REFERENCE_HEIGHT - ROOT_ANCHOR_Y)).takeIf { it.isFinite() } ?: SAFE_MIN_SCALE
+        return max(SAFE_MIN_SCALE, min(MAX_FIT_SCALE, min(min(leftScale, rightScale), min(topScale, bottomScale))))
     }
 
     fun transform(screenWidth: Int, screenHeight: Int, animationScale: Float, margin: Float = DEFAULT_MARGIN) =
@@ -170,21 +176,21 @@ data class SilentTransform(
 
     fun screenToLocal(mouseX: Double, mouseY: Double): SilentPoint =
         SilentPoint(
-            ((mouseX.toFloat() - centerX) / totalScale) + SilentClickGuiLayout.REFERENCE_WIDTH * 0.5f,
-            ((mouseY.toFloat() - centerY) / totalScale) + SilentClickGuiLayout.REFERENCE_HEIGHT * 0.5f
+            ((mouseX.toFloat() - centerX) / totalScale) + SilentClickGuiLayout.ROOT_ANCHOR_X,
+            ((mouseY.toFloat() - centerY) / totalScale) + SilentClickGuiLayout.ROOT_ANCHOR_Y
         )
 
     fun localToScreen(point: SilentPoint): SilentPoint =
         SilentPoint(
-            centerX + (point.x - SilentClickGuiLayout.REFERENCE_WIDTH * 0.5f) * totalScale,
-            centerY + (point.y - SilentClickGuiLayout.REFERENCE_HEIGHT * 0.5f) * totalScale
+            centerX + (point.x - SilentClickGuiLayout.ROOT_ANCHOR_X) * totalScale,
+            centerY + (point.y - SilentClickGuiLayout.ROOT_ANCHOR_Y) * totalScale
         )
 
     fun localToScreen(rect: SilentRect): ScreenRect {
-        val x0 = centerX + (rect.x - SilentClickGuiLayout.REFERENCE_WIDTH * 0.5f) * totalScale
-        val y0 = centerY + (rect.y - SilentClickGuiLayout.REFERENCE_HEIGHT * 0.5f) * totalScale
-        val x1 = centerX + (rect.right - SilentClickGuiLayout.REFERENCE_WIDTH * 0.5f) * totalScale
-        val y1 = centerY + (rect.bottom - SilentClickGuiLayout.REFERENCE_HEIGHT * 0.5f) * totalScale
+        val x0 = centerX + (rect.x - SilentClickGuiLayout.ROOT_ANCHOR_X) * totalScale
+        val y0 = centerY + (rect.y - SilentClickGuiLayout.ROOT_ANCHOR_Y) * totalScale
+        val x1 = centerX + (rect.right - SilentClickGuiLayout.ROOT_ANCHOR_X) * totalScale
+        val y1 = centerY + (rect.bottom - SilentClickGuiLayout.ROOT_ANCHOR_Y) * totalScale
         val minX = min(x0, x1)
         val minY = min(y0, y1)
         val maxX = max(x0, x1)

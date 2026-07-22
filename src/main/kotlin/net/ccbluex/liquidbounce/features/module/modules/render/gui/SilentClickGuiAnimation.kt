@@ -23,8 +23,6 @@ object SilentClickGuiAnimation {
     const val OPEN_ALPHA_MS = 180L
     const val CLOSE_MS = 200L
     const val MIN_SCALE = 0.94f
-    /** Retained only for restrained content changes when switching modules. */
-    const val SWITCH_CONTENT_MS = 160L
 
     fun expoOut(progress: Float): Float {
         val t = progress.coerceIn(0f, 1f)

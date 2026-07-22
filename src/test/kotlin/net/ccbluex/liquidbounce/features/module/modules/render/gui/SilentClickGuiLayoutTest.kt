@@ -25,13 +25,19 @@ class SilentClickGuiLayoutTest {
     }
 
     @Test
-    fun `FCL canvas is centered and capped at 0 point 86`() {
+    fun `FCL main panel is centered while the side panel extends right`() {
         val transform = SilentClickGuiLayout.transform(535, 243, 1f)
-        assertClose(0.86f, transform.fitScale)
-        assertClose(66.26f, transform.localToScreen(SilentPoint(0f, 0f)).x)
-        assertClose(24.32f, transform.localToScreen(SilentPoint(0f, 0f)).y)
-        assertClose(468.74f, transform.localToScreen(SilentPoint(468f, 226f)).x)
-        assertClose(218.68f, transform.localToScreen(SilentPoint(468f, 226f)).y)
+        assertClose(0.8488372f, transform.fitScale)
+        assertClose(125.744f, transform.localToScreen(SilentPoint(0f, 0f)).x)
+        assertClose(25.581f, transform.localToScreen(SilentPoint(0f, 0f)).y)
+        assertClose(523f, transform.localToScreen(SilentPoint(468f, 226f)).x)
+        assertClose(217.419f, transform.localToScreen(SilentPoint(468f, 226f)).y)
+        assertClose(267.5f, transform.localToScreen(SilentPoint(167f, 113f)).x)
+        assertClose(121.5f, transform.localToScreen(SilentPoint(167f, 113f)).y)
+        val mainRight = transform.localToScreen(SilentPoint(SilentClickGuiLayout.mainPanel.right, 0f)).x
+        val sideLeft = transform.localToScreen(SilentPoint(SilentClickGuiLayout.sidePanel.x, 0f)).x
+        assertClose(409.256f, mainRight)
+        assertClose(416.047f, sideLeft)
     }
 
     @Test

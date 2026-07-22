@@ -132,7 +132,13 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         val alpha = visualAlpha()
         val transform = SilentClickGuiLayout.transform(width, height, scale)
         val localMouse = transform.screenToLocal(mouseX.toDouble(), mouseY.toDouble())
+        val previousMorphPhase = morph.phase
         morph.tick()
+        if (previousMorphPhase == ModuleSettingsMorphPhase.SWITCH_FADE_OUT &&
+            morph.phase == ModuleSettingsMorphPhase.SWITCH_OPENING) {
+            sideSettingsScroll = 0f
+            settings.clearTransient()
+        }
         selectedModule = morph.selectedModule
 
         settings.beginFrame()
@@ -142,10 +148,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         pose.pushMatrix()
         pose.translate(transform.centerX, transform.centerY)
         pose.scale(transform.totalScale, transform.totalScale)
-        pose.translate(
-            -SilentClickGuiLayout.REFERENCE_WIDTH * 0.5f,
-            -SilentClickGuiLayout.REFERENCE_HEIGHT * 0.5f
-        )
+        pose.translate(-SilentClickGuiLayout.ROOT_ANCHOR_X, -SilentClickGuiLayout.ROOT_ANCHOR_Y)
 
         try {
             renderShell(context, transform, localMouse, alpha)
@@ -160,8 +163,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             return true
         }
 
-        if (morph.phase in setOf(ModuleSettingsMorphPhase.OPENING, ModuleSettingsMorphPhase.PREPARING_CLOSE,
-                ModuleSettingsMorphPhase.CLOSING)) {
+        if (morphIsBusy()) {
             return true
         }
 
@@ -170,9 +172,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         }
 
         val local = inputTransform().screenToLocal(event.x(), event.y())
-        if (SilentClickGuiLayout.sidePanel.contains(local) && morph.phase in setOf(
-                ModuleSettingsMorphPhase.OPEN, ModuleSettingsMorphPhase.SWITCHING
-            )) {
+        if (SilentClickGuiLayout.sidePanel.contains(local) && morph.phase == ModuleSettingsMorphPhase.OPEN) {
             val module = selectedModule
             if (module != null && SilentClickGuiLayout.sideHeader.contains(local)) {
                 val header = SilentClickGuiLayout.sideHeader
@@ -209,7 +209,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             }
         }
 
-        if (morph.phase in setOf(ModuleSettingsMorphPhase.OPENING, ModuleSettingsMorphPhase.PREPARING_CLOSE, ModuleSettingsMorphPhase.CLOSING)) {
+        if (morphIsBusy()) {
             return true
         }
         if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT && button != GLFW.GLFW_MOUSE_BUTTON_RIGHT &&
@@ -232,6 +232,9 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     }
 
     override fun mouseDragged(event: MouseButtonEvent, dx: Double, dy: Double): Boolean {
+        if (morphIsBusy()) {
+            return true
+        }
         if (settings.updateDragging(inputTransform().screenToLocal(event.x(), event.y()).x)) {
             return true
         }
@@ -244,7 +247,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             return true
         }
 
-        if (morph.phase in setOf(ModuleSettingsMorphPhase.OPENING, ModuleSettingsMorphPhase.PREPARING_CLOSE, ModuleSettingsMorphPhase.CLOSING)) {
+        if (morphIsBusy()) {
             return true
         }
         val local = inputTransform().screenToLocal(mouseX, mouseY)
@@ -277,14 +280,16 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     }
 
     override fun keyPressed(event: KeyEvent): Boolean {
-        if (morph.phase !in setOf(ModuleSettingsMorphPhase.OPENING, ModuleSettingsMorphPhase.PREPARING_CLOSE,
-                ModuleSettingsMorphPhase.CLOSING) && settings.handleKey(event)) {
+        if (!morphIsBusy() && settings.handleKey(event)) {
             return true
         }
 
         if (event.isEscape()) {
-            if (morph.phase in setOf(ModuleSettingsMorphPhase.OPEN, ModuleSettingsMorphPhase.SWITCHING, ModuleSettingsMorphPhase.OPENING)) {
+            if (morph.phase in setOf(ModuleSettingsMorphPhase.OPEN, ModuleSettingsMorphPhase.OPENING,
+                    ModuleSettingsMorphPhase.OPENING_SETTLE)) {
                 beginModuleClose()
+            } else if (morphIsBusy()) {
+                return true
             } else {
                 startClosing()
             }
@@ -344,6 +349,9 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             else -> renderModulePage(context, transform, mouse, alpha)
         }
         renderSideSettings(context, mouse, alpha)
+        if (morphOwnsSurface()) {
+            runCatching { context.nextStratum() }
+        }
         renderMorph(context, mouse, alpha)
     }
 
@@ -372,7 +380,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         ExosGuiRenderer.roundedOutline(matrices, SilentClickGuiLayout.header.x, SilentClickGuiLayout.header.y,
             SilentClickGuiLayout.header.w, SilentClickGuiLayout.header.h, 6f, fade(0x13FFFFFF, alpha), 0.55f)
         val side = SilentClickGuiLayout.sidePanel
-        val sideOpen = morph.phase in setOf(ModuleSettingsMorphPhase.OPEN, ModuleSettingsMorphPhase.SWITCHING)
+        val sideOpen = morph.phase in setOf(ModuleSettingsMorphPhase.OPEN, ModuleSettingsMorphPhase.SWITCH_FADE_OUT)
         if (sideOpen) {
             ExosGuiRenderer.roundedGradientRect(matrices, side.x, side.y, side.w, side.h, 8f,
                 fade(0xE20B0F17.toInt(), alpha), fade(0xE4141922.toInt(), alpha),
@@ -380,9 +388,6 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             ExosGuiRenderer.roundedOutline(matrices, side.x, side.y, side.w, side.h, 8f, fade(0x28FFFFFF, alpha), 0.75f)
             val viewport = SilentClickGuiLayout.settingsViewport
             ExosGuiRenderer.roundedRect(matrices, viewport.x, viewport.y, viewport.w, viewport.h, 5f, fade(0x18000000, alpha))
-        } else {
-            // Closed dock is only a restrained composition indicator, never an empty panel.
-            ExosGuiRenderer.roundedOutline(matrices, side.x, side.y, side.w, side.h, 8f, fade(0x18FFFFFF, alpha), 0.55f)
         }
     }
 
@@ -498,14 +503,9 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                     return@forEachIndexed
                 }
 
-                if (morph.selectedModule === module && morph.phase in setOf(
-                        ModuleSettingsMorphPhase.OPENING,
-                        ModuleSettingsMorphPhase.OPEN,
-                        ModuleSettingsMorphPhase.SWITCHING,
-                        ModuleSettingsMorphPhase.PREPARING_CLOSE,
-                        ModuleSettingsMorphPhase.CLOSING,
-                    )) {
-                    if (morph.phase != ModuleSettingsMorphPhase.CLOSING) {
+                if (shouldHideModuleCard(module)) {
+                    if (morph.phase !in setOf(ModuleSettingsMorphPhase.PREPARING_CLOSE,
+                            ModuleSettingsMorphPhase.CLOSING, ModuleSettingsMorphPhase.CLOSING_SETTLE)) {
                         morph.updateLatestSourceRect(card)
                     }
                     return@forEachIndexed
@@ -539,11 +539,6 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         ExosGuiRenderer.roundedRect(context.matrices, card.x, card.y, card.w, card.h, 6f, style.fillColor)
         ExosGuiRenderer.roundedOutline(context.matrices, card.x, card.y, card.w, card.h, 5f,
             style.outlineColor, style.outlineWidth)
-        if (enabled) {
-            ExosGuiRenderer.roundedRect(context.matrices, card.x, card.y, 2f, card.h, 1f,
-                style.enabledStripColor)
-        }
-
         val nameColor = style.nameColor
         val zone = SilentClickGuiLayout.moduleSettingsZone(card)
         val nameMax = zone.x - card.x - 9f
@@ -564,18 +559,114 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     }
 
     private fun renderSideSettings(context: DrawContext, mouse: SilentPoint, alpha: Float) {
-        if (morph.phase !in setOf(ModuleSettingsMorphPhase.OPEN, ModuleSettingsMorphPhase.SWITCHING)) {
-            return
-        }
+        if (morph.phase !in setOf(ModuleSettingsMorphPhase.OPEN, ModuleSettingsMorphPhase.SWITCH_FADE_OUT)) return
         val side = SilentClickGuiLayout.sidePanel
         val header = SilentClickGuiLayout.sideHeader
         val viewport = SilentClickGuiLayout.settingsViewport
         val module = selectedModule.takeIf { selectedPage.category != null && it != null && it.category == selectedPage.category }
-        val title = module?.name ?: return
-        val subtitle = selectedPage.title
-        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(title, 70f, 6.2f), side.x + 8f, header.y + 6f,
-            fade(0xE8FFFFFF.toInt(), alpha), 6.2f)
-        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(subtitle, 64f, 4.7f), side.x + 8f, header.y + 17f,
+            ?: return
+        val contentAlpha = if (morph.phase == ModuleSettingsMorphPhase.SWITCH_FADE_OUT) 1f - morph.progress() else 1f
+        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(module.name, 70f, 6.2f), side.x + 8f, header.y + 6f,
+            fade(0xE8FFFFFF.toInt(), alpha * contentAlpha), 6.2f)
+        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(selectedPage.title, 64f, 4.7f), side.x + 8f, header.y + 17f,
+            fade(0x78FFFFFF, alpha * contentAlpha), 4.7f)
+        val toggle = SilentRect(header.right - 28f, header.y + 8f, 18f, 9f)
+        drawSwitch(context, toggle.x, toggle.y, module.enabled, alpha * contentAlpha)
+        val close = SilentRect(header.right - 8f, header.y + 7f, 8f, 12f)
+        ExosGuiRenderer.clickGuiBody(context.matrices, "×", close.x, close.y,
+            fade(0xA8FFFFFF.toInt(), alpha * contentAlpha), 6f)
+        val entries = settings.visibleSettings(module)
+        val contentHeight = settings.contentHeight(entries)
+        sideSettingsScroll = SilentClickGuiSettingsMath.clampScroll(sideSettingsScroll, contentHeight, viewport.h)
+        if (contentAlpha > 0.01f) {
+            withLocalScissor(context, viewport) {
+                settings.render(context, viewport, entries, sideSettingsScroll, mouse.x, mouse.y,
+                    alpha * contentAlpha)
+            }
+        }
+    }
+
+    private fun renderMorph(context: DrawContext, mouse: SilentPoint, alpha: Float) {
+        val phase = morph.phase
+        if (!morphOwnsSurface()) return
+        val module = morph.selectedModule ?: return
+        val progress = morph.progress()
+        when (phase) {
+            ModuleSettingsMorphPhase.OPENING -> {
+                val card = SilentClickGuiMorph.openingRect(morph.sourceRect, progress)
+                drawMorphSurface(context, card, alpha)
+                val prep = ModuleSettingsMorphController.OPEN_PREP_MS.toFloat() /
+                    (ModuleSettingsMorphController.OPEN_PREP_MS + ModuleSettingsMorphController.OPEN_TRAVEL_MS).toFloat()
+                if (progress < prep) renderMorphName(context, module, card, alpha * (1f - progress / prep))
+            }
+            ModuleSettingsMorphPhase.OPENING_SETTLE -> {
+                val card = SilentClickGuiLayout.sidePanel
+                drawMorphSurface(context, card, alpha)
+                renderMorphPanel(context, module, mouse, alpha * progress, card)
+            }
+            ModuleSettingsMorphPhase.PREPARING_CLOSE -> {
+                val card = morph.closingStartRect.takeUnless { it == SilentRect.ZERO } ?: SilentClickGuiLayout.sidePanel
+                drawMorphSurface(context, card, alpha)
+                renderMorphPanel(context, module, mouse, alpha * (1f - progress), card)
+            }
+            ModuleSettingsMorphPhase.CLOSING -> {
+                val start = morph.closingStartRect.takeUnless { it == SilentRect.ZERO } ?: SilentClickGuiLayout.sidePanel
+                val card = SilentClickGuiMorph.morphRect(start, morph.latestSourceRect, progress)
+                drawMorphSurface(context, card, alpha)
+            }
+            ModuleSettingsMorphPhase.CLOSING_SETTLE -> {
+                val card = morph.latestSourceRect
+                drawMorphSurface(context, card, alpha)
+                renderMorphName(context, module, card, alpha * progress)
+            }
+            ModuleSettingsMorphPhase.SWITCH_OPENING -> {
+                val card = SilentClickGuiMorph.switchRect(morph.sourceRect, progress)
+                drawMorphSurface(context, card, alpha)
+                val prep = 40f / ModuleSettingsMorphController.SWITCH_TRAVEL_MS.toFloat()
+                if (progress < prep) renderMorphName(context, module, card, alpha * (1f - progress / prep))
+            }
+            ModuleSettingsMorphPhase.SWITCH_SETTLE -> {
+                val card = SilentClickGuiLayout.sidePanel
+                drawMorphSurface(context, card, alpha)
+                renderMorphPanel(context, module, mouse, alpha * progress, card)
+            }
+            else -> Unit
+        }
+
+        if (phase == ModuleSettingsMorphPhase.CLOSING_SETTLE && progress >= 1f) {
+            val page = morph.consumePendingPage()
+            val search = morph.consumePendingSearch()
+            morph.completeClose()
+            selectedModule = null
+            sideSettingsScroll = 0f
+            page?.let { applyPage(it) }
+            search?.let { searchText = it; resetSearchScroll() }
+        }
+    }
+
+    private fun drawMorphSurface(context: DrawContext, rect: SilentRect, alpha: Float) {
+        if (rect.w <= 0f || rect.h <= 0f) return
+        val radius = min(8f, min(rect.w, rect.h) * 0.5f)
+        ExosGuiRenderer.roundedRect(context.matrices, rect.x, rect.y, rect.w, rect.h, radius,
+            fade(0xF00B0F17.toInt(), alpha))
+        ExosGuiRenderer.roundedOutline(context.matrices, rect.x, rect.y, rect.w, rect.h, radius,
+            fade(0x35FFFFFF, alpha), 0.75f)
+    }
+
+    private fun renderMorphName(context: DrawContext, module: ClientModule, rect: SilentRect, alpha: Float) {
+        if (alpha <= 0.01f || rect.w < 20f || rect.h < 10f) return
+        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(module.name, max(12f, rect.w - 12f), 6f),
+            rect.x + 6f, rect.y + 4f, fade(ClientTheme.accentA, alpha), 6f)
+    }
+
+    private fun renderMorphPanel(context: DrawContext, module: ClientModule, mouse: SilentPoint,
+                                 alpha: Float, clipRect: SilentRect) {
+        if (alpha <= 0.01f) return
+        val side = SilentClickGuiLayout.sidePanel
+        val header = SilentClickGuiLayout.sideHeader
+        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(module.name, 70f, 6.2f), side.x + 8f,
+            header.y + 6f, fade(0xE8FFFFFF.toInt(), alpha), 6.2f)
+        ExosGuiRenderer.clickGuiBody(context.matrices, selectedPage.title, side.x + 8f, header.y + 17f,
             fade(0x78FFFFFF, alpha), 4.7f)
         val toggle = SilentRect(header.right - 28f, header.y + 8f, 18f, 9f)
         drawSwitch(context, toggle.x, toggle.y, module.enabled, alpha)
@@ -583,72 +674,14 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         ExosGuiRenderer.clickGuiBody(context.matrices, "×", close.x, close.y, fade(0xA8FFFFFF.toInt(), alpha), 6f)
         val entries = settings.visibleSettings(module)
         val contentHeight = settings.contentHeight(entries)
-        sideSettingsScroll = SilentClickGuiSettingsMath.clampScroll(sideSettingsScroll, contentHeight, viewport.h)
-        withLocalScissor(context, viewport) {
-            settings.render(context, viewport, entries, sideSettingsScroll, mouse.x, mouse.y, alpha)
-        }
-    }
-
-    private fun renderMorph(context: DrawContext, mouse: SilentPoint, alpha: Float) {
-        val phase = morph.phase
-        if (phase !in setOf(ModuleSettingsMorphPhase.OPENING, ModuleSettingsMorphPhase.PREPARING_CLOSE, ModuleSettingsMorphPhase.CLOSING)) {
-            return
-        }
-        val module = morph.selectedModule ?: return
-        val progress = morph.progress()
-        val opening = phase != ModuleSettingsMorphPhase.CLOSING
-        val t = if (opening) progress else 1f - progress
-        val start = if (opening) morph.sourceRect else morph.closingStartRect.takeUnless { it == SilentRect.ZERO }
-            ?: SilentClickGuiLayout.sidePanel
-        val end = if (opening) SilentClickGuiLayout.sidePanel else morph.latestSourceRect
-        val card = SilentClickGuiMorph.morphRect(start, end, t)
-        val cardAlpha = if (opening) SilentClickGuiMorph.cardContentAlpha(t) else 1f - SilentClickGuiMorph.panelContentAlpha(t)
-        val panelAlpha = if (opening) SilentClickGuiMorph.panelContentAlpha(t) else 1f - SilentClickGuiMorph.panelContentAlpha(t)
-        val radius = SilentClickGuiMorph.radius(t)
-        val style = CompactModuleCardStyles.style(module.enabled, selected = true, hovered = false, alpha * cardAlpha)
-        val sideColor = fade(0xE20B0F17.toInt(), alpha)
-        ExosGuiRenderer.roundedGradientRect(
-            context.matrices, card.x, card.y, card.w, card.h, radius,
-            ExosGuiRenderer.mix(style.fillColor, sideColor, t),
-            ExosGuiRenderer.mix(style.fillColor, sideColor, t),
-            ExosGuiRenderer.mix(style.fillColor, sideColor, t),
-            ExosGuiRenderer.mix(style.fillColor, sideColor, t)
-        )
-        ExosGuiRenderer.roundedOutline(context.matrices, card.x, card.y, card.w, card.h, radius,
-            ExosGuiRenderer.mix(style.outlineColor, fade(0x28FFFFFF, alpha), t),
-            SilentClickGuiMorph.lerp(style.outlineWidth, 0.75f, t))
-
-        if (cardAlpha > 0.01f && card.w > 20f) {
-            val zone = SilentClickGuiLayout.moduleSettingsZone(SilentRect(card.x, card.y, card.w, card.h))
-            ExosGuiRenderer.clickGuiBody(context.matrices, truncate(module.name, max(12f, card.w - 30f), 6f),
-                card.x + 6f, card.y + 4f, style.nameColor, 6f)
-            ExosGuiRenderer.clickGuiBody(context.matrices, truncate(moduleDescription(module), max(12f, card.w - 12f), 4.4f),
-                card.x + 6f, card.y + 15f, style.descriptionColor, 4.4f)
-            ExosGuiRenderer.clickGuiIcon(context.matrices, ">", zone.x + 4f, zone.y + 4.6f,
-                style.settingsControlColor, 5.5f)
-        }
-
-        if (panelAlpha > 0.01f && card.w > 90f) {
-            val header = SilentClickGuiLayout.sideHeader
-            ExosGuiRenderer.clickGuiBody(context.matrices, truncate(module.name, 70f, 6.2f), header.x + 8f,
-                header.y + 6f, fade(0xE8FFFFFF.toInt(), alpha * panelAlpha), 6.2f)
-            ExosGuiRenderer.clickGuiBody(context.matrices, selectedPage.title, header.x + 8f, header.y + 17f,
-                fade(0x78FFFFFF, alpha * panelAlpha), 4.7f)
-            val entries = settings.visibleSettings(module)
-            withLocalScissor(context, SilentClickGuiLayout.settingsViewport) {
+        sideSettingsScroll = SilentClickGuiSettingsMath.clampScroll(sideSettingsScroll, contentHeight,
+            SilentClickGuiLayout.settingsViewport.h)
+        val viewport = intersectRect(SilentClickGuiLayout.settingsViewport, clipRect)
+        if (viewport.w > 0f && viewport.h > 0f) {
+            withLocalScissor(context, viewport) {
                 settings.render(context, SilentClickGuiLayout.settingsViewport, entries, sideSettingsScroll,
-                    mouse.x, mouse.y, alpha * panelAlpha)
+                    mouse.x, mouse.y, alpha)
             }
-        }
-
-        if (phase == ModuleSettingsMorphPhase.CLOSING && progress >= 1f) {
-            val page = morph.consumePendingPage()
-            val search = morph.consumePendingSearch()
-            morph.clear()
-            selectedModule = null
-            sideSettingsScroll = 0f
-            page?.let { applyPage(it) }
-            search?.let { searchText = it; resetSearchScroll() }
         }
     }
 
@@ -826,11 +859,12 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         return true
     }
 
-    private fun beginModuleClose() {
-        if (morph.phase == ModuleSettingsMorphPhase.CLOSING || morph.phase == ModuleSettingsMorphPhase.PREPARING_CLOSE) return
+    private fun beginModuleClose(page: SilentClickGuiPage? = null, search: String? = null) {
+        if (morph.phase == ModuleSettingsMorphPhase.CLOSING || morph.phase == ModuleSettingsMorphPhase.CLOSING_SETTLE ||
+            morph.phase == ModuleSettingsMorphPhase.PREPARING_CLOSE) return
         settings.clearTransient()
         sideSettingsScroll = 0f
-        morph.requestClose()
+        morph.requestClose(page = page, search = search)
         val module = morph.selectedModule ?: return
         val modules = filteredModules()
         val index = modules.indexOf(module)
@@ -859,12 +893,11 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             return
         }
 
-        if (morph.phase in setOf(ModuleSettingsMorphPhase.OPENING, ModuleSettingsMorphPhase.PREPARING_CLOSE,
-                ModuleSettingsMorphPhase.CLOSING)) {
+        if (morphIsBusy()) {
             return
         }
-        if (morph.phase in setOf(ModuleSettingsMorphPhase.OPEN, ModuleSettingsMorphPhase.SWITCHING)) {
-            morph.requestClose(page = page)
+        if (morph.phase == ModuleSettingsMorphPhase.OPEN) {
+            beginModuleClose(page = page)
             return
         }
 
@@ -887,19 +920,24 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
     private fun selectModule(module: ClientModule?, card: SilentRect) {
         if (module == null) return
-        if (morph.phase in setOf(ModuleSettingsMorphPhase.OPENING, ModuleSettingsMorphPhase.PREPARING_CLOSE, ModuleSettingsMorphPhase.CLOSING)) return
+        if (morphIsBusy()) return
         val index = filteredModules().indexOf(module)
         if (index < 0) return
-        if (morph.phase == ModuleSettingsMorphPhase.OPEN && morph.selectedModule !== module) {
+        val switching = morph.phase == ModuleSettingsMorphPhase.OPEN && morph.selectedModule !== module
+        if (switching) {
             morph.switch(module, selectedPage.category, index, card)
         } else if (morph.phase == ModuleSettingsMorphPhase.CLOSED) {
             morph.open(module, selectedPage.category, index, card)
         } else {
             return
         }
-        selectedModule = module
+        if (!switching) {
+            selectedModule = module
+        }
         module.category?.let { rememberedModules[it] = module }
-        sideSettingsScroll = 0f
+        if (!switching) {
+            sideSettingsScroll = 0f
+        }
         settings.clearTransient()
     }
 
@@ -984,11 +1022,11 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     }
 
     private fun changeSearch(next: String) {
-        if (morph.phase in setOf(ModuleSettingsMorphPhase.OPEN, ModuleSettingsMorphPhase.SWITCHING)) {
-            morph.requestClose(search = next)
+        if (morph.phase == ModuleSettingsMorphPhase.OPEN) {
+            beginModuleClose(search = next)
             return
         }
-        if (morph.phase in setOf(ModuleSettingsMorphPhase.OPENING, ModuleSettingsMorphPhase.PREPARING_CLOSE, ModuleSettingsMorphPhase.CLOSING)) {
+        if (morphIsBusy()) {
             return
         }
         searchText = next
@@ -1058,6 +1096,44 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
     private fun inputTransform(): SilentTransform =
         SilentClickGuiLayout.transform(width, height, visualScale())
+
+    private fun morphIsBusy(): Boolean = morph.phase != ModuleSettingsMorphPhase.CLOSED &&
+        morph.phase != ModuleSettingsMorphPhase.OPEN
+
+    private fun morphOwnsSurface(): Boolean = morph.phase in setOf(
+        ModuleSettingsMorphPhase.OPENING,
+        ModuleSettingsMorphPhase.OPENING_SETTLE,
+        ModuleSettingsMorphPhase.PREPARING_CLOSE,
+        ModuleSettingsMorphPhase.CLOSING,
+        ModuleSettingsMorphPhase.CLOSING_SETTLE,
+        ModuleSettingsMorphPhase.SWITCH_OPENING,
+        ModuleSettingsMorphPhase.SWITCH_SETTLE,
+    )
+
+    private fun shouldHideModuleCard(module: ClientModule): Boolean = when (morph.phase) {
+        ModuleSettingsMorphPhase.OPENING,
+        ModuleSettingsMorphPhase.OPENING_SETTLE,
+        ModuleSettingsMorphPhase.OPEN,
+        ModuleSettingsMorphPhase.PREPARING_CLOSE,
+        ModuleSettingsMorphPhase.CLOSING,
+        ModuleSettingsMorphPhase.CLOSING_SETTLE,
+        -> morph.selectedModule === module
+
+        ModuleSettingsMorphPhase.SWITCH_FADE_OUT -> morph.selectedModule === module
+        ModuleSettingsMorphPhase.SWITCH_OPENING,
+        ModuleSettingsMorphPhase.SWITCH_SETTLE,
+        -> morph.selectedModule === module
+
+        ModuleSettingsMorphPhase.CLOSED -> false
+    }
+
+    private fun intersectRect(a: SilentRect, b: SilentRect): SilentRect {
+        val x = max(a.x, b.x)
+        val y = max(a.y, b.y)
+        val right = min(a.right, b.right)
+        val bottom = min(a.bottom, b.bottom)
+        return SilentRect(x, y, max(0f, right - x), max(0f, bottom - y))
+    }
 
     private fun startClosing() {
         if (closing) {

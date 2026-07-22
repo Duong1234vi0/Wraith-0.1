@@ -147,16 +147,17 @@ class SilentClickGuiStaticTest {
         assertFalse(source.contains("if (selected) ClientTheme.accentA else 0x88FFFFFF"))
         assertFalse(source.contains("SIDE_CONTENT_MS"))
         assertTrue(source.contains("renderMorph"))
-        assertTrue(source.contains("withLocalScissor(context, SilentClickGuiLayout.settingsViewport)"))
+        assertTrue(source.contains("withLocalScissor(context, viewport)"))
     }
 
     @Test
-    fun `closed dock has no empty settings prompt`() {
+    fun `closed state has no side dock or empty settings prompt`() {
         val source = Files.readString(
             Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt")
         )
-        assertTrue(source.contains("Closed dock is only a restrained composition indicator"))
+        assertFalse(source.contains("Closed dock"))
         assertFalse(source.contains("Select a module"))
+        assertTrue(source.contains("val sideOpen = morph.phase in setOf(ModuleSettingsMorphPhase.OPEN, ModuleSettingsMorphPhase.SWITCH_FADE_OUT)"))
     }
 
     @Test
@@ -178,6 +179,27 @@ class SilentClickGuiStaticTest {
         assertTrue(source.contains("SilentClickGuiSettingsMath.checkboxGeometry"))
         assertFalse(source.contains("\"v\""))
         assertFalse(source.contains("\"✓\""))
+    }
+
+    @Test
+    fun `morph uses staged ownership and main panel anchor`() {
+        val screen = Files.readString(Path.of(
+            "src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt"))
+        val layout = Files.readString(Path.of(
+            "src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiLayout.kt"))
+        assertTrue(screen.contains("pose.translate(-SilentClickGuiLayout.ROOT_ANCHOR_X, -SilentClickGuiLayout.ROOT_ANCHOR_Y)"))
+        assertTrue(screen.contains("private fun drawMorphSurface"))
+        assertTrue(screen.contains("renderMorphPanel"))
+        assertTrue(screen.contains("if (morphOwnsSurface())"))
+        assertEquals(1, Regex("blurBeforeThisStratum").findAll(screen).count())
+        assertFalse(screen.contains("morphRect(start, morph.latestSourceRect, 1f - progress)"))
+        assertFalse(screen.contains("enabledStripColor"))
+        assertFalse(screen.contains("DynamicTexture("))
+        assertFalse(screen.contains("Framebuffer"))
+        assertFalse(screen.contains("motionTrail"))
+        assertTrue(layout.contains("ROOT_ANCHOR_X = 167f"))
+        assertTrue(layout.contains("ROOT_ANCHOR_Y = 113f"))
+        assertTrue(layout.contains("rightScale"))
     }
 
 }

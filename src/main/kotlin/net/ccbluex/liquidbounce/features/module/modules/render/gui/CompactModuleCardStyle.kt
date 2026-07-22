@@ -12,26 +12,19 @@ data class CompactModuleCardStyle(
     val bindColor: Int,
     val descriptionColor: Int,
     val settingsControlColor: Int,
-    val enabledStripColor: Int,
 )
 
 object CompactModuleCardStyles {
     fun style(enabled: Boolean, selected: Boolean, hovered: Boolean, alpha: Float = 1f): CompactModuleCardStyle {
-        val fill = when {
-            enabled -> withAlpha(ClientTheme.accentA, 30)
-            hovered -> 0x17FFFFFF
-            else -> 0x0FFFFFFF
-        }
-        val outline = if (enabled) ClientTheme.accentA else 0x14FFFFFF
+        val fill = if (hovered) 0x17FFFFFF else 0x0FFFFFFF
         return CompactModuleCardStyle(
             fillColor = fade(fill, alpha),
-            outlineColor = fade(outline, alpha),
+            outlineColor = fade(if (hovered) 0x22FFFFFF else 0x14FFFFFF, alpha),
             outlineWidth = 0.55f,
-            nameColor = fade(if (selected) ClientTheme.accentA else if (enabled) 0xFFFFFFFF.toInt() else 0xC8FFFFFF.toInt(), alpha),
+            nameColor = fade(if (enabled || selected) ClientTheme.accentA else 0xC8FFFFFF.toInt(), alpha),
             bindColor = fade(0x75FFFFFF, alpha),
             descriptionColor = fade(0x72FFFFFF, alpha),
             settingsControlColor = fade(0x88FFFFFF.toInt(), alpha),
-            enabledStripColor = fade(withAlpha(ClientTheme.accentA, 170), alpha),
         )
     }
 
@@ -41,5 +34,4 @@ object CompactModuleCardStyles {
         return (next shl 24) or (color and 0x00FFFFFF)
     }
 
-    private fun withAlpha(color: Int, alpha: Int): Int = (alpha.coerceIn(0, 255) shl 24) or (color and 0x00FFFFFF)
 }
