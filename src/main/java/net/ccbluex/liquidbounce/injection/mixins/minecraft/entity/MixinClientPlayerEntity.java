@@ -209,10 +209,12 @@ public abstract class MixinClientPlayerEntity extends MixinPlayerEntity implemen
     private Vec2 hookCustomMultiplier(Vec2 instance, float value, Operation<Vec2> original) {
         var playerUseMultiplier = new PlayerUseMultiplier(value, value);
         EventManager.INSTANCE.callEvent(playerUseMultiplier);
-        return new Vec2(
+        Vec2 result = new Vec2(
             instance.x * playerUseMultiplier.getSideways(),
             instance.y * playerUseMultiplier.getForward()
         );
+        ModuleNoSlow.INSTANCE.observeVanillaItemSlowdown(instance, result);
+        return result;
     }
 
     @ModifyExpressionValue(method = "modifyInput", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;isUsingItem()Z", ordinal = 0))

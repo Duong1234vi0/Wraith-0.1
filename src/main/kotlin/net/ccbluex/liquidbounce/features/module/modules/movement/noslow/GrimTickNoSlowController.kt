@@ -11,11 +11,8 @@
 package net.ccbluex.liquidbounce.features.module.modules.movement.noslow
 
 /**
- * Latches GrimTick to completed local movement cycles.
- *
- * A fast cycle is always followed by a completed vanilla recovery cycle. If a
- * cycle never reaches its network POST boundary, the next cycle fails closed
- * as recovery instead of advancing from an unrelated game tick.
+ * Latches one GrimTick decision until the matching natural client tick-end has
+ * returned from Minecraft's normal send path.
  */
 internal class GrimTickNoSlowController(
     private val warmupRecoveryCycles: Int = DEFAULT_WARMUP_RECOVERY_CYCLES,
@@ -26,90 +23,119 @@ internal class GrimTickNoSlowController(
         WARMUP,
         FAST,
         RECOVERY,
+        RECOVERY_CONFIRM,
+    }
+
+    enum class BoundaryIssue {
+        NONE,
+        MISSING_TICK_END,
+        DUPLICATE_TICK_END,
+        UNEXPECTED_TICK_END,
     }
 
     private var playerIdentity: Any? = null
     private var handIdentity: Any? = null
     private var itemIdentity: Any? = null
     private var useSessionId = 0
+    private var selectedSlot = Int.MIN_VALUE
     private var settingsFingerprint = 0
 
-    private var currentCycleId = NO_CYCLE
+    private var expectedTickEndSerial = NO_TICK
+    private var lastCompletedTickEndSerial = NO_TICK
     private var cycleOpen = false
     private var latchedBypass = false
     private var completedWarmupRecoveries = 0
-    private var nextCycleFast = false
+    private var nextPhase = Phase.WARMUP
 
     var phase: Phase = Phase.INACTIVE
         private set
 
+    var boundaryIssue: BoundaryIssue = BoundaryIssue.NONE
+        private set
+
     fun beginCycle(
-        cycleId: Long,
+        tickEndSerial: Long,
         active: Boolean,
         eligible: Boolean,
         playerIdentity: Any?,
         handIdentity: Any?,
         itemIdentity: Any?,
         useSessionId: Int,
+        selectedSlot: Int,
         settingsFingerprint: Int,
     ): Boolean {
-        if (cycleOpen && cycleId == currentCycleId) {
-            return latchedBypass
-        }
-
-        val missedCompletion = cycleOpen
-        cycleOpen = false
-        latchedBypass = false
+        boundaryIssue = BoundaryIssue.NONE
+        val missedTickEnd = cycleOpen
 
         if (!active || !eligible || playerIdentity == null || handIdentity == null || itemIdentity == null) {
             reset()
             return false
         }
 
-        if (!sameUseSession(playerIdentity, handIdentity, itemIdentity, useSessionId, settingsFingerprint)) {
+        if (!sameUseSession(
+                playerIdentity,
+                handIdentity,
+                itemIdentity,
+                useSessionId,
+                selectedSlot,
+                settingsFingerprint,
+            )
+        ) {
             resetProgress()
             this.playerIdentity = playerIdentity
             this.handIdentity = handIdentity
             this.itemIdentity = itemIdentity
             this.useSessionId = useSessionId
+            this.selectedSlot = selectedSlot
             this.settingsFingerprint = settingsFingerprint
+        } else if (missedTickEnd) {
+            boundaryIssue = BoundaryIssue.MISSING_TICK_END
+            failClosed()
         }
 
-        currentCycleId = cycleId
+        expectedTickEndSerial = tickEndSerial
         cycleOpen = true
-
-        latchedBypass = when {
-            missedCompletion -> false
-            completedWarmupRecoveries < warmupRecoveryCycles -> false
-            nextCycleFast -> true
-            else -> false
-        }
-
-        phase = when {
-            latchedBypass -> Phase.FAST
-            completedWarmupRecoveries < warmupRecoveryCycles -> Phase.WARMUP
-            else -> Phase.RECOVERY
-        }
-
+        phase = nextPhase
+        latchedBypass = phase == Phase.FAST
         return latchedBypass
     }
 
     fun decision(): Boolean = cycleOpen && latchedBypass
 
-    /** Returns true only for the first matching completion. */
-    fun completeCycle(cycleId: Long): Boolean {
-        if (!cycleOpen || cycleId != currentCycleId) {
+    fun isRecoveryCycle(): Boolean = cycleOpen && when (phase) {
+        Phase.WARMUP, Phase.RECOVERY, Phase.RECOVERY_CONFIRM -> true
+        Phase.INACTIVE, Phase.FAST -> false
+    }
+
+    /** Returns true only for the first matching natural tick-end completion. */
+    fun completeAtNaturalTickEnd(tickEndSerial: Long): Boolean {
+        boundaryIssue = BoundaryIssue.NONE
+        if (!cycleOpen) {
+            boundaryIssue = if (tickEndSerial == lastCompletedTickEndSerial) {
+                BoundaryIssue.DUPLICATE_TICK_END
+            } else {
+                BoundaryIssue.UNEXPECTED_TICK_END
+            }
+            return false
+        }
+        if (tickEndSerial != expectedTickEndSerial) {
+            boundaryIssue = BoundaryIssue.UNEXPECTED_TICK_END
+            failClosed()
             return false
         }
 
         cycleOpen = false
-        if (latchedBypass) {
-            nextCycleFast = false
-        } else {
-            if (completedWarmupRecoveries < warmupRecoveryCycles) {
+        lastCompletedTickEndSerial = tickEndSerial
+        when (phase) {
+            Phase.WARMUP -> {
                 completedWarmupRecoveries++
+                nextPhase = if (completedWarmupRecoveries >= warmupRecoveryCycles) Phase.FAST else Phase.WARMUP
             }
-            nextCycleFast = completedWarmupRecoveries >= warmupRecoveryCycles
+
+            Phase.FAST -> nextPhase = Phase.RECOVERY
+            Phase.RECOVERY -> nextPhase = Phase.RECOVERY_CONFIRM
+            Phase.RECOVERY_CONFIRM -> nextPhase = Phase.FAST
+            Phase.INACTIVE -> nextPhase = Phase.WARMUP
         }
         latchedBypass = false
         return true
@@ -120,6 +146,7 @@ internal class GrimTickNoSlowController(
         handIdentity = null
         itemIdentity = null
         useSessionId = 0
+        selectedSlot = Int.MIN_VALUE
         settingsFingerprint = 0
         resetProgress()
     }
@@ -129,24 +156,41 @@ internal class GrimTickNoSlowController(
         handIdentity: Any,
         itemIdentity: Any,
         useSessionId: Int,
+        selectedSlot: Int,
         settingsFingerprint: Int,
     ) = this.playerIdentity === playerIdentity &&
         this.handIdentity === handIdentity &&
         this.itemIdentity === itemIdentity &&
         this.useSessionId == useSessionId &&
+        this.selectedSlot == selectedSlot &&
         this.settingsFingerprint == settingsFingerprint
 
+    private fun failClosed() {
+        cycleOpen = false
+        latchedBypass = false
+        expectedTickEndSerial = NO_TICK
+        nextPhase = if (completedWarmupRecoveries < warmupRecoveryCycles) {
+            completedWarmupRecoveries = 0
+            Phase.WARMUP
+        } else {
+            Phase.RECOVERY
+        }
+        phase = Phase.INACTIVE
+    }
+
     private fun resetProgress() {
-        currentCycleId = NO_CYCLE
+        expectedTickEndSerial = NO_TICK
+        lastCompletedTickEndSerial = NO_TICK
         cycleOpen = false
         latchedBypass = false
         completedWarmupRecoveries = 0
-        nextCycleFast = false
+        nextPhase = Phase.WARMUP
         phase = Phase.INACTIVE
+        boundaryIssue = BoundaryIssue.NONE
     }
 
     companion object {
         const val DEFAULT_WARMUP_RECOVERY_CYCLES = 2
-        private const val NO_CYCLE = Long.MIN_VALUE
+        private const val NO_TICK = Long.MIN_VALUE
     }
 }

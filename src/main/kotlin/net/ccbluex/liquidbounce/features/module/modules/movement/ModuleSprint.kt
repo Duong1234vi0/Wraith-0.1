@@ -26,6 +26,7 @@ import net.ccbluex.liquidbounce.event.events.SprintEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
+import net.ccbluex.liquidbounce.features.module.modules.movement.noslow.ModuleNoSlow
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager
 import net.ccbluex.liquidbounce.utils.aiming.RotationsConfigurable
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
@@ -69,6 +70,14 @@ object ModuleSprint : ClientModule("Sprint", Category.MOVEMENT) {
     @Suppress("unused")
     private val sprintHandler = handler<SprintEvent>(priority = CRITICAL_MODIFICATION) { event ->
         if (!event.directionalInput.isMoving) {
+            return@handler
+        }
+
+        // GrimTick recovery owns the complete vanilla item-use boundary. Do not turn
+        // vanilla's rejected sprint state back on during either recovery phase.
+        if (ModuleNoSlow.isGrimTickRecoveryCycle() &&
+            (event.source == SprintEvent.Source.MOVEMENT_TICK || event.source == SprintEvent.Source.INPUT)
+        ) {
             return@handler
         }
 

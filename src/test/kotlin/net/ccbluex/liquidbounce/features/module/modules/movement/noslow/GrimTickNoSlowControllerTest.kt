@@ -10,135 +10,132 @@ import org.junit.jupiter.api.Test
 class GrimTickNoSlowControllerTest {
 
     @Test
-    fun noItemUseIsInactiveAndVanillaSafe() {
-        val controller = GrimTickNoSlowController()
-
-        assertFalse(begin(controller, cycle = 1, active = false))
-        assertFalse(controller.decision())
-        assertEquals(GrimTickNoSlowController.Phase.INACTIVE, controller.phase)
-        assertFalse(controller.completeCycle(1))
-    }
-
-    @Test
-    fun warmupThenFullSpeedAndRecoveryAlternate() {
+    fun exactWarmupFastRecoveryConfirmationSequence() {
         val controller = GrimTickNoSlowController()
 
         assertEquals(
-            listOf(false, false, true, false, true, false, true),
-            (1L..7L).map { cycle ->
-                begin(controller, cycle).also { assertTrue(controller.completeCycle(cycle)) }
+            listOf(false, false, true, false, false, true, false, false),
+            (1L..8L).map { serial ->
+                begin(controller, serial).also { assertTrue(controller.completeAtNaturalTickEnd(serial)) }
             },
+        )
+        assertEquals(
+            listOf(
+                GrimTickNoSlowController.Phase.WARMUP,
+                GrimTickNoSlowController.Phase.WARMUP,
+                GrimTickNoSlowController.Phase.FAST,
+                GrimTickNoSlowController.Phase.RECOVERY,
+                GrimTickNoSlowController.Phase.RECOVERY_CONFIRM,
+                GrimTickNoSlowController.Phase.FAST,
+                GrimTickNoSlowController.Phase.RECOVERY,
+                GrimTickNoSlowController.Phase.RECOVERY_CONFIRM,
+            ),
+            phases(8),
         )
     }
 
     @Test
-    fun everyCallerReadsOneImmutableCycleDecision() {
+    fun fastDecisionIsImmutableAndCompletelyUnslowed() {
         val controller = warmedController()
         assertTrue(begin(controller, 3))
 
-        val input = controller.decision()
-        val pose = controller.decision()
-        val sprintStart = controller.decision()
-        val sprintStop = controller.decision()
-
-        assertEquals(listOf(true, true, true, true), listOf(input, pose, sprintStart, sprintStop))
+        assertEquals(listOf(true, true, true, true), List(4) { controller.decision() })
         assertEquals(GrimTickNoSlowController.Phase.FAST, controller.phase)
+        assertFalse(controller.isRecoveryCycle())
     }
 
     @Test
-    fun mutableUseTimeInsideCycleCannotChangeTheLatch() {
-        val legacy = LegacyConsumableCache(ready = true)
-        assertTrue(legacy.decision(CacheKey(tick = 20, ticksUsingItem = 2)))
-        assertFalse(legacy.decision(CacheKey(tick = 20, ticksUsingItem = 3)))
-
-        val controller = warmedController()
-        assertTrue(begin(controller, 3))
-        repeat(8) {
-            // The controller deliberately has no mutable use-time cache key.
-            assertTrue(controller.decision())
-        }
-    }
-
-    @Test
-    fun phaseAdvancesOnceAndDuplicatePostIsIgnored() {
+    fun onlyMatchingNaturalTickEndCompletesAndDuplicateIsIgnored() {
         val controller = GrimTickNoSlowController()
-
         assertFalse(begin(controller, 1))
-        assertTrue(controller.completeCycle(1))
-        assertFalse(controller.completeCycle(1))
-        assertFalse(controller.completeCycle(2))
 
-        assertFalse(begin(controller, 2))
-        assertTrue(controller.completeCycle(2))
-        assertFalse(controller.completeCycle(2))
+        assertFalse(controller.completeAtNaturalTickEnd(2))
+        assertEquals(
+            GrimTickNoSlowController.BoundaryIssue.UNEXPECTED_TICK_END,
+            controller.boundaryIssue,
+        )
 
-        assertTrue(begin(controller, 3))
+        assertFalse(begin(controller, 3))
+        assertTrue(controller.completeAtNaturalTickEnd(3))
+        assertFalse(controller.completeAtNaturalTickEnd(3))
+        assertEquals(
+            GrimTickNoSlowController.BoundaryIssue.DUPLICATE_TICK_END,
+            controller.boundaryIssue,
+        )
     }
 
     @Test
-    fun missingPostFailsClosedAndCannotCreateFastFast() {
+    fun missingTickEndFailsClosedAndRequiresRecoveryConfirmation() {
         val controller = warmedController()
-
         assertTrue(begin(controller, 3))
-        // Cycle 3 never reaches POST. Cycle 4 must be a real recovery.
-        assertFalse(begin(controller, 4))
+
+        assertFalse(begin(controller, 3))
         assertEquals(GrimTickNoSlowController.Phase.RECOVERY, controller.phase)
-        assertTrue(controller.completeCycle(4))
+        assertEquals(
+            GrimTickNoSlowController.BoundaryIssue.MISSING_TICK_END,
+            controller.boundaryIssue,
+        )
+        assertTrue(controller.completeAtNaturalTickEnd(3))
+
+        assertFalse(begin(controller, 4))
+        assertEquals(GrimTickNoSlowController.Phase.RECOVERY_CONFIRM, controller.phase)
+        assertTrue(controller.completeAtNaturalTickEnd(4))
         assertTrue(begin(controller, 5))
     }
 
     @Test
-    fun pausedCancelledAndNoWorldPathsDoNotAdvance() {
-        val controller = warmedController()
-        assertTrue(begin(controller, 3))
+    fun interruptedRecoveryOrConfirmationCannotRearmFast() {
+        val recoveryInterrupted = controllerAfterFast()
+        assertFalse(begin(recoveryInterrupted, 4))
+        assertFalse(begin(recoveryInterrupted, 4))
+        assertEquals(GrimTickNoSlowController.Phase.RECOVERY, recoveryInterrupted.phase)
 
-        // No POST represents an interrupted/cancelled cycle; a later begin fails closed.
-        assertFalse(begin(controller, 4))
-        controller.reset()
-        assertFalse(begin(controller, 5, active = false))
-        assertFalse(begin(controller, 6, active = false, playerOverride = null))
-        assertFalse(controller.decision())
+        val confirmationInterrupted = controllerAfterFast()
+        assertFalse(begin(confirmationInterrupted, 4))
+        assertTrue(confirmationInterrupted.completeAtNaturalTickEnd(4))
+        assertFalse(begin(confirmationInterrupted, 5))
+        assertEquals(GrimTickNoSlowController.Phase.RECOVERY_CONFIRM, confirmationInterrupted.phase)
+        assertFalse(begin(confirmationInterrupted, 5))
+        assertEquals(GrimTickNoSlowController.Phase.RECOVERY, confirmationInterrupted.phase)
     }
 
     @Test
-    fun useIdentityAndLifecycleChangesRestartWarmup() {
-        val contexts = listOf(
+    fun lifecycleAndEveryUseIdentityChangeRestartTwoWarmups() {
+        val changedContexts = listOf(
             Context(player = OTHER_PLAYER),
             Context(hand = OFF_HAND),
             Context(item = OTHER_ITEM),
             Context(useSessionId = 99),
+            Context(selectedSlot = 6),
             Context(settingsFingerprint = 99),
         )
 
-        contexts.forEachIndexed { index, changed ->
+        changedContexts.forEachIndexed { index, changed ->
             val controller = warmedController()
             assertTrue(begin(controller, 3))
             assertFalse(begin(controller, 4, context = changed), "identity case $index")
             assertEquals(GrimTickNoSlowController.Phase.WARMUP, controller.phase)
+            assertTrue(controller.completeAtNaturalTickEnd(4))
+            assertFalse(begin(controller, 5, context = changed))
         }
 
-        val useEndRestart = warmedController()
-        assertTrue(begin(useEndRestart, 3))
-        assertFalse(begin(useEndRestart, 4, active = false))
-        assertFalse(begin(useEndRestart, 5, context = Context(useSessionId = 101)))
-
-        val lifecycle = warmedController()
-        lifecycle.reset() // disable, mode change, world, disconnect, death, or player replacement
-        assertFalse(begin(lifecycle, 10))
-        assertEquals(GrimTickNoSlowController.Phase.WARMUP, lifecycle.phase)
+        val reset = warmedController()
+        reset.reset()
+        assertFalse(begin(reset, 10))
+        assertEquals(GrimTickNoSlowController.Phase.WARMUP, reset.phase)
     }
 
     @Test
-    fun ridingFallFlyingAndUnselectedItemsAreVanillaSafe() {
+    fun inactiveIneligibleRidingAndFallFlyingStayVanilla() {
         val controller = warmedController()
-
-        assertFalse(begin(controller, 3, active = false)) // riding/fall flying/use end
-        assertFalse(begin(controller, 4, eligible = false)) // hand/item selection
+        assertFalse(begin(controller, 3, active = false))
+        assertFalse(begin(controller, 4, eligible = false))
         assertFalse(controller.decision())
+        assertFalse(controller.isRecoveryCycle())
     }
 
     @Test
-    fun handItemMovementAndSprintVariantsDoNotWeakenFastPhase() {
+    fun handItemAndMovementVariantsKeepEveryFastPhaseFullSpeed() {
         val variants = listOf(
             Context(hand = MAIN_HAND, item = FOOD),
             Context(hand = OFF_HAND, item = FOOD),
@@ -148,82 +145,132 @@ class GrimTickNoSlowControllerTest {
             Context(hand = MAIN_HAND, item = TRIDENT),
             Context(hand = OFF_HAND, item = CROSSBOW),
         )
-
         variants.forEach { context ->
             val controller = warmedController(context)
-            // Direction, diagonal/straight, ground/air, and sprint are intentionally
-            // absent from the controller: eligible fast cycles stay fully unslowed.
             assertTrue(begin(controller, 3, context = context))
         }
     }
 
     @Test
-    fun grimConsecutivePredictionModelRequiresRealRecovery() {
-        val model = GrimNoSlowModel(offsetToFlag = 0.001)
-
-        assertFalse(model.checkedPrediction(offset = 0.1))
+    fun detailedGrimModelMatchesCheckedUncheckedAndItemStateSemantics() {
+        val model = GrimNoSlowModel()
+        assertFalse(model.observe(Prediction.INVALID_CHECKED))
         assertTrue(model.flaggedLastTick)
-        assertFalse(model.checkedPrediction(offset = 0.0))
+        assertFalse(model.observe(Prediction.UNCHECKED))
+        assertTrue(model.flaggedLastTick)
+        assertFalse(model.observe(Prediction.ITEM_STATE_FALSE))
+        assertTrue(model.flaggedLastTick)
+        assertTrue(model.observe(Prediction.INVALID_CHECKED))
+
+        assertFalse(model.observe(Prediction.VALID_CHECKED))
         assertFalse(model.flaggedLastTick)
-        assertFalse(model.checkedPrediction(offset = 0.1))
-        assertTrue(model.checkedPrediction(offset = 0.1))
+        assertEquals(0.95, model.violations, 0.00001)
     }
 
     @Test
-    fun controllerSequenceNeverFeedsTwoFastCheckedPredictions() {
+    fun oldSingleRecoveryCanFlagWhenRecoveryDoesNotClearLatch() {
+        val model = GrimNoSlowModel()
+        assertFalse(model.observe(Prediction.INVALID_CHECKED))
+        assertFalse(model.observe(Prediction.UNCHECKED))
+        assertTrue(model.observe(Prediction.INVALID_CHECKED))
+    }
+
+    @Test
+    fun validRecoveryClearsLatchAndConfirmationPreventsImmediateFastAfterOneFailure() {
+        val model = GrimNoSlowModel()
+        assertFalse(model.observe(Prediction.INVALID_CHECKED))
+        assertFalse(model.observe(Prediction.VALID_CHECKED))
+        assertFalse(model.observe(Prediction.INVALID_CHECKED))
+
+        val controller = controllerAfterFast()
+        assertFalse(begin(controller, 4))
+        assertTrue(controller.completeAtNaturalTickEnd(4))
+        assertFalse(begin(controller, 5))
+        assertEquals(GrimTickNoSlowController.Phase.RECOVERY_CONFIRM, controller.phase)
+    }
+
+    @Test
+    fun productionWiringUsesPostSentNaturalTickEndAndNoPacketSpoof() {
+        val module = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/noslow/ModuleNoSlow.kt")
+        val controller = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/noslow/GrimTickNoSlowController.kt")
+
+        assertTrue(module.contains("handler<OutgoingPacketPostSendEvent>"))
+        assertTrue(module.contains("event.packet !is ServerboundClientTickEndPacket"))
+        assertTrue(module.contains("completeAtNaturalTickEnd(naturalTickEndSerial)"))
+        assertFalse(module.contains("handler<PlayerNetworkMovementTickEvent>"))
+        assertFalse(module.contains("EventState.POST"))
+        assertFalse(module.contains("ServerboundClientTickEndPacket("))
+        assertFalse(module.contains("network.sendPacket(ServerboundClientTickEndPacket"))
+        assertFalse(controller.contains("PlayerNetworkMovementTickEvent"))
+    }
+
+    @Test
+    fun recoverySprintRestrictionIsNarrowFinalAndCoversBothSources() {
+        val noSlow = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/noslow/ModuleNoSlow.kt")
+        val sprint = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleSprint.kt")
+
+        assertTrue(sprint.contains("ModuleNoSlow.isGrimTickRecoveryCycle()"))
+        assertTrue(noSlow.contains("handler<SprintEvent>(priority = Short.MIN_VALUE)"))
+        assertTrue(noSlow.contains("SprintEvent.Source.INPUT"))
+        assertTrue(noSlow.contains("SprintEvent.Source.MOVEMENT_TICK"))
+        assertTrue(noSlow.contains("SprintEvent.Source.NETWORK"))
+        assertTrue(noSlow.contains("event.sprint = false"))
+    }
+
+    @Test
+    fun diagnosticsAreBoundedAndPacketObservationOnly() {
+        val module = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/noslow/ModuleNoSlow.kt")
+
+        assertTrue(module.contains("[GrimTickDiag]"))
+        assertTrue(module.contains("MAX_DIAGNOSTIC_BOUNDARIES = 180"))
+        assertTrue(module.contains("ServerboundMovePlayerPacket"))
+        assertTrue(module.contains("ServerboundPlayerInputPacket"))
+        assertTrue(module.contains("ServerboundPlayerCommandPacket"))
+        assertTrue(module.contains("ServerboundUseItemPacket"))
+        assertTrue(module.contains("ServerboundPlayerActionPacket"))
+        assertTrue(module.contains("ServerboundSetCarriedItemPacket"))
+        assertFalse(module.contains("release use spam", ignoreCase = true))
+    }
+
+    private fun phases(count: Int): List<GrimTickNoSlowController.Phase> {
         val controller = GrimTickNoSlowController()
-        val model = GrimNoSlowModel(offsetToFlag = 0.001)
-        val phases = mutableListOf<Boolean>()
-
-        for (cycle in 1L..20L) {
-            val fast = begin(controller, cycle)
-            phases += fast
-            assertFalse(model.checkedPrediction(if (fast) 0.1 else 0.0))
-            assertTrue(controller.completeCycle(cycle))
+        return (1L..count.toLong()).map { serial ->
+            begin(controller, serial)
+            controller.phase.also { assertTrue(controller.completeAtNaturalTickEnd(serial)) }
         }
-
-        assertFalse(phases.zipWithNext().any { (left, right) -> left && right })
-        assertEquals(0, model.setbacks)
-    }
-
-    @Test
-    fun productionWiringUsesMovementBeginAndNetworkPostWithoutTraceSpam() {
-        val module = Files.readString(sourcePath("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/noslow/ModuleNoSlow.kt"))
-        val mixin = Files.readString(sourcePath("src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/entity/MixinClientPlayerEntity.java"))
-
-        assertTrue(module.contains("handler<PlayerMovementTickEvent>"))
-        assertTrue(module.contains("event.state == EventState.POST"))
-        assertTrue(module.contains("grimTickController.completeCycle(movementCycleSequence)"))
-        assertFalse(module.contains("updateGrimTickState"))
-        assertFalse(module.contains("consumeGrimTickWindow"))
-        assertFalse(module.contains("GRIMTICK_TRACE"))
-        assertEquals(4, Regex("shouldBypassItemSlowdownForCurrentTick\\(\\)").findAll(mixin).count())
     }
 
     private fun warmedController(context: Context = Context()) = GrimTickNoSlowController().also { controller ->
         assertFalse(begin(controller, 1, context = context))
-        assertTrue(controller.completeCycle(1))
+        assertTrue(controller.completeAtNaturalTickEnd(1))
         assertFalse(begin(controller, 2, context = context))
-        assertTrue(controller.completeCycle(2))
+        assertTrue(controller.completeAtNaturalTickEnd(2))
+    }
+
+    private fun controllerAfterFast() = warmedController().also { controller ->
+        assertTrue(begin(controller, 3))
+        assertTrue(controller.completeAtNaturalTickEnd(3))
     }
 
     private fun begin(
         controller: GrimTickNoSlowController,
-        cycle: Long,
+        serial: Long,
         active: Boolean = true,
         eligible: Boolean = true,
         context: Context = Context(),
-        playerOverride: Any? = context.player,
     ) = controller.beginCycle(
-        cycleId = cycle,
+        tickEndSerial = serial,
         active = active,
         eligible = eligible,
-        playerIdentity = playerOverride,
+        playerIdentity = context.player,
         handIdentity = context.hand,
         itemIdentity = context.item,
         useSessionId = context.useSessionId,
+        selectedSlot = context.selectedSlot,
         settingsFingerprint = context.settingsFingerprint,
     )
+
+    private fun source(relative: String) = Files.readString(sourcePath(relative))
 
     private fun sourcePath(relative: String): Path {
         var cursor = Path.of("").toAbsolutePath()
@@ -240,40 +287,36 @@ class GrimTickNoSlowControllerTest {
         val hand: Any = MAIN_HAND,
         val item: Any = FOOD,
         val useSessionId: Int = 7,
+        val selectedSlot: Int = 2,
         val settingsFingerprint: Int = 1,
     )
 
-    private data class CacheKey(val tick: Int, val ticksUsingItem: Int)
-
-    private class LegacyConsumableCache(private var ready: Boolean) {
-        private var key: CacheKey? = null
-        private var cached = false
-
-        fun decision(newKey: CacheKey): Boolean {
-            if (key == newKey) return cached
-            key = newKey
-            cached = ready
-            ready = false
-            return cached
-        }
+    private enum class Prediction {
+        VALID_CHECKED,
+        INVALID_CHECKED,
+        UNCHECKED,
+        ITEM_STATE_FALSE,
     }
 
-    private class GrimNoSlowModel(private val offsetToFlag: Double) {
+    private class GrimNoSlowModel {
         var flaggedLastTick = false
             private set
-        var setbacks = 0
+        var violations = 0.0
             private set
 
-        fun checkedPrediction(offset: Double): Boolean {
-            if (offset > offsetToFlag) {
-                if (flaggedLastTick) setbacks++
-                val setback = flaggedLastTick
-                flaggedLastTick = true
-                return setback
+        fun observe(prediction: Prediction): Boolean = when (prediction) {
+            Prediction.UNCHECKED, Prediction.ITEM_STATE_FALSE -> false
+            Prediction.VALID_CHECKED -> {
+                violations = (violations - 0.05).coerceAtLeast(0.0)
+                flaggedLastTick = false
+                false
             }
-
-            flaggedLastTick = false
-            return false
+            Prediction.INVALID_CHECKED -> {
+                val flags = flaggedLastTick
+                if (flags) violations++
+                flaggedLastTick = true
+                flags
+            }
         }
     }
 

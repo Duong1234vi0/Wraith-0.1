@@ -20,31 +20,35 @@ package net.ccbluex.liquidbounce.features.module.modules.movement.noslow
 
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.config.types.nesting.Configurable
-import net.ccbluex.liquidbounce.event.EventState
 import net.ccbluex.liquidbounce.event.events.BlockSlipperinessMultiplierEvent
 import net.ccbluex.liquidbounce.event.events.BlockVelocityMultiplierEvent
 import net.ccbluex.liquidbounce.event.events.DeathEvent
 import net.ccbluex.liquidbounce.event.events.DisconnectEvent
+import net.ccbluex.liquidbounce.event.events.OutgoingPacketPostSendEvent
+import net.ccbluex.liquidbounce.event.events.OutgoingPacketSentEvent
 import net.ccbluex.liquidbounce.event.events.PlayerMovementTickEvent
-import net.ccbluex.liquidbounce.event.events.PlayerNetworkMovementTickEvent
 import net.ccbluex.liquidbounce.event.events.PlayerSneakMultiplier
 import net.ccbluex.liquidbounce.event.events.PlayerUseMultiplier
+import net.ccbluex.liquidbounce.event.events.SprintEvent
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.utils.client.interaction
+import net.ccbluex.liquidbounce.utils.client.logger
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.client.network
 import net.ccbluex.liquidbounce.utils.client.world
 import net.ccbluex.liquidbounce.utils.entity.*
 import net.minecraft.core.component.DataComponents
-import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket
-import net.minecraft.network.protocol.game.ServerboundUseItemPacket
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.network.protocol.game.*
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.item.Items
+import net.minecraft.world.item.component.UseEffects
 import net.minecraft.world.level.block.Blocks
+import net.minecraft.world.phys.Vec2
 
 /**
  * V-Core 0.8 NoSlow port.
@@ -81,7 +85,11 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
     }
 
     private val grimTickController = GrimTickNoSlowController()
-    private var movementCycleSequence = 0L
+    private var naturalTickEndSerial = 0L
+    private var diagnosticSession: DiagnosticSession? = null
+    private var diagnosticTick = DiagnosticTick()
+    private var diagnosticBoundariesRemaining = 0
+    private var diagnosticMessagesRemaining = 0
 
     private var preserveNextUseItemPacketRotation = false
 
@@ -110,46 +118,141 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
     @Suppress("unused")
     private val grimTickMovementBeginHandler = handler<PlayerMovementTickEvent> {
         val localPlayer = mc.player
-        movementCycleSequence++
 
         if (mode != Mode.GrimTick || localPlayer == null) {
-            grimTickController.reset()
+            resetGrimTickController("mode or player unavailable")
             return@handler
         }
 
         val usingSlowItem = isUsingSlowItem() && !localPlayer.isDead
-        grimTickController.beginCycle(
-            cycleId = movementCycleSequence,
+        val eligible = usingSlowItem && allowsActiveItem() && allowsActiveHand()
+        if (eligible) {
+            beginDiagnosticSessionIfNeeded(localPlayer)
+        }
+
+        val bypass = grimTickController.beginCycle(
+            tickEndSerial = naturalTickEndSerial + 1,
             active = usingSlowItem,
-            eligible = usingSlowItem && allowsActiveItem() && allowsActiveHand(),
+            eligible = eligible,
             playerIdentity = localPlayer,
             handIdentity = localPlayer.usedItemHand.takeIf { usingSlowItem },
-            itemIdentity = localPlayer.useItem.item.takeIf { usingSlowItem },
+            itemIdentity = localPlayer.useItem.takeIf { usingSlowItem },
             useSessionId = localPlayer.tickCount - localPlayer.ticksUsingItem,
+            selectedSlot = localPlayer.inventory.selectedSlot,
             settingsFingerprint = settingsFingerprint(),
         )
+
+        if (!eligible) {
+            endDiagnosticSession("item use ended or became ineligible")
+            return@handler
+        }
+
+        diagnosticTick = DiagnosticTick(
+            tickSerial = naturalTickEndSerial + 1,
+            playerTick = localPlayer.tickCount,
+            phase = grimTickController.phase,
+            bypass = bypass,
+        )
+        if (grimTickController.boundaryIssue == GrimTickNoSlowController.BoundaryIssue.MISSING_TICK_END) {
+            diagnostic("tick-end missing before new movement begin; failed closed to recovery")
+        }
+        if (bypass) {
+            diagnostic("fast cycle starts serial=${naturalTickEndSerial + 1}")
+        }
     }
 
     @Suppress("unused")
-    private val grimTickMovementCompleteHandler = handler<PlayerNetworkMovementTickEvent> { event ->
-        if (event.state == EventState.POST) {
-            grimTickController.completeCycle(movementCycleSequence)
+    private val grimTickOutgoingPacketHandler = handler<OutgoingPacketSentEvent> { event ->
+        mc.player?.takeIf {
+            mode == Mode.GrimTick && isUsingSlowItem() && allowsActiveItem() && allowsActiveHand()
+        }?.let(::beginDiagnosticSessionIfNeeded)
+
+        if (!isDiagnosticActive()) {
+            return@handler
+        }
+
+        when (val packet = event.packet) {
+            is ServerboundMovePlayerPacket -> {
+                diagnosticTick.movementPacket = packet.javaClass.simpleName
+                diagnosticTick.movementHasPosition = packet.hasPosition()
+                diagnosticTick.movementHasRotation = packet.hasRotation()
+            }
+
+            is ServerboundPlayerInputPacket -> {
+                val input = packet.input
+                diagnosticTick.playerInput = "f=${input.forward()} b=${input.backward()} l=${input.left()} " +
+                    "r=${input.right()} jump=${input.jump()} shift=${input.shift()} sprint=${input.sprint()}"
+                diagnosticTick.playerInputSprint = input.sprint()
+            }
+
+            is ServerboundPlayerCommandPacket -> when (packet.action) {
+                ServerboundPlayerCommandPacket.Action.START_SPRINTING -> diagnosticTick.sprintCommand = "START"
+                ServerboundPlayerCommandPacket.Action.STOP_SPRINTING -> diagnosticTick.sprintCommand = "STOP"
+                else -> Unit
+            }
+
+            is ServerboundUseItemPacket -> diagnosticTick.actions += "use:${packet.hand}"
+            is ServerboundPlayerActionPacket -> diagnosticTick.actions += "action:${packet.action}"
+            is ServerboundSetCarriedItemPacket -> diagnosticTick.actions += "slot:${packet.slot}"
+            is ServerboundClientTickEndPacket -> diagnosticTick.tickEndObserved = true
+        }
+    }
+
+    @Suppress("unused")
+    private val grimTickNaturalTickEndHandler = handler<OutgoingPacketPostSendEvent> { event ->
+        if (event.packet !is ServerboundClientTickEndPacket) {
+            return@handler
+        }
+
+        naturalTickEndSerial++
+        val completedPhase = grimTickController.phase
+        val completed = grimTickController.completeAtNaturalTickEnd(naturalTickEndSerial)
+
+        if (isDiagnosticActive()) {
+            if (!completed) {
+                diagnostic("tick-end ignored issue=${grimTickController.boundaryIssue} serial=$naturalTickEndSerial")
+            } else {
+                when (completedPhase) {
+                    GrimTickNoSlowController.Phase.RECOVERY -> diagnostic("recovery cycle completes serial=$naturalTickEndSerial")
+                    GrimTickNoSlowController.Phase.RECOVERY_CONFIRM -> diagnostic(
+                        "recovery-confirm cycle completes serial=$naturalTickEndSerial"
+                    )
+                    else -> Unit
+                }
+            }
+            logDiagnosticTick()
+        }
+    }
+
+    @Suppress("unused")
+    private val grimTickSprintRecoveryHandler = handler<SprintEvent>(priority = Short.MIN_VALUE) { event ->
+        if (mode != Mode.GrimTick || !grimTickController.isRecoveryCycle()) {
+            return@handler
+        }
+        val before = event.sprint
+        if (event.source == SprintEvent.Source.INPUT ||
+            event.source == SprintEvent.Source.MOVEMENT_TICK ||
+            event.source == SprintEvent.Source.NETWORK
+        ) {
+            event.sprint = false
+            diagnosticTick.sprintBefore = diagnosticTick.sprintBefore ?: before
+            diagnosticTick.sprintAfter = false
         }
     }
 
     @Suppress("unused")
     private val grimTickWorldChangeHandler = handler<WorldChangeEvent> {
-        resetGrimTickController()
+        resetGrimTickController("world changed", resetNaturalSerial = true)
     }
 
     @Suppress("unused")
     private val grimTickDisconnectHandler = handler<DisconnectEvent> {
-        resetGrimTickController()
+        resetGrimTickController("disconnected", resetNaturalSerial = true)
     }
 
     @Suppress("unused")
     private val grimTickDeathHandler = handler<DeathEvent> {
-        resetGrimTickController()
+        resetGrimTickController("player died")
     }
 
     @Suppress("unused")
@@ -216,11 +319,28 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
     fun shouldBypassItemSlowdownForCurrentTick(): Boolean {
         val localPlayer = mc.player
         if (!running || localPlayer == null) {
-            resetGrimTickController()
+            resetGrimTickController("module stopped or player unavailable")
             return false
         }
 
-        return canNoSlow()
+        return canNoSlow().also { bypass ->
+            if (mode == Mode.GrimTick && bypass) {
+                val input = localPlayer.input.moveVector
+                diagnosticTick.inputBefore = diagnosticTick.inputBefore ?: input.describe()
+                diagnosticTick.inputAfter = input.describe()
+            }
+        }
+    }
+
+    fun isGrimTickRecoveryCycle(): Boolean =
+        running && mode == Mode.GrimTick && grimTickController.isRecoveryCycle()
+
+    fun observeVanillaItemSlowdown(before: Vec2, after: Vec2) {
+        if (!isDiagnosticActive() || mode != Mode.GrimTick) {
+            return
+        }
+        diagnosticTick.inputBefore = before.describe()
+        diagnosticTick.inputAfter = after.describe()
     }
 
     fun shouldBypassSneakSprintCheck(): Boolean {
@@ -314,11 +434,125 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
         return result
     }
 
-    private fun resetGrimTickController() {
+    private fun resetGrimTickController(reason: String = "module or settings reset", resetNaturalSerial: Boolean = false) {
+        endDiagnosticSession(reason)
         grimTickController.reset()
-        movementCycleSequence = 0L
+        if (resetNaturalSerial) {
+            naturalTickEndSerial = 0L
+        }
         preserveNextUseItemPacketRotation = false
     }
+
+    private fun beginDiagnosticSessionIfNeeded(localPlayer: net.minecraft.client.player.LocalPlayer) {
+        val next = DiagnosticSession(
+            player = localPlayer,
+            hand = localPlayer.usedItemHand,
+            stack = localPlayer.useItem,
+            useSessionId = localPlayer.tickCount - localPlayer.ticksUsingItem,
+            selectedSlot = localPlayer.inventory.selectedSlot,
+            settingsFingerprint = settingsFingerprint(),
+        )
+        val current = diagnosticSession
+        if (current != null && current.sameAs(next)) {
+            return
+        }
+
+        endDiagnosticSession("new use session")
+        diagnosticSession = next
+        diagnosticBoundariesRemaining = MAX_DIAGNOSTIC_BOUNDARIES
+        diagnosticMessagesRemaining = MAX_DIAGNOSTIC_MESSAGES
+        diagnostic("use session starts hand=${next.hand} item=${itemId(next.stack)} slot=${next.selectedSlot}")
+        diagnostic("phase resets to warm-up recovery")
+    }
+
+    private fun endDiagnosticSession(reason: String) {
+        if (diagnosticSession != null) {
+            diagnostic("phase resets reason=$reason")
+        }
+        diagnosticSession = null
+        diagnosticTick = DiagnosticTick()
+        diagnosticBoundariesRemaining = 0
+        diagnosticMessagesRemaining = 0
+    }
+
+    private fun isDiagnosticActive() = diagnosticSession != null &&
+        diagnosticBoundariesRemaining > 0 && diagnosticMessagesRemaining > 0 &&
+        running && mode == Mode.GrimTick
+
+    private fun logDiagnosticTick() {
+        if (!isDiagnosticActive()) {
+            return
+        }
+        val localPlayer = mc.player ?: return
+        val session = diagnosticSession ?: return
+        val stack = session.stack
+        val multiplier = stack.getOrDefault(DataComponents.USE_EFFECTS, UseEffects.DEFAULT).speedMultiplier()
+        diagnostic(
+            "tick serial=${diagnosticTick.tickSerial} playerTick=${diagnosticTick.playerTick} " +
+                "phase=${diagnosticTick.phase} bypass=${diagnosticTick.bypass} hand=${session.hand} " +
+                "item=${itemId(stack)} ticksUsing=${localPlayer.ticksUsingItem} useMultiplier=$multiplier " +
+                "input=${diagnosticTick.inputBefore ?: "unknown"}->${diagnosticTick.inputAfter ?: "unknown"} " +
+                "sprint=${diagnosticTick.sprintBefore ?: localPlayer.isSprinting}->" +
+                "${diagnosticTick.sprintAfter ?: localPlayer.isSprinting} move=${diagnosticTick.movementPacket} " +
+                "pos=${diagnosticTick.movementHasPosition} rot=${diagnosticTick.movementHasRotation} " +
+                "playerInput=${diagnosticTick.playerInput} inputSprint=${diagnosticTick.playerInputSprint} " +
+                "sprintCmd=${diagnosticTick.sprintCommand} actions=${diagnosticTick.actions.joinToString(",")} " +
+                "tickEnd=${diagnosticTick.tickEndObserved}"
+        )
+        diagnosticBoundariesRemaining--
+        diagnosticTick = DiagnosticTick()
+        if (diagnosticBoundariesRemaining == 0) {
+            diagnostic("diagnostic boundary budget exhausted limit=$MAX_DIAGNOSTIC_BOUNDARIES")
+        }
+    }
+
+    private fun diagnostic(message: String) {
+        if (diagnosticSession == null || diagnosticMessagesRemaining <= 0) {
+            return
+        }
+        diagnosticMessagesRemaining--
+        logger.info("$DIAGNOSTIC_PREFIX $message")
+    }
+
+    private fun itemId(stack: net.minecraft.world.item.ItemStack) = BuiltInRegistries.ITEM.getKey(stack.item)
+
+    private fun Vec2.describe() = "${x},${y}"
+
+    private data class DiagnosticSession(
+        val player: Any,
+        val hand: InteractionHand,
+        val stack: net.minecraft.world.item.ItemStack,
+        val useSessionId: Int,
+        val selectedSlot: Int,
+        val settingsFingerprint: Int,
+    ) {
+        fun sameAs(other: DiagnosticSession) = player === other.player && hand == other.hand && stack === other.stack &&
+            useSessionId == other.useSessionId && selectedSlot == other.selectedSlot &&
+            settingsFingerprint == other.settingsFingerprint
+    }
+
+    private data class DiagnosticTick(
+        val tickSerial: Long = Long.MIN_VALUE,
+        val playerTick: Int = -1,
+        val phase: GrimTickNoSlowController.Phase = GrimTickNoSlowController.Phase.INACTIVE,
+        val bypass: Boolean = false,
+        var inputBefore: String? = null,
+        var inputAfter: String? = null,
+        var sprintBefore: Boolean? = null,
+        var sprintAfter: Boolean? = null,
+        var movementPacket: String = "none",
+        var movementHasPosition: Boolean? = null,
+        var movementHasRotation: Boolean? = null,
+        var playerInput: String = "unchanged",
+        var playerInputSprint: Boolean? = null,
+        var sprintCommand: String = "none",
+        val actions: MutableList<String> = mutableListOf(),
+        var tickEndObserved: Boolean = false,
+    )
+
+    private const val DIAGNOSTIC_PREFIX = "[GrimTickDiag]"
+    private const val MAX_DIAGNOSTIC_BOUNDARIES = 180
+    private const val MAX_DIAGNOSTIC_MESSAGES = MAX_DIAGNOSTIC_BOUNDARIES * 4
 
     private fun isIceBlock(block: net.minecraft.world.level.block.Block): Boolean {
         return block === Blocks.ICE ||
