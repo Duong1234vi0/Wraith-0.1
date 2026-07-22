@@ -12616,7 +12616,10 @@ handoff after verification. Unrelated worktree files and prior Agent1 history re
   exclusion for unrelated test sources.
 - Unfiltered normal tests remain blocked by pre-existing compile errors in `SmartCriticalDecisionTest.kt`,
   `PointFindingKtTest.kt`, and `ItemCooldownProgressTest.kt`; those files were not modified.
-- Required clean build, JAR SHA-256, commits, and push are recorded after the final verification pass.
+- Required clean build: `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt` — `BUILD SUCCESSFUL`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`; SHA-256: `d9dd53e2a510945d82b0cf22838bf623ae327b2a28b2748fac1c9aaadf53757e`.
+- Commit: `74c4e84fcc1e713bc6e800f3e7e6384c02832a75` — `feat(clickgui): add shared card to settings morph`.
+- Push succeeded to `origin/main`; local `HEAD` equals remote at `74c4e84fcc1e713bc6e800f3e7e6384c02832a75`.
 - FCL/Android visual testing has not occurred in this headless workspace. Compilation and unit tests do not prove
   motion quality; the manual matrix remains pending on Minecraft `26.1.2`, GUI scale `2`, approximately `535 x 243`.
 
