@@ -12030,6 +12030,136 @@ the unrelated sources listed above. No Wyvern behavior was silently replaced wit
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - The post-push documentation commit and final remote-equality verification are reported in the assistant handoff.
 
+## 2026-07-22 - GrimTick NoSlow second runtime-driven correction
+
+### Request and runtime evidence
+
+The supplied FCL session was read completely from `/storage/emulated/0/FCL/log/latest_game.log` (1,944 lines,
+SHA-256 `ebed84532ff531cec8dccc72a601de094b605eb505f0eed38d8a2a649c11b8e0`). The connection began at
+`10:07:53`; the server announced `[latest(1.21.11) server]` at `10:07:57`. The session ran under FCL/Android on
+an Adreno 750 renderer. An enchanted golden apple was visible in the offhand near login, but the log does not prove
+that it was active for every segment; the user separately confirmed low NoSlow VL for both MainHand and Offhand.
+
+There are exactly 32 visible Grim NoSlow alerts. The first is `10:08:02 — vl:0.0`; the final is
+`10:09:26 — vl:4.550000000000061`. During the continuous section they occur approximately every two seconds.
+The log contains no visible Grim alerts for Sprint, PacketOrder, MultiActions, BadPackets, Timer, or Simulation.
+This is not an occasional harmless alert: VL accumulated from 0 to 4.55 in approximately 84 seconds, approaching
+the supplied Grim default `NoSlow.setbackvl: 5`. The live server may customize its punishment/setback threshold;
+the exact live threshold is not claimed from the archive.
+
+### Checked
+
+Read the required workflow documents, the complete current Wraith NoSlow/GrimTick/Sprint/mixin/network/boundary/
+movement files and call sites, current outgoing packet observers/tests, the relevant Minecraft 26.1.2 decompiled
+`LocalPlayer`, `LivingEntity`, and `Minecraft` methods, and the complete supplied Grim NoSlow, prediction, input,
+packet-state, digging, steering, check, SprintC, PacketOrder, MultiActions, English config, and punishment sources.
+Reference source, archives, runtime log, and bytecode remained read-only. Existing unrelated tracked and untracked
+worktree changes were preserved.
+
+### Detector interpretation
+
+Grim `NoSlow` updates only for `PredictionComplete.isChecked()` and only while server item-use slowdown is active.
+An invalid checked prediction arms `flaggedLastTick`; a second consecutive invalid checked prediction flags with
+setback. A valid slowed checked prediction calls `reward()` and clears the latch. Unchecked predictions and item-use-
+false boundaries do not clear that latch. `ModernInputTransformer` predicts the actual 1.21.11 item-use multiplier,
+falling back to 0.2 only when the component/version is unavailable. The visible approximately 0.05/0.10/0.15 VL
+changes support, but do not prove per-prediction, the inference that some recovery predictions reward while failed or
+unchecked boundaries leave the latch armed for a later invalid fast prediction.
+
+### Previous fix failure and superseded claims
+
+The previous patch began at `PlayerMovementTickEvent`, latched one decision through the movement hooks, and completed
+at `PlayerNetworkMovementTickEvent.POST` after `LocalPlayer.sendPosition()` returned. Its old stable sequence was
+two warm-up recoveries followed by `FAST, RECOVERY` alternation. The new FCL log proves that this did not guarantee a
+Grim-valid recovery between invalid checked predictions. Any previous claim that one movement POST recovery
+guaranteed Grim separation is superseded.
+
+### Root cause and boundary correction
+
+26.1.2 bytecode shows `aiStep` and input/sprint decisions first, then changed `ServerboundPlayerInputPacket`, then
+`sendPosition()` (sprint command followed by a possible move packet), and only later the natural
+`ServerboundClientTickEndPacket` from `Minecraft.tick`. Grim treats a movement packet as the tick for 1.21.2+ or
+uses `CLIENT_TICK_END` when no movement packet was sent. `sendPosition()` POST was therefore an incomplete
+server-facing boundary.
+
+`GrimTickNoSlowController` now latches at movement begin but completes only from the post-send observation of the
+natural `ServerboundClientTickEndPacket` through `OutgoingPacketPostSendEvent`. It tracks an explicit natural tick-end
+serial; movement POST, PLAYER_INPUT, sprint commands, and generic GameTick cannot complete a phase. Duplicate or
+unexpected tick-end observations do not advance the state twice. A missing natural boundary fails closed into
+recovery, and world/disconnect/player/death/use/hand/item/slot/settings/riding/fall-flying changes reset safely.
+
+### Sprint recovery audit and correction
+
+Before this correction, `ModuleSprint` could set `SprintEvent.sprint = true` at critical modification priority for
+both `Source.INPUT` and `Source.MOVEMENT_TICK` whenever movement was present, even while vanilla item-use logic had
+rejected sprint. That meant the previous recovery was not fully vanilla. The correction gates this override only while
+an eligible GrimTick recovery cycle is active and adds a final recovery-only restriction for INPUT, MOVEMENT_TICK,
+and NETWORK sources. It allows the recovery tick to stop sprint naturally, keeps fast cycles unchanged, and does not
+globally disable Sprint or manually spam sprint packets.
+
+### New sequence and blatant behavior
+
+The exact stable sequence is:
+
+`WARMUP recovery -> WARMUP recovery -> FAST -> RECOVERY -> RECOVERY_CONFIRM -> FAST -> RECOVERY -> RECOVERY_CONFIRM -> ...`
+
+Both recovery phases use complete vanilla item slowdown and item-use sprint behavior. Every FAST phase remains fully
+unslowed; no partial multiplier is used. For ordinary vanilla multiplier `m = 0.2`, the repeating average is
+`(1 + 2m) / 3 = (1 + 0.2 + 0.2) / 3 = 0.4667`, with one fully fast phase per three client tick boundaries. The
+active item's actual multiplier is used by vanilla; production does not hardcode 0.2.
+
+### Packet strategy and bounded diagnostics
+
+No packet spoofing was added: no release/use spam, held/offhand spoof, inventory swap, manual tick-end packet,
+transaction manipulation, movement cancellation, timer change, delay queue, or server-use-state desynchronization.
+Existing Grim/Matrix/Normal modes, selections, MainHand semantics, and Grim use-item packet behavior remain unchanged.
+
+Bounded `[GrimTickDiag]` diagnostics activate only for an eligible GrimTick use session, reset on a new session, and
+stop after 180 natural tick-end boundaries. They log one compact boundary summary with serial, local tick, phase,
+bypass, hand/item/ticks-used, actual UseEffects multiplier, pre/post input, sprint before/after, movement subtype and
+position/rotation flags, PLAYER_INPUT sprint/input fields, sprint command, use/release/slot actions, tick-end proof,
+plus bounded session/phase/missing/duplicate messages. They are observational and contain no authentication or chat
+contents.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/noslow/GrimTickNoSlowController.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/noslow/ModuleNoSlow.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleSprint.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/entity/MixinClientPlayerEntity.java`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/noslow/GrimTickNoSlowControllerTest.kt`
+- this append-only `Agent1.md` entry.
+
+No supplied Grim source, archive, runtime log, unrelated module, or unrelated worktree file was modified.
+
+### Tests and build
+
+- Focused command (excluding the unrelated dirty `PointFindingKtTest`, `SmartCriticalDecisionTest`, and
+  `ItemCooldownProgressTest` sources): `BUILD SUCCESSFUL`; 14 GrimTick tests plus the existing connection post-send
+  test passed (15 total).
+- Normal unfiltered `test`: blocked during existing unrelated test compilation by unresolved references in exactly
+  those three test files; no task test failure was observed.
+- `compileKotlin`: `BUILD SUCCESSFUL`.
+- Required clean build
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`:
+  `BUILD SUCCESSFUL in 2m 5s`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`; SHA-256
+  `4197e4fc40e8607142b87bf357c659be0fea0124e3d2ff25466fa8b8429fe273`.
+- Sources JAR SHA-256: `3a7f81ade1d4a5ad13ad639c196b94004b15887fb697e383ca7f4e5111e3a392`.
+
+### FCL status, commits, and superseded safety claims
+
+The corrected JAR has not yet been run through the required same-server FCL matrix. Runtime success remains pending;
+this change is not called Grim-safe from compilation or unit tests. Required pending cases remain MainHand/Offhand
+food and shield, bow/trident/crossbow with Projectiles, Sprint disabled/Legit/Omnidirectional, forward/strafe/
+diagonal/jump/air movement, repeated sessions, and watching NoSlow, Sprint, PacketOrder, MultiActions, BadPackets,
+Timer, Simulation, setbacks, item-use function, full fast phases, recovery sprint state, and the retained diagnostics.
+
+Commits and push result: implementation commit `55e83feb` (`fix(noslow): align grimtick to natural tick end`);
+documentation commit `docs(agent1): record grimtick runtime correction` (final hash reported in the handoff). Push is
+pending final remote verification. Previous GrimTick safety claims that treated movement POST and one recovery phase
+as sufficient are superseded by this entry.
+
 ## 2026-07-22 - GrimTick NoSlow post-push update
 
 - Implementation commit: `b101f10d7` - `fix(noslow): latch grimtick to movement cycles`.
