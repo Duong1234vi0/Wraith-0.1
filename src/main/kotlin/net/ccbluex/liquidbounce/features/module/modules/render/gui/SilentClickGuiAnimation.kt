@@ -19,9 +19,11 @@
 package net.ccbluex.liquidbounce.features.module.modules.render.gui
 
 object SilentClickGuiAnimation {
-    const val OPEN_SCALE_MS = 400L
-    const val OPEN_ALPHA_MS = 300L
-    const val MIN_SCALE = 0.2f
+    const val OPEN_SCALE_MS = 220L
+    const val OPEN_ALPHA_MS = 180L
+    const val CLOSE_MS = 200L
+    const val MIN_SCALE = 0.94f
+    const val SIDE_CONTENT_MS = 160L
 
     fun expoOut(progress: Float): Float {
         val t = progress.coerceIn(0f, 1f)

@@ -43,7 +43,7 @@ import org.lwjgl.glfw.GLFW
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.IdentityHashMap
+import java.util.EnumMap
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -68,17 +68,9 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
     private data class ModuleHit(
         val module: ClientModule,
-        val header: SilentRect,
-        val settingsViewport: SilentRect?,
+        val card: SilentRect,
+        val settingsZone: SilentRect,
     )
-
-    private data class FloatAnimation(
-        val from: Float,
-        val target: Float,
-        val startedAt: Long,
-    )
-
-    private data class MarqueeState(var startedAt: Long = System.currentTimeMillis())
 
     private var selectedPage = rememberedPage
     private var searchText = ""
@@ -93,12 +85,12 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     private var closeAlphaStart = 1f
     private var pendingDelete: File? = null
     private var searchRect = SilentRect.ZERO
+    private var selectedModule: ClientModule? = null
+    private var sideSettingsScroll = 0f
+    private var sideTransitionStartedAt = 0L
+    private val rememberedModules = EnumMap<Category, ClientModule>(Category::class.java)
 
     private val settings = SilentClickGuiSettings()
-    private val expandedModules = linkedSetOf<ClientModule>()
-    private val moduleSettingsScroll = IdentityHashMap<ClientModule, Float>()
-    private val moduleExpansionAnimations = IdentityHashMap<ClientModule, FloatAnimation>()
-    private val descriptionMarquees = IdentityHashMap<ClientModule, MarqueeState>()
     private val moduleHits = mutableListOf<ModuleHit>()
     private val themeHits = mutableMapOf<Int, SilentRect>()
     private val configActions = mutableListOf<ConfigAction>()
@@ -115,6 +107,9 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         moduleScroll = moduleScroll.coerceAtLeast(0f)
         themeScroll = themeScroll.coerceAtLeast(0f)
         configScroll = configScroll.coerceAtLeast(0f)
+        if (selectedPage.category != null) {
+            repairSelectedModule(filteredModules())
+        }
     }
 
     override fun extractBackground(graphics: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
@@ -167,6 +162,26 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         }
 
         val local = inputTransform().screenToLocal(event.x(), event.y())
+        if (SilentClickGuiLayout.sidePanel.contains(local)) {
+            val module = selectedModule
+            if (module != null && SilentClickGuiLayout.sideHeader.contains(local)) {
+                val header = SilentClickGuiLayout.sideHeader
+                val toggle = SilentRect(header.right - 30f, header.y + 5f, 21f, 16f)
+                val close = SilentRect(header.right - 10f, header.y + 3f, 10f, 20f)
+                if (close.contains(local)) {
+                    selectedModule = null
+                    settings.clearTransient()
+                    sideSettingsScroll = 0f
+                } else if (toggle.contains(local) && !module.notActivatable && !module.disableActivation) {
+                    module.enabled = !module.enabled
+                }
+                return true
+            }
+            if (SilentClickGuiLayout.settingsViewport.contains(local) && module != null) {
+                return settings.handleClick(local.x, local.y, event.button())
+            }
+            return true
+        }
         if (!SilentClickGuiLayout.mainPanel.contains(local)) {
             searchFocused = false
             return false
@@ -219,6 +234,12 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         }
 
         val local = inputTransform().screenToLocal(mouseX, mouseY)
+        if (SilentClickGuiLayout.settingsViewport.contains(local) && selectedModule != null && selectedPage.category != null) {
+            val entries = settings.visibleSettings(selectedModule!!)
+            val maxScroll = SilentClickGuiSettingsMath.maxScroll(settings.contentHeight(entries), SilentClickGuiLayout.settingsViewport.h)
+            sideSettingsScroll = (sideSettingsScroll + (-vertical * 18.0).toFloat()).coerceIn(0f, maxScroll)
+            return true
+        }
         if (!SilentClickGuiLayout.content.contains(local)) {
             return false
         }
@@ -304,6 +325,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             SilentClickGuiPage.CLOUD -> renderCloudPage(context, transform, alpha)
             else -> renderModulePage(context, transform, mouse, alpha)
         }
+        renderSideSettings(context, mouse, alpha)
     }
 
     private fun renderRootSurface(context: DrawContext, alpha: Float) {
@@ -312,20 +334,31 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             matrices,
             0f,
             0f,
-            SilentClickGuiLayout.REFERENCE_WIDTH,
-            SilentClickGuiLayout.REFERENCE_HEIGHT,
+            SilentClickGuiLayout.mainPanel.w,
+            SilentClickGuiLayout.mainPanel.h,
             8f,
             fade(0xDC090B10.toInt(), alpha),
             fade(0xD611141B.toInt(), alpha),
             fade(0xDA080A0F.toInt(), alpha),
             fade(0xD70D0F15.toInt(), alpha)
         )
-        ExosGuiRenderer.roundedOutline(matrices, 0f, 0f, SilentClickGuiLayout.REFERENCE_WIDTH,
-            SilentClickGuiLayout.REFERENCE_HEIGHT, 8f, fade(0x24FFFFFF, alpha), 0.75f)
-        ExosGuiRenderer.roundedRect(matrices, 5f, 5f, 78f, 244f, 6f, fade(0x23000000, alpha))
-        ExosGuiRenderer.roundedOutline(matrices, 5f, 5f, 78f, 244f, 6f, fade(0x16FFFFFF, alpha), 0.65f)
-        ExosGuiRenderer.roundedRect(matrices, 87f, 5f, 306.5f, 24f, 6f, fade(0x18FFFFFF, alpha))
-        ExosGuiRenderer.roundedOutline(matrices, 87f, 5f, 306.5f, 24f, 6f, fade(0x13FFFFFF, alpha), 0.55f)
+        ExosGuiRenderer.roundedOutline(matrices, 0f, 0f, SilentClickGuiLayout.mainPanel.w,
+            SilentClickGuiLayout.mainPanel.h, 8f, fade(0x24FFFFFF, alpha), 0.75f)
+        ExosGuiRenderer.roundedRect(matrices, SilentClickGuiLayout.sidebar.x, SilentClickGuiLayout.sidebar.y,
+            SilentClickGuiLayout.sidebar.w, SilentClickGuiLayout.sidebar.h, 6f, fade(0x23000000, alpha))
+        ExosGuiRenderer.roundedOutline(matrices, SilentClickGuiLayout.sidebar.x, SilentClickGuiLayout.sidebar.y,
+            SilentClickGuiLayout.sidebar.w, SilentClickGuiLayout.sidebar.h, 6f, fade(0x16FFFFFF, alpha), 0.65f)
+        ExosGuiRenderer.roundedRect(matrices, SilentClickGuiLayout.header.x, SilentClickGuiLayout.header.y,
+            SilentClickGuiLayout.header.w, SilentClickGuiLayout.header.h, 6f, fade(0x18FFFFFF, alpha))
+        ExosGuiRenderer.roundedOutline(matrices, SilentClickGuiLayout.header.x, SilentClickGuiLayout.header.y,
+            SilentClickGuiLayout.header.w, SilentClickGuiLayout.header.h, 6f, fade(0x13FFFFFF, alpha), 0.55f)
+        val side = SilentClickGuiLayout.sidePanel
+        ExosGuiRenderer.roundedGradientRect(matrices, side.x, side.y, side.w, side.h, 8f,
+            fade(0xE20B0F17.toInt(), alpha), fade(0xE4141922.toInt(), alpha),
+            fade(0xE00A0E16.toInt(), alpha), fade(0xE10D121B.toInt(), alpha))
+        ExosGuiRenderer.roundedOutline(matrices, side.x, side.y, side.w, side.h, 8f, fade(0x28FFFFFF, alpha), 0.75f)
+        val viewport = SilentClickGuiLayout.settingsViewport
+        ExosGuiRenderer.roundedRect(matrices, viewport.x, viewport.y, viewport.w, viewport.h, 5f, fade(0x18000000, alpha))
     }
 
     private fun renderSidebar(context: DrawContext, mouse: SilentPoint, alpha: Float) {
@@ -383,7 +416,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     private fun renderHeader(context: DrawContext, alpha: Float) {
         val page = selectedPage
         val icon = SilentClickGuiIcons.glyphFor(page)
-        val pill = SilentRect(94f, 10f, min(92f, 29f + ExosGuiRenderer.clickGuiBodyWidth(page.title, 6.4f)), 14f)
+        val pill = SilentRect(84f, 10f, min(76f, 25f + ExosGuiRenderer.clickGuiBodyWidth(page.title, 6.1f)), 14f)
         drawPill(context, pill, alpha)
         ExosGuiRenderer.clickGuiIcon(context.matrices, icon, pill.x + 5f, pill.y + 3.1f,
             fade(ClientTheme.accentA, alpha), 7.2f)
@@ -391,7 +424,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             fade(0xEFFFFFFF.toInt(), alpha), 6.4f)
 
         val status = statusText()
-        val statusWidth = min(54f, max(31f, ExosGuiRenderer.clickGuiBodyWidth(status, 6f) + 14f))
+        val statusWidth = min(48f, max(28f, ExosGuiRenderer.clickGuiBodyWidth(status, 5.6f) + 10f))
         val statusRect = SilentRect(pill.right + 5f, 10f, statusWidth, 14f)
         drawPill(context, statusRect, alpha)
         ExosGuiRenderer.clickGuiBody(context.matrices, status,
@@ -399,7 +432,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             statusRect.y + 4.2f, fade(0xBFFFFFFF.toInt(), alpha), 6f)
 
         if (searchSupported()) {
-            searchRect = SilentRect(285f, 10f, 98f, 14f)
+            searchRect = SilentRect(244f, 10f, 79f, 14f)
             val focusedFill = if (searchFocused) colorWithAlpha(ClientTheme.accentA, 34, alpha) else fade(0x16000000, alpha)
             ExosGuiRenderer.roundedRect(context.matrices, searchRect.x, searchRect.y, searchRect.w, searchRect.h, 5f,
                 focusedFill)
@@ -408,7 +441,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             ExosGuiRenderer.clickGuiBody(context.matrices, "Search", searchRect.x + 7f, searchRect.y + 4.2f,
                 fade(0x82FFFFFF.toInt(), alpha), 5.8f)
             if (searchText.isNotEmpty()) {
-                val query = truncate(searchText, 48f, 5.8f)
+                val query = truncate(searchText, 39f, 5.6f)
                 ExosGuiRenderer.clickGuiBody(context.matrices, query, searchRect.right -
                     ExosGuiRenderer.clickGuiBodyWidth(query, 5.8f) - 7f, searchRect.y + 4.2f,
                     fade(0xDFFFFFFF.toInt(), alpha), 5.8f)
@@ -425,27 +458,25 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         alpha: Float,
     ) {
         val modules = filteredModules()
-        val now = System.currentTimeMillis()
-        val heights = modules.map { moduleHeight(it, now) }
-        val waterfallNoScroll = SilentClickGuiLayout.waterfall(heights)
-        val maxScroll = max(0f, waterfallNoScroll.contentHeight - SilentClickGuiLayout.content.h)
+        repairSelectedModule(modules)
+        val contentHeight = SilentClickGuiLayout.moduleGridContentHeight(modules.size)
+        val maxScroll = max(0f, contentHeight - SilentClickGuiLayout.content.h)
         moduleScroll = moduleScroll.coerceIn(0f, maxScroll)
-        val waterfall = SilentClickGuiLayout.waterfall(heights, moduleScroll)
 
         moduleHits.clear()
         withLocalScissor(context, SilentClickGuiLayout.content) {
             modules.forEachIndexed { index, module ->
-                val card = waterfall.rects[index]
+                val card = SilentClickGuiLayout.moduleCardRect(index, moduleScroll)
                 if (!card.intersects(SilentClickGuiLayout.content)) {
                     return@forEachIndexed
                 }
 
-                renderModuleCard(context, transform, module, card, mouse, alpha, now)
+                renderModuleCard(context, module, card, mouse, alpha)
             }
 
             if (maxScroll > 0.5f) {
                 val content = SilentClickGuiLayout.content
-                val thumbHeight = (content.h * content.h / waterfallNoScroll.contentHeight).coerceIn(18f, content.h)
+                val thumbHeight = (content.h * content.h / contentHeight).coerceIn(18f, content.h)
                 val thumbY = content.y + (content.h - thumbHeight) * (moduleScroll / maxScroll)
                 ExosGuiRenderer.roundedRect(context.matrices, content.right - 2.2f, thumbY, 1.6f, thumbHeight,
                     0.8f, fade(0x70FFFFFF, alpha))
@@ -455,84 +486,95 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
     private fun renderModuleCard(
         context: DrawContext,
-        transform: SilentTransform,
         module: ClientModule,
         card: SilentRect,
         mouse: SilentPoint,
         alpha: Float,
-        now: Long,
     ) {
         val enabled = module.enabled
-        val hovered = SilentRect(card.x, card.y, card.w, SilentClickGuiLayout.MODULE_HEADER_HEIGHT).contains(mouse)
+        val selected = selectedModule === module
+        val hovered = card.contains(mouse)
         val fill = when {
-            enabled -> colorWithAlpha(ClientTheme.accentA, 34, alpha)
+            enabled -> colorWithAlpha(ClientTheme.accentA, 30, alpha)
             hovered -> fade(0x17FFFFFF, alpha)
             else -> fade(0x0FFFFFFF, alpha)
         }
 
         ExosGuiRenderer.roundedRect(context.matrices, card.x, card.y, card.w, card.h, 6f, fill)
-        ExosGuiRenderer.roundedOutline(context.matrices, card.x, card.y, card.w, card.h, 6f,
-            fade(if (enabled) ClientTheme.accentA else 0x14FFFFFF, alpha), 0.55f)
+        ExosGuiRenderer.roundedOutline(context.matrices, card.x, card.y, card.w, card.h, 5f,
+            fade(if (selected) ClientTheme.accentA else if (enabled) ClientTheme.accentA else 0x14FFFFFF, alpha),
+            if (selected) 0.9f else 0.55f)
+        if (enabled) {
+            ExosGuiRenderer.roundedRect(context.matrices, card.x, card.y, 2f, card.h, 1f,
+                colorWithAlpha(ClientTheme.accentA, 170, alpha))
+        }
 
         val nameColor = fade(if (enabled) 0xFFFFFFFF.toInt() else 0xC8FFFFFF.toInt(), alpha)
-        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(module.name, 67f, 6.3f),
-            card.x + 6f, card.y + 4f, nameColor, 6.3f)
+        val zone = SilentClickGuiLayout.moduleSettingsZone(card)
+        val nameMax = zone.x - card.x - 9f
+        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(module.name, nameMax, 6f),
+            card.x + 6f, card.y + 4f, nameColor, 6f)
         val bind = module.bind.keyName
-        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(bind, 24f, 4.7f),
-            card.right - ExosGuiRenderer.clickGuiBodyWidth(truncate(bind, 24f, 4.7f), 4.7f) - 6f,
-            card.y + 4.9f, fade(0x75FFFFFF, alpha), 4.7f)
-
-        renderDescription(context, transform, module, card, hovered, alpha, now)
-
-        val settingsHeight = (card.h - SilentClickGuiLayout.MODULE_HEADER_HEIGHT).coerceAtLeast(0f)
-        val settingsViewport = if (settingsHeight > 1f) {
-            SilentRect(card.x, card.y + SilentClickGuiLayout.MODULE_HEADER_HEIGHT, card.w, settingsHeight)
-        } else {
-            null
+        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(bind, 22f, 4.4f),
+            card.right - ExosGuiRenderer.clickGuiBodyWidth(truncate(bind, 22f, 4.4f), 4.4f) - zone.w - 8f,
+            card.y + 5f, fade(0x75FFFFFF, alpha), 4.4f)
+        val descRect = SilentRect(card.x + 6f, card.y + 15f, card.w - 12f, 9f)
+        withLocalScissor(context, descRect) {
+            ExosGuiRenderer.clickGuiBody(context.matrices, truncate(moduleDescription(module), descRect.w, 4.4f),
+                descRect.x, descRect.y, fade(0x72FFFFFF, alpha), 4.4f)
         }
-        moduleHits += ModuleHit(module, SilentRect(card.x, card.y, card.w, SilentClickGuiLayout.MODULE_HEADER_HEIGHT),
-            settingsViewport)
+        ExosGuiRenderer.clickGuiIcon(context.matrices, if (selected) "<" else ">", zone.x + 4f, zone.y + 4.6f,
+            fade(if (selected) ClientTheme.accentA else 0x88FFFFFF.toInt(), alpha), 5.5f)
+        moduleHits += ModuleHit(module, card, zone)
+    }
 
-        if (settingsViewport != null && module in expandedModules) {
-            val entries = settings.visibleSettings(module)
-            val rawScroll = moduleSettingsScroll[module] ?: 0f
-            val clamped = SilentClickGuiSettingsMath.clampScroll(rawScroll, settings.contentHeight(entries),
-                settingsViewport.h)
-            moduleSettingsScroll[module] = clamped
-            withLocalScissor(context, settingsViewport) {
-                settings.render(context, settingsViewport, entries, clamped, mouse.x, mouse.y, alpha)
+    private fun renderSideSettings(context: DrawContext, mouse: SilentPoint, alpha: Float) {
+        val side = SilentClickGuiLayout.sidePanel
+        val header = SilentClickGuiLayout.sideHeader
+        val viewport = SilentClickGuiLayout.settingsViewport
+        val module = selectedModule.takeIf { selectedPage.category != null && it != null && it.category == selectedPage.category }
+        val title = module?.name ?: "Module Settings"
+        val subtitle = module?.let { selectedPage.title } ?: "Select a module"
+        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(title, 70f, 6.2f), side.x + 8f, header.y + 6f,
+            fade(0xE8FFFFFF.toInt(), alpha), 6.2f)
+        ExosGuiRenderer.clickGuiBody(context.matrices, truncate(subtitle, 64f, 4.7f), side.x + 8f, header.y + 17f,
+            fade(0x78FFFFFF, alpha), 4.7f)
+        if (module != null) {
+            val toggle = SilentRect(header.right - 28f, header.y + 8f, 18f, 9f)
+            drawSwitch(context, toggle.x, toggle.y, module.enabled, alpha)
+            val close = SilentRect(header.right - 8f, header.y + 7f, 8f, 12f)
+            ExosGuiRenderer.clickGuiBody(context.matrices, "×", close.x, close.y, fade(0xA8FFFFFF.toInt(), alpha), 6f)
+        } else {
+            ExosGuiRenderer.clickGuiIcon(context.matrices, "X", side.x + 53f, side.y + 78f,
+                fade(0x50FFFFFF, alpha), 12f)
+            ExosGuiRenderer.clickGuiBody(context.matrices, "Select a module",
+                side.x + 8f, side.y + 108f, fade(0x88FFFFFF.toInt(), alpha), 5.6f)
+        }
+
+        if (module == null) return
+        val entries = settings.visibleSettings(module)
+        val contentHeight = settings.contentHeight(entries)
+        sideSettingsScroll = SilentClickGuiSettingsMath.clampScroll(sideSettingsScroll, contentHeight, viewport.h)
+        val transition = SilentClickGuiAnimation.expoOut(
+            (System.currentTimeMillis() - sideTransitionStartedAt).toFloat() / SilentClickGuiAnimation.SIDE_CONTENT_MS
+        )
+        withLocalScissor(context, viewport) {
+            val pose = context.pose()
+            pose.pushMatrix()
+            pose.translate((1f - transition) * -7f, 0f)
+            try {
+                settings.render(context, viewport, entries, sideSettingsScroll, mouse.x, mouse.y, alpha * transition)
+            } finally {
+                pose.popMatrix()
             }
         }
     }
 
-    private fun renderDescription(
-        context: DrawContext,
-        transform: SilentTransform,
-        module: ClientModule,
-        card: SilentRect,
-        hovered: Boolean,
-        alpha: Float,
-        now: Long,
-    ) {
-        val description = moduleDescription(module)
-        if (description.isBlank()) {
-            return
-        }
-
-        val descRect = SilentRect(card.x + 6f, card.y + 12.2f, card.w - 12f, 7f)
-        val textWidth = ExosGuiRenderer.clickGuiBodyWidth(description, 4.6f)
-        val x = if (hovered && textWidth > descRect.w) {
-            val state = descriptionMarquees.getOrPut(module) { MarqueeState(now) }
-            descRect.x + marqueeOffset(now - state.startedAt, textWidth - descRect.w)
-        } else {
-            descriptionMarquees.remove(module)
-            descRect.x
-        }
-
-        withLocalScissor(context, descRect) {
-            ExosGuiRenderer.clickGuiBody(context.matrices, description, x, descRect.y,
-                fade(0x72FFFFFF, alpha), 4.6f)
-        }
+    private fun drawSwitch(context: DrawContext, x: Float, y: Float, enabled: Boolean, alpha: Float) {
+        ExosGuiRenderer.roundedRect(context.matrices, x, y, 18f, 9f, 4f,
+            fade(if (enabled) ClientTheme.accentA else 0x35000000, alpha))
+        ExosGuiRenderer.roundedRect(context.matrices, x + if (enabled) 10f else 1f, y + 1.5f, 6f, 6f, 3f,
+            fade(0xFFFFFFFF.toInt(), alpha))
     }
 
     private fun renderThemePage(context: DrawContext, transform: SilentTransform, mouse: SilentPoint, alpha: Float) {
@@ -637,23 +679,21 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     }
 
     private fun handleModuleClick(local: SilentPoint, button: Int): Boolean {
-        if (settings.handleClick(local.x, local.y, button)) {
+        if (SilentClickGuiLayout.settingsViewport.contains(local) && settings.handleClick(local.x, local.y, button)) {
             return true
         }
 
         moduleHits.asReversed().forEach { hit ->
-            if (hit.settingsViewport?.contains(local) == true) {
-                return true
-            }
-
-            if (hit.header.contains(local)) {
+            if (hit.card.contains(local)) {
                 when (button) {
                     GLFW.GLFW_MOUSE_BUTTON_LEFT -> {
-                        if (!hit.module.notActivatable && !hit.module.disableActivation) {
+                        if (hit.settingsZone.contains(local)) {
+                            selectModule(hit.module)
+                        } else if (!hit.module.notActivatable && !hit.module.disableActivation) {
                             hit.module.enabled = !hit.module.enabled
                         }
                     }
-                    GLFW.GLFW_MOUSE_BUTTON_RIGHT -> toggleModuleExpanded(hit.module)
+                    GLFW.GLFW_MOUSE_BUTTON_RIGHT -> selectModule(hit.module)
                     GLFW.GLFW_MOUSE_BUTTON_MIDDLE -> settings.startModuleBind(hit.module)
                 }
                 return true
@@ -688,26 +728,8 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     }
 
     private fun scrollModules(local: SilentPoint, amount: Float): Boolean {
-        moduleHits.asReversed().forEach { hit ->
-            val viewport = hit.settingsViewport ?: return@forEach
-            if (!viewport.contains(local) || hit.module !in expandedModules) {
-                return@forEach
-            }
-
-            val entries = settings.visibleSettings(hit.module)
-            val maxScroll = max(0f, settings.contentHeight(entries) - viewport.h)
-            if (maxScroll <= 0f) {
-                return@forEach
-            }
-
-            val current = moduleSettingsScroll[hit.module] ?: 0f
-            moduleSettingsScroll[hit.module] = (current + amount).coerceIn(0f, maxScroll)
-            return true
-        }
-
         val modules = filteredModules()
-        val heights = modules.map { moduleHeight(it, System.currentTimeMillis()) }
-        val maxScroll = max(0f, SilentClickGuiLayout.waterfall(heights).contentHeight - SilentClickGuiLayout.content.h)
+        val maxScroll = max(0f, SilentClickGuiLayout.moduleGridContentHeight(modules.size) - SilentClickGuiLayout.content.h)
         moduleScroll = (moduleScroll + amount).coerceIn(0f, maxScroll)
         return true
     }
@@ -725,48 +747,34 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         pendingDelete = null
         searchFocused = false
         settings.clearTransient()
-        expandedModules.clear()
-        moduleSettingsScroll.clear()
-        moduleExpansionAnimations.clear()
-        descriptionMarquees.clear()
-    }
-
-    private fun toggleModuleExpanded(module: ClientModule) {
-        val now = System.currentTimeMillis()
-        val current = expansionProgress(module, now)
-        if (module in expandedModules) {
-            expandedModules -= module
-            moduleExpansionAnimations[module] = FloatAnimation(current, 0f, now)
-            settings.clearTransient()
-        } else {
-            expandedModules += module
-            moduleExpansionAnimations[module] = FloatAnimation(current, 1f, now)
+        selectedModule = null
+        sideSettingsScroll = 0f
+        if (page.category != null) {
+            repairSelectedModule(modulesFor(page.category))
         }
     }
 
-    private fun moduleHeight(module: ClientModule, now: Long): Float {
-        val entries = settings.visibleSettings(module)
-        val settingsHeight = min(settings.contentHeight(entries), SilentClickGuiLayout.MAX_SETTINGS_HEIGHT)
-        val progress = expansionProgress(module, now)
-        return SilentClickGuiLayout.MODULE_HEADER_HEIGHT + settingsHeight * progress
+    private fun selectModule(module: ClientModule?) {
+        if (module == null || selectedModule === module) return
+        selectedModule = module
+        module.category?.let { rememberedModules[it] = module }
+        sideSettingsScroll = 0f
+        sideTransitionStartedAt = System.currentTimeMillis()
+        settings.clearTransient()
     }
 
-    private fun expansionProgress(module: ClientModule, now: Long): Float {
-        val target = if (module in expandedModules) 1f else 0f
-        val animation = moduleExpansionAnimations[module] ?: return target
-        if (animation.target != target) {
-            return target
+    private fun repairSelectedModule(modules: List<ClientModule>) {
+        val category = selectedPage.category ?: run {
+            selectedModule = null
+            return
         }
-
-        val progress = ((now - animation.startedAt).toFloat() / 300f).coerceIn(0f, 1f)
-        val value = animation.from + (animation.target - animation.from) *
-            SilentClickGuiAnimation.expoOut(progress)
-        if (progress >= 1f) {
-            moduleExpansionAnimations.remove(module)
-            return target
+        val remembered = rememberedModules[category]
+        val next = when {
+            remembered != null && remembered in modules -> remembered
+            selectedModule != null && selectedModule in modules -> selectedModule
+            else -> modules.firstOrNull()
         }
-
-        return value
+        if (next !== selectedModule) selectModule(next)
     }
 
     private fun filteredModules(): List<ClientModule> {
@@ -847,6 +855,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     private fun resetSearchScroll() {
         moduleScroll = 0f
         configScroll = 0f
+        if (selectedPage.category != null) repairSelectedModule(filteredModules())
     }
 
     private fun searchSupported(): Boolean =
@@ -924,7 +933,6 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         closingStartedAt = System.currentTimeMillis()
         searchFocused = false
         settings.clearTransient()
-        descriptionMarquees.clear()
     }
 
     private fun visualScale(): Float {
@@ -937,7 +945,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             closeScaleStart,
             SilentClickGuiAnimation.MIN_SCALE,
             now - closingStartedAt,
-            SilentClickGuiAnimation.OPEN_SCALE_MS
+            SilentClickGuiAnimation.CLOSE_MS
         )
     }
 
@@ -951,25 +959,12 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             closeAlphaStart,
             0f,
             now - closingStartedAt,
-            SilentClickGuiAnimation.OPEN_ALPHA_MS
+            SilentClickGuiAnimation.CLOSE_MS
         )
     }
 
     private fun closeFinished(): Boolean =
-        System.currentTimeMillis() - closingStartedAt >= SilentClickGuiAnimation.OPEN_SCALE_MS
-
-    private fun marqueeOffset(elapsed: Long, overflow: Float): Float {
-        val pause = 450L
-        val travel = 1200L
-        val cycle = pause * 2L + travel * 2L
-        val time = elapsed.floorMod(cycle)
-        return when {
-            time < pause -> 0f
-            time < pause + travel -> -overflow * ((time - pause).toFloat() / travel)
-            time < pause + travel + pause -> -overflow
-            else -> -overflow * (1f - ((time - pause - travel - pause).toFloat() / travel))
-        }
-    }
+        System.currentTimeMillis() - closingStartedAt >= SilentClickGuiAnimation.CLOSE_MS
 
     private inline fun withLocalScissor(
         context: DrawContext,
@@ -1014,8 +1009,6 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
     private fun colorWithAlpha(color: Int, baseAlpha: Int, globalAlpha: Float): Int =
         fade((baseAlpha.coerceIn(0, 255) shl 24) or (color and 0x00FFFFFF), globalAlpha)
-
-    private fun Long.floorMod(mod: Long): Long = ((this % mod) + mod) % mod
 
     companion object {
         private var rememberedPage = SilentClickGuiPage.COMBAT

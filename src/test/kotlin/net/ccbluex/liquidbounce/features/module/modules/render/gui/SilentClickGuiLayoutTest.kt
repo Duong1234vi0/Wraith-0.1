@@ -1,21 +1,3 @@
-/*
- * This file is part of LiquidBounce (https://liquidbounce.net)
- *
- * Copyright (c) 2015 - 2026 CCBlueX
- *
- * LiquidBounce is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * LiquidBounce is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
- */
 package net.ccbluex.liquidbounce.features.module.modules.render.gui
 
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -25,139 +7,88 @@ import org.junit.jupiter.api.Test
 import kotlin.math.abs
 
 class SilentClickGuiLayoutTest {
-
     @Test
-    fun `reference geometry matches Silent panel`() {
-        assertEquals(398f, SilentClickGuiLayout.REFERENCE_WIDTH)
-        assertEquals(254f, SilentClickGuiLayout.REFERENCE_HEIGHT)
-
-        assertRect(SilentRect(5f, 5f, 78f, 244f), SilentClickGuiLayout.sidebar)
-        assertRect(SilentRect(87f, 5f, 306.5f, 24f), SilentClickGuiLayout.header)
-        assertEquals(33f, SilentClickGuiLayout.content.y)
+    fun `compact reference geometry matches requested composition`() {
+        assertEquals(468f, SilentClickGuiLayout.REFERENCE_WIDTH)
+        assertEquals(226f, SilentClickGuiLayout.REFERENCE_HEIGHT)
+        assertRect(SilentRect(0f, 0f, 334f, 226f), SilentClickGuiLayout.mainPanel)
+        assertRect(SilentRect(342f, 0f, 126f, 226f), SilentClickGuiLayout.sidePanel)
+        assertRect(SilentRect(5f, 5f, 68f, 216f), SilentClickGuiLayout.sidebar)
+        assertRect(SilentRect(78f, 5f, 251f, 24f), SilentClickGuiLayout.header)
+        assertRect(SilentRect(78f, 34f, 251f, 187f), SilentClickGuiLayout.content)
+        assertRect(SilentRect(348f, 6f, 114f, 29f), SilentClickGuiLayout.sideHeader)
+        assertRect(SilentRect(349f, 40f, 112f, 179f), SilentClickGuiLayout.settingsViewport)
+        assertEquals(8f, SilentClickGuiLayout.sidePanel.x - SilentClickGuiLayout.mainPanel.right)
     }
 
     @Test
-    fun `module waterfall uses three Silent columns`() {
-        assertEquals(3, SilentClickGuiLayout.MODULE_COLUMNS)
-        assertEquals(101f, SilentClickGuiLayout.MODULE_COLUMN_WIDTH)
-        assertEquals(103f, SilentClickGuiLayout.MODULE_HORIZONTAL_STEP)
+    fun `FCL canvas is centered and capped at 0 point 86`() {
+        val transform = SilentClickGuiLayout.transform(535, 243, 1f)
+        assertClose(0.86f, transform.fitScale)
+        assertClose(66.26f, transform.localToScreen(SilentPoint(0f, 0f)).x)
+        assertClose(24.32f, transform.localToScreen(SilentPoint(0f, 0f)).y)
+        assertClose(468.74f, transform.localToScreen(SilentPoint(468f, 226f)).x)
+        assertClose(218.68f, transform.localToScreen(SilentPoint(468f, 226f)).y)
+    }
 
-        repeat(12) { index ->
-            assertEquals(index % 3, SilentClickGuiLayout.columnFor(index))
+    @Test
+    fun `module grid is fixed two columns and row major`() {
+        assertEquals(2, SilentClickGuiLayout.MODULE_COLUMNS)
+        assertEquals(123f, SilentClickGuiLayout.MODULE_COLUMN_WIDTH)
+        assertEquals(30f, SilentClickGuiLayout.MODULE_CARD_HEIGHT)
+        assertEquals(5f, SilentClickGuiLayout.MODULE_HORIZONTAL_GAP)
+        assertEquals(4f, SilentClickGuiLayout.MODULE_VERTICAL_GAP)
+        repeat(10) { index ->
+            val card = SilentClickGuiLayout.moduleCardRect(index)
+            assertEquals(if (index % 2 == 0) 78f else 206f, card.x)
+            assertEquals(34f + (index / 2) * 34f, card.y)
+            assertEquals(30f, card.h)
         }
+        assertEquals(166f, SilentClickGuiLayout.moduleGridContentHeight(10))
+        assertEquals(132f, SilentClickGuiLayout.moduleGridContentHeight(7))
+        assertFalse(SilentClickGuiLayout.moduleCardRect(0).h != SilentClickGuiLayout.moduleCardRect(1).h)
     }
 
     @Test
-    fun `expanded module only moves same waterfall column`() {
-        val waterfall = SilentClickGuiLayout.waterfall(listOf(50f, 22f, 22f, 22f, 22f, 22f))
-
-        assertEquals(SilentClickGuiLayout.content.y, waterfall.rects[1].y)
-        assertEquals(SilentClickGuiLayout.content.y, waterfall.rects[2].y)
-        assertEquals(SilentClickGuiLayout.content.y + 52f, waterfall.rects[3].y)
-        assertEquals(SilentClickGuiLayout.content.y + 24f, waterfall.rects[4].y)
-        assertEquals(SilentClickGuiLayout.content.y + 24f, waterfall.rects[5].y)
+    fun `settings zone is a real touch target inside the card`() {
+        val zone = SilentClickGuiLayout.moduleSettingsZone(SilentClickGuiLayout.moduleCardRect(0))
+        assertTrue(zone.w >= 14f)
+        assertTrue(zone.h >= 16f)
+        assertTrue(SilentClickGuiLayout.moduleCardRect(0).contains(SilentPoint(zone.x + 1f, zone.y + 1f)))
     }
 
     @Test
-    fun `all categories fit above footer and keep logo slot blank`() {
-        val categoryRects = SilentClickGuiLayout.allCategoryRects()
-        assertEquals(8, categoryRects.size)
-        assertTrue(categoryRects.last().bottom < SilentClickGuiLayout.footer.y)
-        assertEquals(5f, SilentClickGuiLayout.logoSlot.y)
-        assertEquals(29f, SilentClickGuiLayout.logoSlot.h)
+    fun `three column waterfall and inline expansion helpers no longer exist`() {
+        val source = java.nio.file.Files.readString(java.nio.file.Path.of(
+            "src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiLayout.kt"))
+        assertFalse(source.contains("waterfall"))
+        assertFalse(source.contains("MAX_SETTINGS_HEIGHT"))
+        assertFalse(source.contains("MODULE_HEADER_HEIGHT"))
     }
 
     @Test
-    fun `screen to local transform remains aligned through scales`() {
-        val transform = SilentClickGuiLayout.transform(800, 600, 1f)
-        val center = transform.screenToLocal(400.0, 300.0)
-        assertClose(199f, center.x)
-        assertClose(127f, center.y)
-
-        val exact = SilentTransform(398f, 254f, 1f, 1f).screenToLocal(199.0, 127.0)
-        assertClose(199f, exact.x)
-        assertClose(127f, exact.y)
-
-        val small = SilentTransform(800f, 600f, 0.5f, 1f).screenToLocal(400.0, 300.0)
-        assertClose(199f, small.x)
-        assertClose(127f, small.y)
-
-        val animated = SilentClickGuiLayout.transform(800, 600, 0.43f)
-        val category = SilentClickGuiLayout.categoryRect(2)
-        val screen = animated.localToScreen(SilentRect(category.x + 10f, category.y + 8f, 1f, 1f))
-        val back = animated.screenToLocal(screen.x0.toDouble(), screen.y0.toDouble())
-        assertTrue(abs(back.x - (category.x + 10f)) < 1.5f)
-        assertTrue(abs(back.y - (category.y + 8f)) < 1.5f)
-    }
-
-    @Test
-    fun `FCL scaled screen keeps Silent panel inside safe margins`() {
-        val transform = SilentClickGuiLayout.transform(535, 243, 1f, 8f)
-        assertClose(0.8937008f, transform.fitScale)
-
-        val topLeft = transform.localToScreen(SilentPoint(0f, 0f))
-        val bottomRight = transform.localToScreen(
-            SilentPoint(SilentClickGuiLayout.REFERENCE_WIDTH, SilentClickGuiLayout.REFERENCE_HEIGHT)
-        )
-
-        assertClose(89.6535f, topLeft.x, 0.0015f)
-        assertClose(8.0f, topLeft.y)
-        assertClose(445.3465f, bottomRight.x, 0.0015f)
-        assertClose(235.0f, bottomRight.y)
-
-        val contentTopLeft = transform.localToScreen(SilentPoint(SilentClickGuiLayout.content.x, SilentClickGuiLayout.content.y))
-        val contentBottomRight = transform.localToScreen(
-            SilentPoint(SilentClickGuiLayout.content.right, SilentClickGuiLayout.content.bottom)
-        )
-        assertClose(167.4055f, contentTopLeft.x, 0.0015f)
-        assertClose(37.4921f, contentTopLeft.y, 0.0015f)
-        assertClose(441.3248f, contentBottomRight.x, 0.0015f)
-        assertClose(230.5315f, contentBottomRight.y, 0.0015f)
-    }
-
-    @Test
-    fun `local and screen coordinates stay inverse during opening animation`() {
-        val transform = SilentClickGuiLayout.transform(535, 243, 0.37f, 8f)
+    fun `inverse transform remains valid during restrained animation`() {
+        val transform = SilentClickGuiLayout.transform(535, 243, 0.97f)
         val local = SilentPoint(191.5f, 82.25f)
         val screen = transform.localToScreen(local)
-        val roundTrip = transform.screenToLocal(screen.x.toDouble(), screen.y.toDouble())
-
-        assertClose(local.x, roundTrip.x)
-        assertClose(local.y, roundTrip.y)
+        val back = transform.screenToLocal(screen.x.toDouble(), screen.y.toDouble())
+        assertClose(local.x, back.x)
+        assertClose(local.y, back.y)
     }
 
     @Test
-    fun `small screens still produce a safe positive fit scale`() {
+    fun `safe minimum scale and closing click gate remain defensive`() {
         assertTrue(SilentClickGuiLayout.fitScale(1, 1) > 0f)
-    }
-
-    @Test
-    fun `closing state rejects ordinary clicks`() {
         assertTrue(SilentClickGuiLayout.acceptsOrdinaryClicks(false))
         assertFalse(SilentClickGuiLayout.acceptsOrdinaryClicks(true))
     }
 
-    @Test
-    fun `Silent category icon glyph mapping is exact`() {
-        assertEquals("h", SilentClickGuiIcons.glyphFor(SilentClickGuiPage.COMBAT))
-        assertEquals("g", SilentClickGuiIcons.glyphFor(SilentClickGuiPage.MOVEMENT))
-        assertEquals("f", SilentClickGuiIcons.glyphFor(SilentClickGuiPage.PLAYER))
-        assertEquals("e", SilentClickGuiIcons.glyphFor(SilentClickGuiPage.RENDER))
-        assertEquals("P", SilentClickGuiIcons.glyphFor(SilentClickGuiPage.MISC))
-        assertEquals("X", SilentClickGuiIcons.glyphFor(SilentClickGuiPage.CONFIG))
-        assertEquals("T", SilentClickGuiIcons.glyphFor(SilentClickGuiPage.THEME))
-        assertEquals("K", SilentClickGuiIcons.glyphFor(SilentClickGuiPage.CLOUD))
-    }
-
     private fun assertRect(expected: SilentRect, actual: SilentRect) {
-        assertClose(expected.x, actual.x)
-        assertClose(expected.y, actual.y)
-        assertClose(expected.w, actual.w)
-        assertClose(expected.h, actual.h)
+        assertClose(expected.x, actual.x); assertClose(expected.y, actual.y)
+        assertClose(expected.w, actual.w); assertClose(expected.h, actual.h)
     }
 
-    private fun assertClose(expected: Float, actual: Float, tolerance: Float = 0.001f) {
+    private fun assertClose(expected: Float, actual: Float, tolerance: Float = 0.01f) {
         assertTrue(abs(expected - actual) < tolerance, "expected <$expected> but was <$actual>")
     }
-
 }

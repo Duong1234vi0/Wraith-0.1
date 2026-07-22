@@ -12475,3 +12475,72 @@ native line format. Their documented visible source formulas remain valid where 
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - Local `HEAD` equals `origin/main` at `8208d58fe21dda129201e8e229c593bd7ef80bed`.
 - FCL runtime remains pending; no Sprint BPS or alert-free runtime result is inferred from compilation/tests.
+
+## 2026-07-22 - Wraith compact ClickGUI redesign
+
+### Request and evidence
+
+User feedback identified the previous ClickGUI as too large, crowded, hard to scan, and overloaded by three narrow
+module columns with inline expandable settings and waterfall scrolling. The attached image was used only as a broad
+composition reference; no reference-client branding, logo, text, assets, fonts, exact colors, source code, or profile
+information were copied. The previous strict Silent shell geometry is superseded by this Wraith design.
+
+### Previous layout superseded
+
+The old production layout was `398 x 254`, with three columns, `101 px` cards, variable-height inline settings,
+per-module settings scroll, expansion animations, waterfall repositioning, `MAX_SETTINGS_HEIGHT = 150`, and a dramatic
+approximately `0.2 -> 1.0` opening scale. Those concepts are removed rather than left dormant.
+
+### New design
+
+The total local canvas is `468 x 226` with a `0.86` maximum fit scale and `12 px` default margin. The main panel is
+`0,0,334,226`; the detached side settings card is `342,0,126,226`, leaving an `8 px` gap. Main geometry is sidebar
+`5,5,68,216`, header `78,5,251,24`, content `78,34,251,187`, logo slot `5,5,68,24`, and footer `9,199,60,22`.
+The side header is `348,6,114,29`; its settings viewport is `349,40,112,179` with its own background, outline,
+scissor, scroll value, scrollbar, and empty state.
+
+The module browser is a fixed row-major two-column grid: two columns, `123 x 30` cards, `5 px` horizontal gap,
+`4 px` vertical gap, X positions `78` and `206`, and `34 px` row step. Cards never change height and settings never
+render inside them. Approximately ten modules fit across five rows at the default viewport.
+
+### Interaction and state
+
+Card-body left click toggles a module; the real `16 x 18` settings zone selects it without toggling; right click selects
+it; middle click enters the existing bind listener. The side header contains selected module/category text, an enabled
+switch, and close/deselect. State is now one selected module, one side settings scroll, remembered selection per
+category, and a small side-content transition. Search filters name and description, resets module scroll, and repairs
+selection to a valid first result. Theme, Config, and Cloud use neutral side-card empty state and never expose stale
+module settings hitboxes.
+
+### Settings, pages, render, and animation
+
+The existing Wraith value/configurable adapters remain in use for Boolean, ToggleableConfigurable, ranges, choices,
+multi-choice, Bind, Action, Color, sections, visibility, nested choices, and enabled children. Settings use the full
+side viewport and a single independent scroll path; module-grid, side-settings, Theme, and Config scrolling do not
+forward into one another. Theme is adapted to three columns; Config remains one-column with save/load/delete and
+confirmation; Cloud behavior is preserved. The real `context.pose()` push/translate/scale/pop architecture and local
+DrawContext scissors with balanced `try/finally` remain intact. Opening is now `0.94 -> 1.0` over about `220 ms`, alpha
+about `180 ms`, closing about `200 ms`, and side content changes use a small `6-8 px`/`160 ms` transition.
+
+### Files and removed architecture
+
+Changed: `ClickGuiScreen.kt`, `SilentClickGuiLayout.kt`, `SilentClickGuiAnimation.kt`, and focused layout/static tests.
+No production rename was required; comments/tests now describe the compact Wraith side-panel role. Removed production
+references include `expandedModules`, module expansion animations, waterfall layout, variable module heights,
+`MAX_SETTINGS_HEIGHT`, per-card settings viewports/scroll maps, inline settings rendering, and description marquee
+state. No Grim Client branding or copied assets were added.
+
+### Verification and runtime status
+
+`git diff --check` passed. Production `compileKotlin` passed. Focused tests were updated for reference geometry, FCL
+scale/bounds, two-column grid, fixed cards, settings hit zone, inverse transforms, side architecture, and restrained
+animation; normal test execution remains subject to the repository's existing unrelated test-compilation blockers.
+The required clean `assemble -x detekt` and artifact hash are to be recorded after this redesign build. FCL/Android visual
+testing has not occurred in this headless workspace; compilation does not prove visual quality. The user must test the
+manual FCL matrix on Minecraft `26.1.2`, GUI scale `2`, approximately `535 x 243`. This entry records the compact
+redesign and supersedes the previous strict Silent `398 x 254`/three-column/inline-settings production claims.
+
+### Commits and push
+
+Implementation, focused tests, documentation commit, JAR SHA-256, and remote push result are recorded in the final
+handoff after verification. Unrelated worktree files and prior Agent1 history remain preserved and unstaged.

@@ -18,39 +18,48 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.render.gui
 
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
 
 object SilentClickGuiLayout {
-    const val REFERENCE_WIDTH = 398f
-    const val REFERENCE_HEIGHT = 254f
-    const val SAFE_MIN_SCALE = 0.20f
-    const val DEFAULT_MARGIN = 8f
+    const val REFERENCE_WIDTH = 468f
+    const val REFERENCE_HEIGHT = 226f
+    const val SAFE_MIN_SCALE = 0.05f
+    const val DEFAULT_MARGIN = 12f
+    const val MAX_FIT_SCALE = 0.86f
 
-    val mainPanel = SilentRect(0f, 0f, REFERENCE_WIDTH, REFERENCE_HEIGHT)
-    val sidebar = SilentRect(5f, 5f, 78f, 244f)
-    val logoSlot = SilentRect(5f, 5f, 78f, 29f)
-    val header = SilentRect(87f, 5f, 306.5f, 24f)
-    val content = SilentRect(87f, 33f, 306.5f, 216f)
-    val footer = SilentRect(9.5f, 224.5f, 69f, 21f)
+    val mainPanel = SilentRect(0f, 0f, 334f, 226f)
+    val sidePanel = SilentRect(342f, 0f, 126f, 226f)
+    val sidebar = SilentRect(5f, 5f, 68f, 216f)
+    val logoSlot = SilentRect(5f, 5f, 68f, 24f)
+    val header = SilentRect(78f, 5f, 251f, 24f)
+    val content = SilentRect(78f, 34f, 251f, 187f)
+    val footer = SilentRect(9f, 199f, 60f, 22f)
+    val sideHeader = SilentRect(348f, 6f, 114f, 29f)
+    val settingsViewport = SilentRect(349f, 40f, 112f, 179f)
 
-    const val CATEGORY_ROW_X = 14f
-    const val CATEGORY_ROW_Y = 39f
-    const val CATEGORY_ROW_WIDTH = 64f
-    const val CATEGORY_ROW_HEIGHT = 21f
-    const val CATEGORY_ROW_STEP = 22f
+    const val CATEGORY_ROW_X = 11f
+    const val CATEGORY_ROW_Y = 34f
+    const val CATEGORY_ROW_WIDTH = 56f
+    const val CATEGORY_ROW_HEIGHT = 18f
+    const val CATEGORY_ROW_STEP = 20f
 
-    const val MODULE_COLUMNS = 3
-    const val MODULE_COLUMN_WIDTH = 101f
-    const val MODULE_HORIZONTAL_STEP = 103f
-    const val MODULE_HEADER_HEIGHT = 22f
-    const val MODULE_VERTICAL_GAP = 2f
-    const val MAX_SETTINGS_HEIGHT = 150f
+    const val MODULE_COLUMNS = 2
+    const val MODULE_COLUMN_WIDTH = 123f
+    const val MODULE_CARD_HEIGHT = 30f
+    const val MODULE_HORIZONTAL_GAP = 5f
+    const val MODULE_HORIZONTAL_STEP = 128f
+    const val MODULE_VERTICAL_GAP = 4f
+    const val MODULE_VERTICAL_STEP = 34f
+    const val SETTINGS_ZONE_WIDTH = 16f
+    const val SETTINGS_ZONE_HEIGHT = 18f
 
-    const val THEME_BOX_SIZE = 60f
-    const val THEME_BOX_SPACING = 15f
+    const val THEME_BOX_WIDTH = 77f
+    const val THEME_BOX_HEIGHT = 30f
+    const val THEME_BOX_GAP = 5f
+    const val THEME_ROW_STEP = 44f
 
     fun fitScale(screenWidth: Int, screenHeight: Int, margin: Float = DEFAULT_MARGIN): Float {
         val safeWidth = screenWidth.toFloat().coerceAtLeast(1f)
@@ -58,7 +67,7 @@ object SilentClickGuiLayout {
         val safeMargin = margin.coerceAtLeast(0f)
         val widthScale = ((safeWidth - safeMargin * 2f) / REFERENCE_WIDTH).takeIf { it.isFinite() } ?: SAFE_MIN_SCALE
         val heightScale = ((safeHeight - safeMargin * 2f) / REFERENCE_HEIGHT).takeIf { it.isFinite() } ?: SAFE_MIN_SCALE
-        return max(SAFE_MIN_SCALE, min(widthScale, heightScale))
+        return max(SAFE_MIN_SCALE, min(MAX_FIT_SCALE, min(widthScale, heightScale)))
     }
 
     fun transform(screenWidth: Int, screenHeight: Int, animationScale: Float, margin: Float = DEFAULT_MARGIN) =
@@ -80,36 +89,33 @@ object SilentClickGuiLayout {
     fun allCategoryRects(): List<SilentRect> =
         SilentClickGuiPage.ORDER.indices.map(::categoryRect)
 
-    fun columnFor(moduleIndex: Int): Int =
-        moduleIndex.floorMod(MODULE_COLUMNS)
+    fun columnFor(moduleIndex: Int): Int = moduleIndex.floorMod(MODULE_COLUMNS)
 
-    fun moduleX(column: Int): Float =
-        content.x + MODULE_HORIZONTAL_STEP * column.coerceIn(0, MODULE_COLUMNS - 1)
+    fun rowFor(moduleIndex: Int): Int = moduleIndex / MODULE_COLUMNS
 
-    fun waterfall(moduleHeights: List<Float>, scroll: Float = 0f): Waterfall {
-        val cursors = FloatArray(MODULE_COLUMNS) { content.y }
-        val rects = ArrayList<SilentRect>(moduleHeights.size)
+    fun moduleX(column: Int): Float = content.x + MODULE_HORIZONTAL_STEP * column.coerceIn(0, MODULE_COLUMNS - 1)
 
-        moduleHeights.forEachIndexed { index, rawHeight ->
-            val column = columnFor(index)
-            val height = rawHeight.coerceAtLeast(MODULE_HEADER_HEIGHT)
-            val rect = SilentRect(moduleX(column), cursors[column] - scroll, MODULE_COLUMN_WIDTH, height)
-            rects += rect
-            cursors[column] += height + MODULE_VERTICAL_GAP
-        }
+    fun moduleCardRect(moduleIndex: Int, scroll: Float = 0f): SilentRect =
+        SilentRect(moduleX(columnFor(moduleIndex)), content.y + rowFor(moduleIndex) * MODULE_VERTICAL_STEP - scroll,
+            MODULE_COLUMN_WIDTH, MODULE_CARD_HEIGHT)
 
-        val contentHeight = cursors.maxOrNull()?.minus(content.y + MODULE_VERTICAL_GAP) ?: 0f
-        return Waterfall(rects, contentHeight.coerceAtLeast(0f))
+    fun moduleSettingsZone(card: SilentRect): SilentRect =
+        SilentRect(card.right - SETTINGS_ZONE_WIDTH - 4f, card.y + 7f, SETTINGS_ZONE_WIDTH, SETTINGS_ZONE_HEIGHT)
+
+    fun moduleGridContentHeight(moduleCount: Int): Float {
+        if (moduleCount <= 0) return 0f
+        val rows = ceil(moduleCount / MODULE_COLUMNS.toFloat()).toInt()
+        return rows * MODULE_CARD_HEIGHT + max(0, rows - 1) * MODULE_VERTICAL_GAP
     }
 
     fun themeBoxRect(index: Int, scroll: Float = 0f): SilentRect {
-        val column = index.floorMod(4)
-        val row = index / 4
+        val column = index.floorMod(3)
+        val row = index / 3
         return SilentRect(
-            content.x + 6f + column * (THEME_BOX_SIZE + THEME_BOX_SPACING),
-            content.y + 10f + row * (THEME_BOX_SIZE + THEME_BOX_SPACING + 13f) - scroll,
-            THEME_BOX_SIZE,
-            THEME_BOX_SIZE
+            content.x + 2f + column * (THEME_BOX_WIDTH + THEME_BOX_GAP),
+            content.y + 7f + row * THEME_ROW_STEP - scroll,
+            THEME_BOX_WIDTH,
+            THEME_BOX_HEIGHT
         )
     }
 
@@ -118,15 +124,14 @@ object SilentClickGuiLayout {
             return 0f
         }
 
-        val rows = ((count - 1) / 4) + 1
-        return 10f + rows * THEME_BOX_SIZE + max(0, rows - 1) * (THEME_BOX_SPACING + 13f) + 18f
+        val rows = ((count - 1) / 3) + 1
+        return 7f + rows * THEME_BOX_HEIGHT + max(0, rows - 1) * (THEME_ROW_STEP - THEME_BOX_HEIGHT) + 16f
     }
 
     fun acceptsOrdinaryClicks(closing: Boolean): Boolean = !closing
 
     private fun Int.floorMod(mod: Int): Int = ((this % mod) + mod) % mod
 
-    data class Waterfall(val rects: List<SilentRect>, val contentHeight: Float)
 }
 
 data class SilentPoint(val x: Float, val y: Float)

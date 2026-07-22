@@ -19,6 +19,7 @@
 package net.ccbluex.liquidbounce.features.module.modules.render.gui
 
 import net.ccbluex.liquidbounce.render.FontManager
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -108,6 +109,31 @@ class SilentClickGuiStaticTest {
         assertTrue(guiSources.contains("ClientTheme"))
         assertFalse(guiSources.contains("ThemeManager"))
         assertFalse(guiSources.contains("AutoBuy"))
+    }
+
+    @Test
+    fun `production ClickGUI uses compact side settings architecture`() {
+        val source = Files.readString(
+            Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt")
+        )
+        assertTrue(source.contains("selectedModule"))
+        assertTrue(source.contains("sideSettingsScroll"))
+        assertTrue(source.contains("SilentClickGuiLayout.settingsViewport"))
+        assertFalse(source.contains("expandedModules"))
+        assertFalse(source.contains("moduleExpansionAnimations"))
+        assertFalse(source.contains("moduleSettingsScroll"))
+        assertFalse(source.contains("waterfall"))
+        assertFalse(source.contains("MAX_SETTINGS_HEIGHT"))
+        assertFalse(source.contains("MarqueeState"))
+    }
+
+    @Test
+    fun `compact animation replaces dramatic opening scale`() {
+        assertEquals(0.94f, SilentClickGuiAnimation.MIN_SCALE)
+        assertEquals(220L, SilentClickGuiAnimation.OPEN_SCALE_MS)
+        assertEquals(180L, SilentClickGuiAnimation.OPEN_ALPHA_MS)
+        assertTrue(SilentClickGuiAnimation.openScale(0) >= 0.94f)
+        assertTrue(SilentClickGuiAnimation.openScale(220) <= 1f)
     }
 
     @Test
