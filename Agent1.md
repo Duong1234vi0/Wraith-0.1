@@ -12790,3 +12790,114 @@ Implementation/test commit: `c7970be4` - `refactor(clickgui): use explicit dista
 Documentation commit and push result will be recorded in the post-push update. This entry supersedes the prior
 compact morph timing claims that described `320 ms` opening, `280 ms` closing, or `160 ms` switch motion without
 separate full-duration preparation/travel stages.
+
+## Wraith compact ClickGUI terminal close repair — 2026-07-22
+
+### Request and runtime symptom
+
+The user reported a severe FCL terminal-state failure after the accepted compact ClickGUI motion polish. Closing the
+Module Settings panel made the source module card flash continuously, never completed the close animation, consumed
+all mouse/module/category/search/scroll/bind interaction, and trapped Escape so the root ClickGUI could not be closed.
+This was treated as a state-machine terminal-transition bug only. The accepted opening, closing, and switching timing,
+distance-aware durations, easing, Hermite interruption handling, centering, two-column layout, card styling, side-panel
+geometry, and one-surface render ownership were preserved.
+
+### Checked and authority
+
+Read the required Skill workflow documents, the complete current `ModuleSettingsMorphController.kt`, `ClickGuiScreen.kt`,
+`SilentClickGuiAnimation.kt`, `SilentClickGuiLayout.kt`, all current ClickGUI morph/layout/static/style/settings tests,
+and the newest compact ClickGUI Agent1 entries covering the shared card-to-panel morph, direction repair, render
+ownership, explicit phases, and distance-aware motion polish. Current Wraith source was authoritative over the historical
+journal. Existing unrelated tracked and untracked worktree changes were preserved.
+
+### Root cause
+
+`ModuleSettingsMorphPhase.CLOSE_SETTLE` had a configured duration of `65 ms` and `stageDurationMs()` returned it, but
+`advancePhase()` had no `CLOSE_SETTLE -> CLOSED` transition. `tick()` advanced `transitionStartedAtNanos` by 65 ms,
+received no successor, and left the phase in `CLOSE_SETTLE`. Each later frame therefore observed another `0 -> 1`
+settle interval. The potential pulse frequency was approximately `1000 / 65 = 15.38 Hz`, subject to frame sampling.
+
+The render-side fallback in `renderMorph()` checked `progress >= 1f` and then consumed deferred actions, called
+`completeClose()`, cleared the selected module, and applied page/search changes. `tick()` had already advanced the
+timestamp before `frame()` computed progress, so ordinary frames normally saw only the remainder and could not reach
+that render-side completion. Rendering was therefore unable to repair the state machine.
+
+Because every phase other than `CLOSED` and `OPEN` was considered busy, the stuck phase kept `morphIsBusy()` true,
+kept the selected source card hidden, consumed clicks/scroll/drag/bind/category/search input, and consumed Escape.
+
+### Controller-owned completion
+
+- Added the real terminal transition `CLOSE_SETTLE -> CLOSED`.
+- Added `ModuleSettingsCloseCompletion` carrying pending page and pending search exactly once.
+- The controller snapshots deferred actions, enters `CLOSED`, clears its morph state, and queues one completion payload.
+- Added `consumeCloseCompletion()` as the one-shot screen handoff; repeated ticks while closed are idempotent and cannot
+  advance the timestamp or emit a second completion.
+- Added a shared `ModuleSettingsMorphInputPolicy` for busy state, surface ownership, source-card hiding, and Escape
+  decisions. `CLOSED` is no longer busy, owns no surface, and does not hide the selected card.
+- Added explicit phase-successor and timed-phase helpers used by the state machine and invariant tests.
+
+### Screen/render lifecycle
+
+- `extractRenderState()` now ticks the controller, consumes close completion, applies deferred page/search actions, and
+  clears selected module/side scroll/transient settings before taking the render snapshot.
+- `renderMorph()` is now render-only. It no longer checks `progress >= 1f`, advances state, calls `completeClose()`, or
+  consumes pending page/search values.
+- Terminal handoff stops the morph surface and lets the real module card render immediately in the same logical target
+  rectangle, with no empty slot, duplicate surface, or restarted alpha.
+- The selected card becomes visible and its hitbox is rebuilt after completion. Mouse clicks, scrolling, category,
+  search, dragging, and middle-click bind input unlock because `morphIsBusy()` becomes false.
+- Escape closes settings during `OPEN`/opening phases. Escape during switching or finite close phases starts the existing
+  root close animation deterministically rather than being consumed forever. Repeated Escape does not restart timers.
+- `onClose()` and the render close-finished path clear morph/selected state before `super.onClose()`, so root dismissal
+  during opening, switching, fade, travel, or settle cannot wait on the panel morph and reopening starts cleanly closed.
+
+### Preserved behavior and deviations
+
+All accepted motion constants and geometry remain unchanged: opening `70 ms + 260..340 ms + 100 ms`, closing
+`75 ms + 220..300 ms + 65 ms`, switching `70 ms + 55 ms + 240..320 ms + 90 ms`, monotonic nanosecond timing,
+overshoot carry, cubic Bézier position/size easing, delayed height, radius interpolation, Hermite interruption, one
+solid travel surface, no trails/blur/particles, existing pose/scissor path, and main-panel centering.
+
+Deviations: none. No new visual effect, mode, setting, fallback, timing retune, or unrelated behavior was added.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ModuleSettingsMorphController.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiMorphTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiStaticTest.kt`
+- this append-only history entry.
+
+### Tests and verification
+
+- `git diff --check`: passed.
+- Focused ClickGUI suite using `.codex-tmp/clickgui-focused-test.init.gradle`: `BUILD SUCCESSFUL`; 64 tests passed.
+  Coverage includes full close lifecycle, exact one-nanosecond terminal boundary, repeated closed ticks, late-frame
+  travel/settle overshoot, old 65 ms flash-loop regression, timed-phase successor invariant, deferred page/search
+  one-shot handling, input unlock/Escape policy, root dismissal across every phase, 30/60/90/120/144 FPS, irregular
+  frames, and 150/500 ms stalls, plus existing layout/static/style/settings coverage.
+- `compileKotlin`: `BUILD SUCCESSFUL`.
+- Unfiltered `./gradlew --no-daemon test`: blocked during pre-existing unrelated test compilation by unresolved
+  `calculateItemCooldownProgress`/`ITEM_COOLDOWN_SAMPLE_TICK_DELTA` in `SmartCriticalDecisionTest.kt` and
+  `ItemCooldownProgressTest.kt`, plus old `math`/`Vec3d`/vector symbols in `PointFindingKtTest.kt`. No task test
+  failure was observed and none of those tests was modified.
+- Required clean assembly:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+  — `BUILD SUCCESSFUL in 3m 5s`.
+- Main JAR: `build/libs/liquidbounce-0.31.2.jar`; SHA-256:
+  `1d177d73f29d1adca135b8fd6e07e5ac1fbf68841a8a20f3c7740fb64f44fa12`.
+- Sources JAR SHA-256:
+  `dc2a924cda60d5c61207885779aba8903089a94e81e9c7036fb0dc636dd73328`.
+
+### Runtime status and commits
+
+FCL/Android runtime retesting has not occurred in this headless Termux workspace. Compilation and focused tests do not
+prove that the original visual flashing or real input deadlock is fixed in-game. The user must retest Minecraft 26.1.2
+under FCL at GUI scale 2 and approximately 535 × 243, including basic close, Escape, repeated open/close, switch-then-
+close, category/search/scroll/bind input, 150/500 ms frame drops, and at least 50 repetitions. No runtime success is
+claimed before that retest.
+
+- Implementation/test commit: `b2a217cf` — `fix(clickgui): terminate settings close morph`.
+- Documentation commit and push result: pending at entry creation; a post-push update will record both.
+- This entry corrects only the terminal close logic in the preceding motion-polish entry; it does not supersede any
+  accepted timing, easing, geometry, or render-quality decisions.
