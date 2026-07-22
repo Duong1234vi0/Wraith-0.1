@@ -137,6 +137,29 @@ class SilentClickGuiStaticTest {
     }
 
     @Test
+    fun `module selection is name-only and uses a shared morph controller`() {
+        val source = Files.readString(
+            Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt")
+        )
+        assertTrue(source.contains("CompactModuleCardStyles.style"))
+        assertTrue(source.contains("ModuleSettingsMorphPhase"))
+        assertFalse(source.contains("if (selected) 0.9f else 0.55f"))
+        assertFalse(source.contains("if (selected) ClientTheme.accentA else 0x88FFFFFF"))
+        assertFalse(source.contains("SIDE_CONTENT_MS"))
+        assertTrue(source.contains("renderMorph"))
+        assertTrue(source.contains("withLocalScissor(context, SilentClickGuiLayout.settingsViewport)"))
+    }
+
+    @Test
+    fun `closed dock has no empty settings prompt`() {
+        val source = Files.readString(
+            Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt")
+        )
+        assertTrue(source.contains("Closed dock is only a restrained composition indicator"))
+        assertFalse(source.contains("Select a module"))
+    }
+
+    @Test
     fun `Silent mode selector does not draw a selected rounded background`() {
         val source = Files.readString(
             Path.of("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiSettings.kt")

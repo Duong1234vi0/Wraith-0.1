@@ -12559,3 +12559,68 @@ handoff after verification. Unrelated worktree files and prior Agent1 history re
 - Push succeeded to `origin/main`; local `HEAD` equals remote at `5864057d20d223206cb35ad0d64ef5beef20787f`.
 - FCL/Android visual testing remains pending. No design approval or visual success is claimed from compilation; the
   old Silent shell layout remains explicitly superseded.
+
+## Wraith compact ClickGUI alignment, selection, and shared morph — 2026-07-22
+
+### Request / runtime evidence
+
+- The attached FCL screenshot showed category labels visibly below their icons, selected modules using a bright
+  full-card accent outline, and the detached settings panel appearing statically while only its content translated.
+- The accepted `468 x 226` canvas, `334 x 226` main panel, detached side location, two-column grid, card dimensions,
+  Theme/Config/Cloud pages, fit scaling, and root ClickGUI animation were preserved.
+
+### Root causes
+
+- Sidebar used independent `rect.y + 4.2f` (icon) and `rect.y + 6.2f` (label) offsets. With `visualHeight(size) =
+  size * 0.7`, the calculated visual-center difference was approximately `1.405 px` (`7.0` vs `8.405`).
+- Selected cards changed full-card outline color/thickness and chevron color; module names only reflected enabled state.
+- The previous side transition was content-only: `SIDE_CONTENT_MS` was approximately `160 ms` with a small `-7 px`
+  translation/fade. It is superseded as the primary opening animation.
+
+### Changed
+
+- Added MSDF ClickGUI metric helpers in `ExosGuiRenderer.kt`; all eight sidebar rows now derive icon and label Y from
+  one row center. The old independent sidebar offsets were removed.
+- Added `CompactModuleCardStyle.kt`: selection changes only the module name to `ClientTheme.accentA`; fills,
+  outlines, outline widths, enabled strip, bind, description, and neutral settings control remain state-independent
+  from selection. Enabled and hover behavior remains intact.
+- Added `ModuleSettingsMorphController.kt` and `SilentClickGuiMorph` geometry helpers with explicit phases:
+  `CLOSED`, `OPENING`, `OPEN`, `SWITCHING`, `PREPARING_CLOSE`, and `CLOSING`.
+- Opening uses a `320 ms` cubic ease-in/out expansion with restrained quadratic Bézier flight (control Y is 14 px
+  above the lower center), staged card/panel alpha, and exact local endpoints `123 x 30` card to `342,0,126,226`
+  side panel. Closing uses `280 ms`, resolves the selected module's current row after scrolling, and supports an
+  interruption-safe reverse start rectangle.
+- The real selected card is suppressed from rendering and hitboxes during the morph and while open; its fixed grid
+  slot remains reserved. The morph copy renders after the module-content scissor. The static side panel is only shown
+  in `OPEN`/`SWITCHING`; the closed dock is a low-alpha outline without a title, empty-state text, or viewport.
+- Switching modules while open keeps the side panel, restores the old card, suppresses the new card, resets settings
+  scroll/transient state, and uses a restrained `160 ms` switching phase. Category/search changes defer until close;
+  morph-time settings/module interactions are blocked. Escape closes module settings before the root GUI.
+- Automatic first/remembered-module opening through `repairSelectedModule` was removed. Explicit settings-zone or
+  right-click selection is required. Real `context.pose()` and balanced local scissor handling remain in use; no
+  framebuffer capture, dynamic texture, per-frame texture allocation, or external asset was introduced.
+
+### Files changed
+
+- `ClickGuiScreen.kt`, `ExosGuiRenderer.kt`, `SilentClickGuiAnimation.kt`
+- `CompactModuleCardStyle.kt`, `ModuleSettingsMorphController.kt`
+- `SilentClickGuiLayoutTest.kt`, `SilentClickGuiStaticTest.kt`, `CompactModuleCardStyleTest.kt`,
+  `SilentClickGuiMorphTest.kt`
+- This append to `Agent1.md`.
+
+### Verification / status
+
+- `git diff --check`: passed.
+- `compileKotlin`: passed.
+- Focused ClickGUI alignment/style/morph/static tests: passed using the existing `.codex-tmp/clickgui-focused-test.init.gradle`
+  exclusion for unrelated test sources.
+- Unfiltered normal tests remain blocked by pre-existing compile errors in `SmartCriticalDecisionTest.kt`,
+  `PointFindingKtTest.kt`, and `ItemCooldownProgressTest.kt`; those files were not modified.
+- Required clean build, JAR SHA-256, commits, and push are recorded after the final verification pass.
+- FCL/Android visual testing has not occurred in this headless workspace. Compilation and unit tests do not prove
+  motion quality; the manual matrix remains pending on Minecraft `26.1.2`, GUI scale `2`, approximately `535 x 243`.
+
+### Supersedes
+
+The previous static side-content `-7 px`/`160 ms` transition is superseded as the primary open/close animation by the
+shared module-card-to-settings-panel morph described above. No visual approval is claimed until the user tests FCL.

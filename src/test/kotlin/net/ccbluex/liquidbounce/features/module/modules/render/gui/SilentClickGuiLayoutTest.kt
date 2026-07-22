@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import net.ccbluex.liquidbounce.render.font.msdf.MsdfTextRenderer
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.math.abs
 
 class SilentClickGuiLayoutTest {
@@ -81,6 +84,31 @@ class SilentClickGuiLayoutTest {
         assertTrue(SilentClickGuiLayout.fitScale(1, 1) > 0f)
         assertTrue(SilentClickGuiLayout.acceptsOrdinaryClicks(false))
         assertFalse(SilentClickGuiLayout.acceptsOrdinaryClicks(true))
+    }
+
+    @Test
+    fun `category icon and label use the same row center at every size`() {
+        SilentClickGuiPage.ORDER.indices.forEach { index ->
+            val row = SilentClickGuiLayout.categoryRect(index)
+            listOf(5f, 6.3f, 8f, 11f).forEach { size ->
+                val center = row.y + row.h * 0.5f
+                val iconY = ExosGuiRenderer.clickGuiIconCenteredY(row.y, row.h, "A", size)
+                val labelY = ExosGuiRenderer.clickGuiBodyCenteredY(row.y, row.h, "A", size)
+                assertClose(center, iconY + MsdfTextRenderer.visualHeight(size) * 0.5f)
+                assertClose(center, labelY + MsdfTextRenderer.visualHeight(size) * 0.5f)
+                assertTrue(row.h <= 18f)
+            }
+        }
+    }
+
+    @Test
+    fun `sidebar has no independent guessed icon or label baselines`() {
+        val source = Files.readString(Path.of(
+            "src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt"))
+        assertFalse(source.contains("rect.y + 4.2f"))
+        assertFalse(source.contains("rect.y + 6.2f"))
+        assertTrue(source.contains("clickGuiIconCenteredY"))
+        assertTrue(source.contains("clickGuiBodyCenteredY"))
     }
 
     private fun assertRect(expected: SilentRect, actual: SilentRect) {

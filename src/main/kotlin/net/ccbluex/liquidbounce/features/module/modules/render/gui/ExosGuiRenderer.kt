@@ -21,6 +21,7 @@ package net.ccbluex.liquidbounce.features.module.modules.render.gui
 import com.mojang.blaze3d.vertex.PoseStack
 import net.ccbluex.liquidbounce.render.FontManager
 import net.ccbluex.liquidbounce.render.font.msdf.FontRenderer
+import net.ccbluex.liquidbounce.render.font.msdf.MsdfTextRenderer
 import net.ccbluex.liquidbounce.render.gui.drawGradientGlowRect
 import net.ccbluex.liquidbounce.render.gui.drawGlowRect
 import net.ccbluex.liquidbounce.render.gui.drawRoundedGradientOutline
@@ -48,6 +49,19 @@ import kotlin.math.sin
  * Public function signatures are kept stable for existing HUD/render call-sites.
  */
 object ExosGuiRenderer {
+
+    /** ClickGUI metrics use the same MSDF visual plane as the draw path. */
+    fun clickGuiBodyHeight(text: String = "A", size: Float): Float =
+        MsdfTextRenderer.visualHeight(size)
+
+    fun clickGuiIconHeight(glyph: String = "A", size: Float): Float =
+        MsdfTextRenderer.visualHeight(size)
+
+    fun clickGuiBodyCenteredY(rowY: Float, rowHeight: Float, text: String, size: Float): Float =
+        rowY + (rowHeight - clickGuiBodyHeight(text, size)) * 0.5f
+
+    fun clickGuiIconCenteredY(rowY: Float, rowHeight: Float, glyph: String, size: Float): Float =
+        rowY + (rowHeight - clickGuiIconHeight(glyph, size)) * 0.5f
 
     fun roundedRect(
         matrices: PoseStack,
