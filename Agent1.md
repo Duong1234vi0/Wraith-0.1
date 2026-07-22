@@ -12030,6 +12030,77 @@ the unrelated sources listed above. No Wyvern behavior was silently replaced wit
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - The post-push documentation commit and final remote-equality verification are reported in the assistant handoff.
 
+## 2026-07-22 - GrimTick NoSlow movement-cycle phase leak audit and fix
+
+- User report: GrimTick remained visibly functional and provided noticeable NoSlow movement, but intermittently emitted
+  `[GrimAC] BestSlient failed NoSlow (vl:0.0)` and
+  `[GrimAC] BestSlient failed NoSlow (vl:0.09999999999999969)`; the slowly accumulating violations could eventually
+  cause a setback/flashback.
+- Authority/source: live Wraith checkout on Minecraft 26.1.2; supplied Grim 2.0 tree under
+  `WorkSpace/.../Grim-2.0`, repository revision `bef1f02d0cbd4bb381f5d242bcb159c957f64b70`.
+- Grim detector: default `NoSlow.threshold` is `0.001`. While item slowdown is certain, Grim retains the best
+  non-`Flip_Use_Item` prediction offset. One invalid checked prediction sets `flaggedLastTick`; another consecutive
+  invalid prediction calls `flagWithSetback()`. A valid slowed prediction rewards and clears the latch. Grim item-use
+  state is derived from use/release/slot/metadata/transaction/movement/client-tick-end input, and modern input prediction
+  uses the item's actual use-effect speed multiplier.
+- Previous Wraith implementation: generic `GameTickEvent` advanced `grimTickCounter`/`grimTickReady`; whichever hook
+  first reached `consumeGrimTickWindow()` consumed the Boolean, while a cache keyed by player tick, use state, hand,
+  item, `ticksUsingItem`, and settings tried to share that result with later hooks.
+- Diagnostic method: temporary compact production instrumentation was added and compiled to cover game/player/movement/
+  network sequences, movement and tick-end packet emission, use identity/time, phase and every decision caller, input,
+  sprint, velocity, and relevant outgoing packet order. It was removed before the production patch. This headless Termux
+  environment could not launch FCL, so no runtime line was fabricated; the completed static bytecode/event trace and
+  conclusions are retained untracked in `.codex-tmp/grimtick-noslow-audit-20260722.md`.
+- Trace finding: in ordinary Minecraft 26.1.2 execution, `ticksUsingItem` is updated in `LivingEntity.tick` before
+  `LocalPlayer.aiStep`; it did not change between `modifyInput`, `isSlowDueToUsingItem`, sprint checks, and packet
+  preparation. Therefore one normal movement cycle was not proven to receive mixed decisions, and mutable
+  `ticksUsingItem` was not the established live cause. A regression model still proves the old consumable/cache design
+  can return true then false if its mutable key changes; the new latch cannot.
+- Exact root cause: phase readiness advanced at generic client-game-tick timing rather than completed local movement/
+  network prediction timing. A skipped, delayed, paused, or otherwise uncompleted player movement cycle could re-arm
+  the consumable window without inserting a server-checked vanilla recovery prediction, exposing fast-fast to Grim.
+- Proven boundary: Wraith's `PlayerMovementTickEvent` fires at `LocalPlayer.aiStep` HEAD before `ClientInput.tick` and
+  `LocalPlayer.modifyInput`. `PlayerNetworkMovementTickEvent.POST` fires at `sendPosition` RETURN once for that local
+  movement cycle, independent of whether a movement packet subtype was selected. Natural client tick-end emission does
+  not advance the controller, so it cannot double-advance it.
+- New architecture: `GrimTickNoSlowController` computes and latches once at movement begin; input slowdown,
+  `isSlowDueToUsingItem`, sprint-start, and sprint-stop hooks read the same immutable result. POST completes/advances once;
+  duplicate POST is ignored and a missing POST forces the next begin to recovery. Player/use-session/hand/item/settings,
+  module/mode, world, disconnect, death, riding, fall-flying, and use-end transitions reset vanilla-safe.
+- Sequence and duty cycle: the explicit sequence is recovery warm-up, recovery warm-up, full-speed fast, real vanilla
+  recovery, then deterministic fast/recovery alternation. The stable full-speed duty cycle remains 1/2. The previous
+  source-intended steady duty cycle was also 1/2, but generic-tick drift could collapse the observed checked sequence to
+  fast-fast. Fast phases remain completely unslowed; recovery delegates the real active item's multiplier and modern
+  normalization to vanilla.
+- Sprint: no global sprint, diagonal, jump, air, or movement restriction was added. All existing input/pose/sprint hooks
+  now read one phase latch. Static 26.1.2 bytecode showed `shouldStopRunSprinting` no longer contains the targeted direct
+  item-slow call (`require = 0`), and no separate sprint contribution to the reported leak was established or invented.
+- Packet strategy: none. No release/use spam, slot spoof, offhand spoof, transaction/tick-end spam, timer manipulation,
+  movement cancellation, alert suppression, or manual velocity multiplier was added. Grim/Matrix/Normal behavior and
+  the existing Grim use-item rotation path were left unchanged.
+- Files inspected: all requested NoSlow mixins/events/network dispatch and `ModuleSprint`, every requested call site,
+  mapped/decompiled Minecraft 26.1.2 `LocalPlayer`/`LivingEntity`/`Minecraft` tick-input-sprint-packet methods, complete
+  requested Grim NoSlow/prediction/input/state/digging/metadata/check files, PacketOrderF, MultiActions A/B/E, Sprint
+  checks A-G, threshold configuration, and the V-Core source port.
+- Files changed: `ModuleNoSlow.kt`, new `GrimTickNoSlowController.kt`, and focused
+  `GrimTickNoSlowControllerTest.kt`; this chronological `Agent1.md` append is documentation only. No mixin production
+  diff or temporary log spam remains.
+- Tests: focused controller/static/Grim-model suite passed (`BUILD SUCCESSFUL`, 2026-07-22). It covers lifecycle and
+  identity resets, repeated callers, mutable-use-time regression, exact sequence, duplicate/missing POST, movement/item/
+  hand/sprint variants, and Grim's consecutive-invalid latch. Unfiltered `test` remains blocked only by pre-existing
+  unrelated unresolved symbols in `SmartCriticalDecisionTest`, `PointFindingKtTest`, and `ItemCooldownProgressTest`.
+- Build: required Java 25 `clean assemble -x detekt` passed (`BUILD SUCCESSFUL` in 2m13s). Artifact
+  `build/libs/liquidbounce-0.31.2.jar`, SHA-256
+  `1f94eb28f61fa698f1b62d4eb9b912a10d7dacb10b80d750cc1b9f35bda5c63a`.
+- Runtime status: supplied Grim was audited but was not actually run as a local server. FCL/Android matrix was not run
+  and remains pending on the user's observed server/config; compilation and model tests do not prove the live flag fixed,
+  and GrimTick is not claimed Grim-safe.
+- Commits: `b101f10d7` (`fix(noslow): latch grimtick to movement cycles`) and `2c19b96bf`
+  (`test(noslow): model grim consecutive prediction checks`). Documentation and push verification follow below.
+- Supersedes the older 2026-07-16 GrimTick claim only where it implied generic tick/cached consumption was fully
+  Grim-aligned or that compile/static verification established Grim safety. The V-Core provenance and unchanged behavior
+  of other NoSlow modes remain valid.
+
 ## 2026-07-21 - Wyvern KillEffect, Cubes, and LineGlyphs fidelity/performance correction
 
 ### Request and terminology correction
