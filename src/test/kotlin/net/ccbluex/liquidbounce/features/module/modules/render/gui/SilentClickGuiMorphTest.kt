@@ -4,6 +4,7 @@ import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -116,6 +117,9 @@ class SilentClickGuiMorphTest {
         controller.tick(now)
         assertEquals(ModuleSettingsMorphPhase.CLOSE_SETTLE, controller.phase)
         assertEquals(ModuleSettingsMorphController.CLOSE_SETTLE_MS, controller.stageDurationMs())
+        now += ms(ModuleSettingsMorphController.CLOSE_SETTLE_MS)
+        controller.tick(now)
+        assertEquals(ModuleSettingsMorphPhase.CLOSED, controller.phase)
 
         assertEquals(
             ModuleSettingsMorphController.OPEN_PREP_MS + openingTravel + ModuleSettingsMorphController.OPEN_SETTLE_MS,
@@ -306,6 +310,209 @@ class SilentClickGuiMorphTest {
         assertTrue(screenSource.contains("withLocalScissor(context, viewport)"))
     }
 
+    @Test
+    fun `full close lifecycle terminates and emits one completion`() {
+        val harness = Harness()
+        val module = module("First")
+        harness.openFully(module)
+        harness.controller.requestClose()
+        harness.controller.setCloseTarget(source, needsReveal = false)
+
+        harness.advance(ModuleSettingsMorphController.CLOSE_FADE_MS)
+        assertEquals(ModuleSettingsMorphPhase.CLOSE_TRAVEL, harness.controller.phase)
+        harness.advance(harness.controller.activeTravelDurationMs)
+        assertEquals(ModuleSettingsMorphPhase.CLOSE_SETTLE, harness.controller.phase)
+        assertTrue(ModuleSettingsMorphInputPolicy.isBusy(harness.controller.phase))
+        assertTrue(ModuleSettingsMorphInputPolicy.ownsSurface(harness.controller.phase))
+        assertTrue(ModuleSettingsMorphInputPolicy.shouldHideModuleCard(harness.controller.phase, module, module))
+
+        harness.advance(ModuleSettingsMorphController.CLOSE_SETTLE_MS)
+        assertEquals(ModuleSettingsMorphPhase.CLOSED, harness.controller.phase)
+        assertFalse(ModuleSettingsMorphInputPolicy.isBusy(harness.controller.phase))
+        assertFalse(ModuleSettingsMorphInputPolicy.ownsSurface(harness.controller.phase))
+        assertFalse(ModuleSettingsMorphInputPolicy.shouldHideModuleCard(
+            harness.controller.phase, harness.controller.selectedModule, module
+        ))
+        assertEquals(ModuleSettingsCloseCompletion(null, null), harness.controller.consumeCloseCompletion())
+        assertNull(harness.controller.consumeCloseCompletion())
+    }
+
+    @Test
+    fun `close settle terminal boundary is exact without progress reset`() {
+        val harness = Harness()
+        harness.openFully(module("Boundary"))
+        harness.enterCloseSettle(source)
+        val settleStarted = harness.now
+        val durationNanos = ms(ModuleSettingsMorphController.CLOSE_SETTLE_MS)
+
+        harness.now = settleStarted + durationNanos - 1L
+        harness.controller.tick(harness.now)
+        assertEquals(ModuleSettingsMorphPhase.CLOSE_SETTLE, harness.controller.phase)
+        assertNull(harness.controller.consumeCloseCompletion())
+
+        harness.now = settleStarted + durationNanos
+        val entered = harness.controller.tick(harness.now)
+        assertTrue(ModuleSettingsMorphPhase.CLOSED in entered)
+        assertEquals(ModuleSettingsMorphPhase.CLOSED, harness.controller.phase)
+        assertEquals(1f, harness.controller.progress(harness.now))
+
+        harness.now++
+        harness.controller.tick(harness.now)
+        assertEquals(ModuleSettingsMorphPhase.CLOSED, harness.controller.phase)
+        assertEquals(1f, harness.controller.progress(harness.now))
+    }
+
+    @Test
+    fun `closed ticks are idempotent and completion cannot repeat`() {
+        val harness = Harness()
+        harness.openFully(module("Idempotent"))
+        harness.enterCloseSettle(source)
+        harness.advance(ModuleSettingsMorphController.CLOSE_SETTLE_MS)
+        val closedTimestamp = harness.controller.transitionStartedAtNanos
+        assertEquals(ModuleSettingsMorphPhase.CLOSED, harness.controller.phase)
+        assertEquals(ModuleSettingsCloseCompletion(null, null), harness.controller.consumeCloseCompletion())
+
+        listOf(harness.now, harness.now + 1L, harness.now + ms(10_000L)).forEach { timestamp ->
+            assertTrue(harness.controller.tick(timestamp).isEmpty())
+            assertEquals(ModuleSettingsMorphPhase.CLOSED, harness.controller.phase)
+            assertEquals(closedTimestamp, harness.controller.transitionStartedAtNanos)
+            assertNull(harness.controller.consumeCloseCompletion())
+        }
+    }
+
+    @Test
+    fun `late frame crosses close travel and settle exactly once`() {
+        val harness = Harness()
+        harness.openFully(module("Late"))
+        harness.controller.requestClose()
+        harness.controller.setCloseTarget(source, needsReveal = false)
+        harness.advance(ModuleSettingsMorphController.CLOSE_FADE_MS)
+        val remaining = harness.controller.activeTravelDurationMs +
+            ModuleSettingsMorphController.CLOSE_SETTLE_MS + 500L
+
+        val entered = harness.advance(remaining)
+        assertTrue(ModuleSettingsMorphPhase.CLOSE_SETTLE in entered)
+        assertTrue(ModuleSettingsMorphPhase.CLOSED in entered)
+        assertEquals(ModuleSettingsMorphPhase.CLOSED, harness.controller.phase)
+        assertEquals(ModuleSettingsCloseCompletion(null, null), harness.controller.consumeCloseCompletion())
+        assertNull(harness.controller.consumeCloseCompletion())
+    }
+
+    @Test
+    fun `close settle cannot restart the old sixty five millisecond flash loop`() {
+        val harness = Harness()
+        harness.openFully(module("Flash"))
+        harness.enterCloseSettle(source)
+
+        repeat(8) { cycle ->
+            harness.advance(ModuleSettingsMorphController.CLOSE_SETTLE_MS)
+            assertEquals(ModuleSettingsMorphPhase.CLOSED, harness.controller.phase, "cycle $cycle")
+            assertFalse(ModuleSettingsMorphInputPolicy.ownsSurface(harness.controller.phase))
+            assertEquals(1f, harness.controller.progress(harness.now))
+        }
+        assertEquals(ModuleSettingsCloseCompletion(null, null), harness.controller.consumeCloseCompletion())
+        assertNull(harness.controller.consumeCloseCompletion())
+    }
+
+    @Test
+    fun `every timed phase has a different successor or terminal transition`() {
+        val timed = ModuleSettingsMorphPhase.entries.filter {
+            ModuleSettingsMorphController.stageDurationMsFor(it) != null
+        }
+        assertEquals(
+            setOf(
+                ModuleSettingsMorphPhase.OPEN_PREP,
+                ModuleSettingsMorphPhase.OPEN_TRAVEL,
+                ModuleSettingsMorphPhase.OPEN_SETTLE,
+                ModuleSettingsMorphPhase.SWITCH_FADE_OUT,
+                ModuleSettingsMorphPhase.SWITCH_PREP,
+                ModuleSettingsMorphPhase.SWITCH_TRAVEL,
+                ModuleSettingsMorphPhase.SWITCH_SETTLE,
+                ModuleSettingsMorphPhase.CLOSE_FADE_OUT,
+                ModuleSettingsMorphPhase.CLOSE_TRAVEL,
+                ModuleSettingsMorphPhase.CLOSE_SETTLE,
+            ),
+            timed.toSet(),
+        )
+        timed.forEach { phase ->
+            val successor = ModuleSettingsMorphController.successorOnExpiration(phase)
+            assertTrue(successor != null && successor != phase, "$phase must expire into a different phase")
+        }
+        assertEquals(
+            ModuleSettingsMorphPhase.CLOSED,
+            ModuleSettingsMorphController.successorOnExpiration(ModuleSettingsMorphPhase.CLOSE_SETTLE),
+        )
+    }
+
+    @Test
+    fun `deferred page and search survive until one shot terminal completion`() {
+        val harness = Harness()
+        harness.openFully(module("Deferred"))
+        harness.controller.requestClose(page = SilentClickGuiPage.THEME, search = "sprint")
+        harness.controller.setCloseTarget(source, needsReveal = false)
+
+        harness.advance(ModuleSettingsMorphController.CLOSE_FADE_MS)
+        harness.advance(harness.controller.activeTravelDurationMs)
+        assertNull(harness.controller.consumeCloseCompletion())
+        harness.advance(ModuleSettingsMorphController.CLOSE_SETTLE_MS)
+
+        assertEquals(
+            ModuleSettingsCloseCompletion(SilentClickGuiPage.THEME, "sprint"),
+            harness.controller.consumeCloseCompletion(),
+        )
+        assertNull(harness.controller.consumeCloseCompletion())
+        harness.controller.tick(harness.now + ms(500L))
+        assertNull(harness.controller.consumeCloseCompletion())
+    }
+
+    @Test
+    fun `input unlocks and Escape cannot be trapped in terminal or busy phases`() {
+        val module = module("Input")
+        ModuleSettingsMorphController.CLOSE_PHASES.forEach { phase ->
+            assertTrue(ModuleSettingsMorphInputPolicy.isBusy(phase))
+            assertTrue(ModuleSettingsMorphInputPolicy.shouldHideModuleCard(phase, module, module))
+            assertEquals(ModuleSettingsMorphEscapeAction.CLOSE_ROOT,
+                ModuleSettingsMorphInputPolicy.escapeAction(phase))
+        }
+        assertEquals(ModuleSettingsMorphEscapeAction.CLOSE_SETTINGS,
+            ModuleSettingsMorphInputPolicy.escapeAction(ModuleSettingsMorphPhase.OPEN))
+        assertEquals(ModuleSettingsMorphEscapeAction.CLOSE_ROOT,
+            ModuleSettingsMorphInputPolicy.escapeAction(ModuleSettingsMorphPhase.CLOSED))
+        assertFalse(ModuleSettingsMorphInputPolicy.isBusy(ModuleSettingsMorphPhase.CLOSED))
+        assertFalse(ModuleSettingsMorphInputPolicy.shouldHideModuleCard(ModuleSettingsMorphPhase.CLOSED, null, module))
+    }
+
+    @Test
+    fun `root dismissal can clear every active morph phase and reopen closed`() {
+        ModuleSettingsMorphPhase.entries.forEach { targetPhase ->
+            val harness = harnessAt(targetPhase)
+            assertEquals(targetPhase, harness.controller.phase)
+            harness.controller.clear()
+            assertEquals(ModuleSettingsMorphPhase.CLOSED, harness.controller.phase)
+            assertNull(harness.controller.selectedModule)
+            assertFalse(ModuleSettingsMorphInputPolicy.isBusy(harness.controller.phase))
+            assertFalse(ModuleSettingsMorphInputPolicy.ownsSurface(harness.controller.phase))
+            assertNull(harness.controller.consumeCloseCompletion())
+        }
+    }
+
+    @Test
+    fun `full close terminates across frame rates irregular frames and stalls`() {
+        val frameSets = mutableListOf<List<Double>>()
+        listOf(30.0, 60.0, 90.0, 120.0, 144.0).forEach { fps ->
+            frameSets += listOf(1_000.0 / fps)
+        }
+        frameSets += listOf(7.0, 19.0, 11.0, 33.0, 5.0, 27.0)
+        frameSets += listOf(16.0, 150.0, 16.0)
+        frameSets += listOf(16.0, 500.0, 16.0)
+
+        frameSets.forEach { intervals ->
+            val result = simulateFullClose(intervals)
+            assertEquals(ModuleSettingsMorphPhase.CLOSED, result.first, "intervals=$intervals")
+            assertEquals(1, result.second, "intervals=$intervals")
+        }
+    }
+
     private fun simulateAt(sampleMs: Long, frameDurationsMs: List<Double>): SilentRect {
         var now = 0L
         val controller = ModuleSettingsMorphController { now }
@@ -319,6 +526,115 @@ class SilentClickGuiMorphTest {
             index++
         }
         return controller.frame(ms(sampleMs)).rect
+    }
+
+    private fun simulateFullClose(frameDurationsMs: List<Double>): Pair<ModuleSettingsMorphPhase, Int> {
+        val harness = Harness()
+        harness.controller.open(module("FrameRate"), Category.COMBAT, 0, source)
+        var index = 0
+        var completions = 0
+        var guard = 0
+        while (harness.controller.phase != ModuleSettingsMorphPhase.OPEN && guard++ < 1_000) {
+            harness.advanceNanos((frameDurationsMs[index++ % frameDurationsMs.size] * 1_000_000.0).toLong())
+        }
+        assertEquals(ModuleSettingsMorphPhase.OPEN, harness.controller.phase)
+        harness.controller.requestClose()
+        harness.controller.setCloseTarget(source, needsReveal = false)
+        guard = 0
+        while (harness.controller.phase != ModuleSettingsMorphPhase.CLOSED && guard++ < 1_000) {
+            harness.advanceNanos((frameDurationsMs[index++ % frameDurationsMs.size] * 1_000_000.0).toLong())
+            if (harness.controller.consumeCloseCompletion() != null) completions++
+        }
+        if (harness.controller.consumeCloseCompletion() != null) completions++
+        repeat(5) {
+            harness.advanceNanos((frameDurationsMs[index++ % frameDurationsMs.size] * 1_000_000.0).toLong())
+            if (harness.controller.consumeCloseCompletion() != null) completions++
+        }
+        return harness.controller.phase to completions
+    }
+
+    private fun harnessAt(target: ModuleSettingsMorphPhase): Harness {
+        val harness = Harness()
+        val first = module("Phase")
+        val second = module("Switch")
+        when (target) {
+            ModuleSettingsMorphPhase.CLOSED -> Unit
+            ModuleSettingsMorphPhase.OPEN_PREP -> harness.controller.open(first, Category.COMBAT, 0, source)
+            ModuleSettingsMorphPhase.OPEN_TRAVEL -> {
+                harness.controller.open(first, Category.COMBAT, 0, source)
+                harness.advance(ModuleSettingsMorphController.OPEN_PREP_MS)
+            }
+            ModuleSettingsMorphPhase.OPEN_SETTLE -> {
+                harness.controller.open(first, Category.COMBAT, 0, source)
+                harness.advance(ModuleSettingsMorphController.OPEN_PREP_MS)
+                harness.advance(harness.controller.activeTravelDurationMs)
+            }
+            ModuleSettingsMorphPhase.OPEN -> harness.openFully(first)
+            ModuleSettingsMorphPhase.SWITCH_FADE_OUT -> {
+                harness.openFully(first)
+                harness.controller.switch(second, Category.COMBAT, 1, SilentClickGuiLayout.moduleCardRect(1))
+            }
+            ModuleSettingsMorphPhase.SWITCH_PREP -> {
+                harness.openFully(first)
+                harness.controller.switch(second, Category.COMBAT, 1, SilentClickGuiLayout.moduleCardRect(1))
+                harness.advance(ModuleSettingsMorphController.SWITCH_FADE_MS)
+            }
+            ModuleSettingsMorphPhase.SWITCH_TRAVEL -> {
+                val prep = harnessAt(ModuleSettingsMorphPhase.SWITCH_PREP)
+                prep.advance(ModuleSettingsMorphController.SWITCH_PREP_MS)
+                return prep
+            }
+            ModuleSettingsMorphPhase.SWITCH_SETTLE -> {
+                val travel = harnessAt(ModuleSettingsMorphPhase.SWITCH_TRAVEL)
+                travel.advance(travel.controller.activeTravelDurationMs)
+                return travel
+            }
+            ModuleSettingsMorphPhase.CLOSE_FADE_OUT -> {
+                harness.openFully(first)
+                harness.controller.requestClose()
+                harness.controller.setCloseTarget(source, needsReveal = false)
+            }
+            ModuleSettingsMorphPhase.CLOSE_TRAVEL -> {
+                val fade = harnessAt(ModuleSettingsMorphPhase.CLOSE_FADE_OUT)
+                fade.advance(ModuleSettingsMorphController.CLOSE_FADE_MS)
+                return fade
+            }
+            ModuleSettingsMorphPhase.CLOSE_SETTLE -> {
+                val travel = harnessAt(ModuleSettingsMorphPhase.CLOSE_TRAVEL)
+                travel.advance(travel.controller.activeTravelDurationMs)
+                return travel
+            }
+        }
+        return harness
+    }
+
+    private inner class Harness {
+        var now = 0L
+        val controller = ModuleSettingsMorphController { now }
+
+        fun advance(milliseconds: Long): List<ModuleSettingsMorphPhase> =
+            advanceNanos(ms(milliseconds))
+
+        fun advanceNanos(nanoseconds: Long): List<ModuleSettingsMorphPhase> {
+            now += nanoseconds
+            return controller.tick(now)
+        }
+
+        fun openFully(module: ClientModule) {
+            controller.open(module, Category.COMBAT, 0, source)
+            advance(ModuleSettingsMorphController.OPEN_PREP_MS)
+            advance(controller.activeTravelDurationMs)
+            advance(ModuleSettingsMorphController.OPEN_SETTLE_MS)
+            assertEquals(ModuleSettingsMorphPhase.OPEN, controller.phase)
+        }
+
+        fun enterCloseSettle(targetRect: SilentRect) {
+            controller.requestClose()
+            controller.setCloseTarget(targetRect, needsReveal = false)
+            advance(ModuleSettingsMorphController.CLOSE_FADE_MS)
+            advance(controller.activeTravelDurationMs)
+            assertEquals(ModuleSettingsMorphPhase.CLOSE_SETTLE, controller.phase)
+        }
     }
 
     private fun module(name: String) = ClientModule(name, Category.COMBAT)

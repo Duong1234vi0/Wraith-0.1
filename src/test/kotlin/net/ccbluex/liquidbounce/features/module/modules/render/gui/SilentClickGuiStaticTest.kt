@@ -202,4 +202,42 @@ class SilentClickGuiStaticTest {
         assertTrue(layout.contains("rightScale"))
     }
 
+    @Test
+    fun `renderMorph is lifecycle immutable and close completion runs before rendering`() {
+        val screen = Files.readString(Path.of(
+            "src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt"))
+        val renderMorph = screen.substringAfter("private fun renderMorph(")
+            .substringBefore("private fun applyModuleCloseCompletion")
+
+        assertFalse(renderMorph.contains("progress >= 1f"))
+        assertFalse(renderMorph.contains("completeClose()"))
+        assertFalse(renderMorph.contains("consumePendingPage()"))
+        assertFalse(renderMorph.contains("consumePendingSearch()"))
+        assertFalse(renderMorph.contains("consumeCloseCompletion()"))
+        assertTrue(screen.indexOf("morph.consumeCloseCompletion()?.let(::applyModuleCloseCompletion)") <
+            screen.indexOf("val morphFrame = morph.frame(frameTimeNanos)"))
+        assertTrue(screen.contains("private fun applyModuleCloseCompletion"))
+        assertTrue(screen.contains("selectedModule = null"))
+        assertTrue(screen.contains("sideSettingsScroll = 0f"))
+        assertTrue(screen.contains("settings.clearTransient()"))
+    }
+
+    @Test
+    fun `Escape and root close cannot wait forever on a morph phase`() {
+        val screen = Files.readString(Path.of(
+            "src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt"))
+        val keyPressed = screen.substringAfter("override fun keyPressed")
+            .substringBefore("override fun charTyped")
+        val onClose = screen.substringAfter("override fun onClose")
+            .substringBefore("private fun renderShell")
+
+        assertTrue(keyPressed.contains("ModuleSettingsMorphInputPolicy.escapeAction"))
+        assertTrue(keyPressed.contains("ModuleSettingsMorphEscapeAction.CLOSE_ROOT -> startClosing()"))
+        assertFalse(keyPressed.contains("else if (morphIsBusy())"))
+        assertTrue(onClose.contains("startClosing()"))
+        assertTrue(onClose.contains("morph.clear()"))
+        assertTrue(onClose.contains("super.onClose()"))
+        assertTrue(screen.contains("if (closing && closeFinished(frameTimeNanos))"))
+    }
+
 }

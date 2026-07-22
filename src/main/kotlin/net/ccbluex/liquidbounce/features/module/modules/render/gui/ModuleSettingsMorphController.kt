@@ -49,6 +49,49 @@ data class ModuleSettingsMorphFrame(
     val radius: Float,
 )
 
+data class ModuleSettingsCloseCompletion(
+    val pendingPage: SilentClickGuiPage?,
+    val pendingSearch: String?,
+)
+
+enum class ModuleSettingsMorphEscapeAction {
+    CLOSE_SETTINGS,
+    CLOSE_ROOT,
+}
+
+object ModuleSettingsMorphInputPolicy {
+    fun isBusy(phase: ModuleSettingsMorphPhase): Boolean =
+        phase != ModuleSettingsMorphPhase.CLOSED && phase != ModuleSettingsMorphPhase.OPEN
+
+    fun ownsSurface(phase: ModuleSettingsMorphPhase): Boolean = phase in setOf(
+        ModuleSettingsMorphPhase.OPEN_PREP,
+        ModuleSettingsMorphPhase.OPEN_TRAVEL,
+        ModuleSettingsMorphPhase.OPEN_SETTLE,
+        ModuleSettingsMorphPhase.CLOSE_FADE_OUT,
+        ModuleSettingsMorphPhase.CLOSE_TRAVEL,
+        ModuleSettingsMorphPhase.CLOSE_SETTLE,
+        ModuleSettingsMorphPhase.SWITCH_PREP,
+        ModuleSettingsMorphPhase.SWITCH_TRAVEL,
+        ModuleSettingsMorphPhase.SWITCH_SETTLE,
+    )
+
+    fun shouldHideModuleCard(
+        phase: ModuleSettingsMorphPhase,
+        selectedModule: ClientModule?,
+        module: ClientModule,
+    ): Boolean = phase != ModuleSettingsMorphPhase.CLOSED && selectedModule === module
+
+    fun escapeAction(phase: ModuleSettingsMorphPhase): ModuleSettingsMorphEscapeAction = when (phase) {
+        ModuleSettingsMorphPhase.OPEN,
+        ModuleSettingsMorphPhase.OPEN_PREP,
+        ModuleSettingsMorphPhase.OPEN_TRAVEL,
+        ModuleSettingsMorphPhase.OPEN_SETTLE,
+        -> ModuleSettingsMorphEscapeAction.CLOSE_SETTINGS
+
+        else -> ModuleSettingsMorphEscapeAction.CLOSE_ROOT
+    }
+}
+
 data class ModuleSettingsMorphSnapshot(
     val phase: ModuleSettingsMorphPhase,
     val selectedModule: ClientModule?,
@@ -113,6 +156,7 @@ class ModuleSettingsMorphController(
     private var closingStartRadius = PANEL_RADIUS
     private var closingUsesHermite = false
     private var closeFadeDurationMs = CLOSE_FADE_MS
+    private var closeCompletion: ModuleSettingsCloseCompletion? = null
 
     fun nowNanos(): Long = clockNanos()
 
@@ -279,11 +323,15 @@ class ModuleSettingsMorphController(
         return entered
     }
 
-    fun completeClose() {
-        clear()
+    fun clear() {
+        resetState()
+        closeCompletion = null
     }
 
-    fun clear() {
+    fun consumeCloseCompletion(): ModuleSettingsCloseCompletion? =
+        closeCompletion.also { closeCompletion = null }
+
+    private fun resetState() {
         phase = ModuleSettingsMorphPhase.CLOSED
         selectedModule = null
         sourceCategory = null
@@ -310,9 +358,6 @@ class ModuleSettingsMorphController(
         closeSettingsAlphaStart = 0f
     }
 
-    fun consumePendingPage(): SilentClickGuiPage? = pendingPage.also { pendingPage = null }
-    fun consumePendingSearch(): String? = pendingSearchText.also { pendingSearchText = null }
-
     fun snapshot() = ModuleSettingsMorphSnapshot(
         phase, selectedModule, sourceCategory, sourceIndex, sourceRect, latestSourceRect,
         transitionStartedAtNanos, pendingModule
@@ -335,26 +380,12 @@ class ModuleSettingsMorphController(
 
     fun velocity(now: Long): SilentRectVelocity = currentMotion(now).velocity
 
-    fun stageDurationMs(): Long? = when (phase) {
-        ModuleSettingsMorphPhase.OPEN_PREP -> OPEN_PREP_MS
-        ModuleSettingsMorphPhase.OPEN_TRAVEL,
-        ModuleSettingsMorphPhase.SWITCH_TRAVEL,
-        ModuleSettingsMorphPhase.CLOSE_TRAVEL,
-        -> activeTravelDurationMs
-        ModuleSettingsMorphPhase.OPEN_SETTLE -> OPEN_SETTLE_MS
-        ModuleSettingsMorphPhase.SWITCH_FADE_OUT -> SWITCH_FADE_MS
-        ModuleSettingsMorphPhase.SWITCH_PREP -> SWITCH_PREP_MS
-        ModuleSettingsMorphPhase.SWITCH_SETTLE -> SWITCH_SETTLE_MS
-        ModuleSettingsMorphPhase.CLOSE_FADE_OUT -> closeFadeDurationMs
-        ModuleSettingsMorphPhase.CLOSE_SETTLE -> CLOSE_SETTLE_MS
-        else -> null
-    }
+    fun stageDurationMs(): Long? = stageDurationMsFor(phase, activeTravelDurationMs, closeFadeDurationMs)
 
     private fun advancePhase(): ModuleSettingsMorphPhase? {
-        phase = when (phase) {
-            ModuleSettingsMorphPhase.OPEN_PREP -> ModuleSettingsMorphPhase.OPEN_TRAVEL
-            ModuleSettingsMorphPhase.OPEN_TRAVEL -> ModuleSettingsMorphPhase.OPEN_SETTLE
-            ModuleSettingsMorphPhase.OPEN_SETTLE -> ModuleSettingsMorphPhase.OPEN
+        val previous = phase
+        val next = successorOnExpiration(previous) ?: return null
+        when (previous) {
             ModuleSettingsMorphPhase.SWITCH_FADE_OUT -> {
                 selectedModule = pendingModule
                 sourceCategory = pendingCategory
@@ -369,15 +400,18 @@ class ModuleSettingsMorphController(
                     sourceRect, SilentClickGuiLayout.sidePanel, SWITCH_MIN_TRAVEL_MS, SWITCH_MAX_TRAVEL_MS
                 )
                 clearPendingSwitch()
-                ModuleSettingsMorphPhase.SWITCH_PREP
             }
-            ModuleSettingsMorphPhase.SWITCH_PREP -> ModuleSettingsMorphPhase.SWITCH_TRAVEL
-            ModuleSettingsMorphPhase.SWITCH_TRAVEL -> ModuleSettingsMorphPhase.SWITCH_SETTLE
-            ModuleSettingsMorphPhase.SWITCH_SETTLE -> ModuleSettingsMorphPhase.OPEN
-            ModuleSettingsMorphPhase.CLOSE_FADE_OUT -> ModuleSettingsMorphPhase.CLOSE_TRAVEL
-            ModuleSettingsMorphPhase.CLOSE_TRAVEL -> ModuleSettingsMorphPhase.CLOSE_SETTLE
-            else -> return null
+
+            ModuleSettingsMorphPhase.CLOSE_SETTLE -> {
+                val completion = ModuleSettingsCloseCompletion(pendingPage, pendingSearchText)
+                resetState()
+                closeCompletion = completion
+                return phase
+            }
+
+            else -> Unit
         }
+        phase = next
         return phase
     }
 
@@ -523,6 +557,39 @@ class ModuleSettingsMorphController(
             ModuleSettingsMorphPhase.CLOSE_TRAVEL,
             ModuleSettingsMorphPhase.CLOSE_SETTLE,
         )
+
+        internal fun stageDurationMsFor(
+            phase: ModuleSettingsMorphPhase,
+            travelDurationMs: Long = OPEN_MIN_TRAVEL_MS,
+            closeFadeDurationMs: Long = CLOSE_FADE_MS,
+        ): Long? = when (phase) {
+            ModuleSettingsMorphPhase.OPEN_PREP -> OPEN_PREP_MS
+            ModuleSettingsMorphPhase.OPEN_TRAVEL,
+            ModuleSettingsMorphPhase.SWITCH_TRAVEL,
+            ModuleSettingsMorphPhase.CLOSE_TRAVEL,
+            -> travelDurationMs
+            ModuleSettingsMorphPhase.OPEN_SETTLE -> OPEN_SETTLE_MS
+            ModuleSettingsMorphPhase.SWITCH_FADE_OUT -> SWITCH_FADE_MS
+            ModuleSettingsMorphPhase.SWITCH_PREP -> SWITCH_PREP_MS
+            ModuleSettingsMorphPhase.SWITCH_SETTLE -> SWITCH_SETTLE_MS
+            ModuleSettingsMorphPhase.CLOSE_FADE_OUT -> closeFadeDurationMs
+            ModuleSettingsMorphPhase.CLOSE_SETTLE -> CLOSE_SETTLE_MS
+            else -> null
+        }
+
+        internal fun successorOnExpiration(phase: ModuleSettingsMorphPhase): ModuleSettingsMorphPhase? = when (phase) {
+            ModuleSettingsMorphPhase.OPEN_PREP -> ModuleSettingsMorphPhase.OPEN_TRAVEL
+            ModuleSettingsMorphPhase.OPEN_TRAVEL -> ModuleSettingsMorphPhase.OPEN_SETTLE
+            ModuleSettingsMorphPhase.OPEN_SETTLE -> ModuleSettingsMorphPhase.OPEN
+            ModuleSettingsMorphPhase.SWITCH_FADE_OUT -> ModuleSettingsMorphPhase.SWITCH_PREP
+            ModuleSettingsMorphPhase.SWITCH_PREP -> ModuleSettingsMorphPhase.SWITCH_TRAVEL
+            ModuleSettingsMorphPhase.SWITCH_TRAVEL -> ModuleSettingsMorphPhase.SWITCH_SETTLE
+            ModuleSettingsMorphPhase.SWITCH_SETTLE -> ModuleSettingsMorphPhase.OPEN
+            ModuleSettingsMorphPhase.CLOSE_FADE_OUT -> ModuleSettingsMorphPhase.CLOSE_TRAVEL
+            ModuleSettingsMorphPhase.CLOSE_TRAVEL -> ModuleSettingsMorphPhase.CLOSE_SETTLE
+            ModuleSettingsMorphPhase.CLOSE_SETTLE -> ModuleSettingsMorphPhase.CLOSED
+            else -> null
+        }
 
         fun travelDurationMs(start: SilentRect, end: SilentRect, minMs: Long, maxMs: Long): Long {
             val minimum = min(minMs, maxMs)

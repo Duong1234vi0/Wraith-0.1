@@ -134,6 +134,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         val transform = SilentClickGuiLayout.transform(width, height, scale)
         val localMouse = transform.screenToLocal(mouseX.toDouble(), mouseY.toDouble())
         val enteredMorphPhases = morph.tick(frameTimeNanos)
+        morph.consumeCloseCompletion()?.let(::applyModuleCloseCompletion)
         val morphFrame = morph.frame(frameTimeNanos)
         if (ModuleSettingsMorphPhase.SWITCH_PREP in enteredMorphPhases) {
             sideSettingsScroll = 0f
@@ -285,13 +286,9 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         }
 
         if (event.isEscape()) {
-            if (morph.phase in setOf(ModuleSettingsMorphPhase.OPEN, ModuleSettingsMorphPhase.OPEN_PREP,
-                    ModuleSettingsMorphPhase.OPEN_TRAVEL, ModuleSettingsMorphPhase.OPEN_SETTLE)) {
-                beginModuleClose()
-            } else if (morphIsBusy()) {
-                return true
-            } else {
-                startClosing()
+            when (ModuleSettingsMorphInputPolicy.escapeAction(morph.phase)) {
+                ModuleSettingsMorphEscapeAction.CLOSE_SETTINGS -> beginModuleClose()
+                ModuleSettingsMorphEscapeAction.CLOSE_ROOT -> startClosing()
             }
             return true
         }
@@ -333,6 +330,8 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         }
 
         if (closeFinished(morph.nowNanos())) {
+            morph.clear()
+            selectedModule = null
             super.onClose()
         }
     }
@@ -660,14 +659,16 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             else -> Unit
         }
 
-        if (phase == ModuleSettingsMorphPhase.CLOSE_SETTLE && progress >= 1f) {
-            val page = morph.consumePendingPage()
-            val search = morph.consumePendingSearch()
-            morph.completeClose()
-            selectedModule = null
-            sideSettingsScroll = 0f
-            page?.let { applyPage(it) }
-            search?.let { searchText = it; resetSearchScroll() }
+    }
+
+    private fun applyModuleCloseCompletion(completion: ModuleSettingsCloseCompletion) {
+        selectedModule = null
+        sideSettingsScroll = 0f
+        settings.clearTransient()
+        completion.pendingPage?.let(::applyPage)
+        completion.pendingSearch?.let {
+            searchText = it
+            resetSearchScroll()
         }
     }
 
@@ -1132,39 +1133,12 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         return SilentClickGuiLayout.transform(width, height, visualScale(now))
     }
 
-    private fun morphIsBusy(): Boolean = morph.phase != ModuleSettingsMorphPhase.CLOSED &&
-        morph.phase != ModuleSettingsMorphPhase.OPEN
+    private fun morphIsBusy(): Boolean = ModuleSettingsMorphInputPolicy.isBusy(morph.phase)
 
-    private fun morphOwnsSurface(): Boolean = morph.phase in setOf(
-        ModuleSettingsMorphPhase.OPEN_PREP,
-        ModuleSettingsMorphPhase.OPEN_TRAVEL,
-        ModuleSettingsMorphPhase.OPEN_SETTLE,
-        ModuleSettingsMorphPhase.CLOSE_FADE_OUT,
-        ModuleSettingsMorphPhase.CLOSE_TRAVEL,
-        ModuleSettingsMorphPhase.CLOSE_SETTLE,
-        ModuleSettingsMorphPhase.SWITCH_PREP,
-        ModuleSettingsMorphPhase.SWITCH_TRAVEL,
-        ModuleSettingsMorphPhase.SWITCH_SETTLE,
-    )
+    private fun morphOwnsSurface(): Boolean = ModuleSettingsMorphInputPolicy.ownsSurface(morph.phase)
 
-    private fun shouldHideModuleCard(module: ClientModule): Boolean = when (morph.phase) {
-        ModuleSettingsMorphPhase.OPEN_PREP,
-        ModuleSettingsMorphPhase.OPEN_TRAVEL,
-        ModuleSettingsMorphPhase.OPEN_SETTLE,
-        ModuleSettingsMorphPhase.OPEN,
-        ModuleSettingsMorphPhase.CLOSE_FADE_OUT,
-        ModuleSettingsMorphPhase.CLOSE_TRAVEL,
-        ModuleSettingsMorphPhase.CLOSE_SETTLE,
-        -> morph.selectedModule === module
-
-        ModuleSettingsMorphPhase.SWITCH_FADE_OUT -> morph.selectedModule === module
-        ModuleSettingsMorphPhase.SWITCH_PREP,
-        ModuleSettingsMorphPhase.SWITCH_TRAVEL,
-        ModuleSettingsMorphPhase.SWITCH_SETTLE,
-        -> morph.selectedModule === module
-
-        ModuleSettingsMorphPhase.CLOSED -> false
-    }
+    private fun shouldHideModuleCard(module: ClientModule): Boolean =
+        ModuleSettingsMorphInputPolicy.shouldHideModuleCard(morph.phase, morph.selectedModule, module)
 
     private fun intersectRect(a: SilentRect, b: SilentRect): SilentRect {
         val x = max(a.x, b.x)
