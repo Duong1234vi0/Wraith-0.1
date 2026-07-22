@@ -20,10 +20,16 @@ package net.ccbluex.liquidbounce.features.module.modules.movement.noslow
 
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.config.types.nesting.Configurable
+import net.ccbluex.liquidbounce.event.EventState
 import net.ccbluex.liquidbounce.event.events.BlockSlipperinessMultiplierEvent
 import net.ccbluex.liquidbounce.event.events.BlockVelocityMultiplierEvent
+import net.ccbluex.liquidbounce.event.events.DeathEvent
+import net.ccbluex.liquidbounce.event.events.DisconnectEvent
+import net.ccbluex.liquidbounce.event.events.PlayerMovementTickEvent
+import net.ccbluex.liquidbounce.event.events.PlayerNetworkMovementTickEvent
 import net.ccbluex.liquidbounce.event.events.PlayerSneakMultiplier
 import net.ccbluex.liquidbounce.event.events.PlayerUseMultiplier
+import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.module.Category
@@ -37,7 +43,6 @@ import net.minecraft.core.component.DataComponents
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket
 import net.minecraft.world.InteractionHand
-import net.minecraft.world.item.Item
 import net.minecraft.world.item.Items
 import net.minecraft.world.level.block.Blocks
 
@@ -53,7 +58,9 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
         Normal("Normal")
     }
 
-    private val mode by enumChoice("Mode", Mode.Normal)
+    private val mode by enumChoice("Mode", Mode.Normal).onChanged {
+        resetGrimTickController()
+    }
     private val mainHand by boolean("MainHand", true)
 
     private object Selection : Configurable("Selection") {
@@ -73,24 +80,14 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
         tree(Selection)
     }
 
-    private var grimTickCounter = 0
-    private var grimTickReady = false
-
-    private var cachedTick = Int.MIN_VALUE
-    private var cachedUsingItem = false
-    private var cachedHand: InteractionHand? = null
-    private var cachedItem: Item? = null
-    private var cachedUseTime = Int.MIN_VALUE
-    private var cachedSettingsFingerprint = 0
-    private var cachedNoSlowDecision = false
+    private val grimTickController = GrimTickNoSlowController()
+    private var movementCycleSequence = 0L
 
     private var preserveNextUseItemPacketRotation = false
 
     @Suppress("unused")
     private val tickUpdater = tickHandler {
         val localPlayer = mc.player ?: return@tickHandler
-
-        updateGrimTickState()
 
         if (!isUsingSlowItem()) {
             return@tickHandler
@@ -108,6 +105,51 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
                 }
             }
         }
+    }
+
+    @Suppress("unused")
+    private val grimTickMovementBeginHandler = handler<PlayerMovementTickEvent> {
+        val localPlayer = mc.player
+        movementCycleSequence++
+
+        if (mode != Mode.GrimTick || localPlayer == null) {
+            grimTickController.reset()
+            return@handler
+        }
+
+        val usingSlowItem = isUsingSlowItem() && !localPlayer.isDead
+        grimTickController.beginCycle(
+            cycleId = movementCycleSequence,
+            active = usingSlowItem,
+            eligible = usingSlowItem && allowsActiveItem() && allowsActiveHand(),
+            playerIdentity = localPlayer,
+            handIdentity = localPlayer.usedItemHand.takeIf { usingSlowItem },
+            itemIdentity = localPlayer.useItem.item.takeIf { usingSlowItem },
+            useSessionId = localPlayer.tickCount - localPlayer.ticksUsingItem,
+            settingsFingerprint = settingsFingerprint(),
+        )
+    }
+
+    @Suppress("unused")
+    private val grimTickMovementCompleteHandler = handler<PlayerNetworkMovementTickEvent> { event ->
+        if (event.state == EventState.POST) {
+            grimTickController.completeCycle(movementCycleSequence)
+        }
+    }
+
+    @Suppress("unused")
+    private val grimTickWorldChangeHandler = handler<WorldChangeEvent> {
+        resetGrimTickController()
+    }
+
+    @Suppress("unused")
+    private val grimTickDisconnectHandler = handler<DisconnectEvent> {
+        resetGrimTickController()
+    }
+
+    @Suppress("unused")
+    private val grimTickDeathHandler = handler<DeathEvent> {
+        resetGrimTickController()
     }
 
     @Suppress("unused")
@@ -157,50 +199,28 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
         }
     }
 
-    override fun disable() {
-        clearDecisionCache()
-    }
+    override fun enable() = resetGrimTickController()
+
+    override fun disable() = resetGrimTickController()
 
     fun canNoSlow(): Boolean {
         val localPlayer = mc.player ?: return true
 
-        return mode != Mode.Matrix &&
-            consumeGrimTickWindow() &&
-            allowsActiveItem() &&
-            allowsActiveHand() &&
-            !isGrimNewBlocked(localPlayer)
+        return when (mode) {
+            Mode.Matrix -> false
+            Mode.GrimTick -> grimTickController.decision()
+            Mode.Grim, Mode.Normal -> allowsActiveItem() && allowsActiveHand() && !isGrimNewBlocked(localPlayer)
+        }
     }
 
     fun shouldBypassItemSlowdownForCurrentTick(): Boolean {
         val localPlayer = mc.player
         if (!running || localPlayer == null) {
-            clearDecisionCache()
+            resetGrimTickController()
             return false
         }
 
-        val usingItem = localPlayer.isUsingItem
-        val hand = if (usingItem) localPlayer.usedItemHand else null
-        val item = if (usingItem) localPlayer.useItem.item else null
-        val useTime = if (usingItem) localPlayer.ticksUsingItem else 0
-        val settingsFingerprint = settingsFingerprint()
-
-        if (cachedTick == localPlayer.tickCount &&
-            cachedUsingItem == usingItem &&
-            cachedHand == hand &&
-            cachedItem === item &&
-            cachedUseTime == useTime &&
-            cachedSettingsFingerprint == settingsFingerprint) {
-            return cachedNoSlowDecision
-        }
-
-        cachedTick = localPlayer.tickCount
-        cachedUsingItem = usingItem
-        cachedHand = hand
-        cachedItem = item
-        cachedUseTime = useTime
-        cachedSettingsFingerprint = settingsFingerprint
-        cachedNoSlowDecision = canNoSlow()
-        return cachedNoSlowDecision
+        return canNoSlow()
     }
 
     fun shouldBypassSneakSprintCheck(): Boolean {
@@ -228,33 +248,6 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
         } else {
             if (movingDiagonally) 0.47f else 0.67f
         }
-    }
-
-    private fun updateGrimTickState() {
-        if (mode == Mode.GrimTick && isUsingSlowItem()) {
-            if (grimTickCounter < 20) {
-                grimTickCounter++
-            }
-
-            grimTickReady = grimTickCounter > 1
-        } else {
-            grimTickCounter = 0
-            grimTickReady = false
-        }
-    }
-
-    private fun consumeGrimTickWindow(): Boolean {
-        if (mode != Mode.GrimTick) {
-            return true
-        }
-
-        if (!grimTickReady) {
-            return false
-        }
-
-        grimTickReady = false
-        grimTickCounter = 0
-        return true
     }
 
     private fun isUsingSlowItem(): Boolean {
@@ -321,14 +314,9 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
         return result
     }
 
-    private fun clearDecisionCache() {
-        cachedTick = Int.MIN_VALUE
-        cachedUsingItem = false
-        cachedHand = null
-        cachedItem = null
-        cachedUseTime = Int.MIN_VALUE
-        cachedSettingsFingerprint = 0
-        cachedNoSlowDecision = false
+    private fun resetGrimTickController() {
+        grimTickController.reset()
+        movementCycleSequence = 0L
         preserveNextUseItemPacketRotation = false
     }
 
