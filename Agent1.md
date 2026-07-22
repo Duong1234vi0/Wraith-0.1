@@ -12098,9 +12098,10 @@ the unrelated sources listed above. No Wyvern behavior was silently replaced wit
   identity resets, repeated callers, mutable-use-time regression, exact sequence, duplicate/missing POST, movement/item/
   hand/sprint variants, and Grim's consecutive-invalid latch. Unfiltered `test` remains blocked only by pre-existing
   unrelated unresolved symbols in `SmartCriticalDecisionTest`, `PointFindingKtTest`, and `ItemCooldownProgressTest`.
-- Build: required Java 25 `clean assemble -x detekt` passed (`BUILD SUCCESSFUL` in 2m13s). Artifact
+- Build: required Java 25 `clean assemble -x detekt` passed on the final committed production tree
+  (`BUILD SUCCESSFUL` in 1m58s). Artifact
   `build/libs/liquidbounce-0.31.2.jar`, SHA-256
-  `1f94eb28f61fa698f1b62d4eb9b912a10d7dacb10b80d750cc1b9f35bda5c63a`.
+  `1bf8b85245a1c783304366e5a53076fa18dfdc63108ada627312fea90e75321a`.
 - Runtime status: supplied Grim was audited but was not actually run as a local server. FCL/Android matrix was not run
   and remains pending on the user's observed server/config; compilation and model tests do not prove the live flag fixed,
   and GrimTick is not claimed Grim-safe.
