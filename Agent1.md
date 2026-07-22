@@ -12688,3 +12688,105 @@ animation smoothness, trail absence, touch alignment, or visual approval. The us
 GUI scale `2`, approximately `535 x 243`, including repeated open/close, switching, scrolling, category/search deferral,
 and interruption cases. This entry supersedes the prior shared morph implementation's inverse close interpolation,
 instant switch, static closed dock, enabled-card accent surfaces, and full-canvas centering claims.
+
+## 2026-07-22 - Wraith compact ClickGUI motion-quality correction
+
+### Request and checked state
+
+The accepted Wraith compact ClickGUI geometry and interaction remained unchanged: two-column module cards, centered
+`334 x 226` main panel, detached `126 x 226` settings panel, real GUI pose/scissor path, one solid travel surface,
+correct opening/closing/switch direction, module-switch replay, and name-only module accent. The user reported that
+the settings-panel morph still felt nearly instant and lacked professional acceleration/deceleration.
+
+Read the mandated Skill workflow, the current `ModuleSettingsMorphController.kt`, `ClickGuiScreen.kt`,
+`SilentClickGuiAnimation.kt`, `SilentClickGuiLayout.kt`, `CompactModuleCardStyle.kt`, `ExosGuiRenderer.kt`,
+the current ClickGUI layout/static/style/settings tests, and all later compact ClickGUI Agent1 entries. Minecraft
+target evidence remains `26.1.2` / Fabric `0.146.1+26.1.2`. Existing unrelated tracked and untracked worktree changes,
+including the pre-existing Agent1 deletion, were preserved.
+
+### Previous effective timing and root cause
+
+The old constants advertised `55 ms` preparation, `185 ms` travel, and `80 ms` settle, but the controller stayed in
+one `OPENING` phase for only `185 ms`. `openingRect()` embedded preparation as
+`55 / (55 + 185)`, so preparation was approximately `42.4 ms` and geometric travel approximately `142.6 ms`; the
+effective opening total was approximately `265 ms`. Switching had the same defect: `40 ms` was embedded inside a
+`160 ms` phase, leaving approximately `120 ms` of geometric travel before its `60 ms` settle. The old controller also
+used `System.currentTimeMillis()` and reset the next stage start to the late frame, discarding elapsed remainder.
+
+### Changed motion architecture
+
+`ModuleSettingsMorphController.kt` now has explicit full-duration phases:
+
+`OPEN_PREP -> OPEN_TRAVEL -> OPEN_SETTLE -> OPEN`,
+`SWITCH_FADE_OUT -> SWITCH_PREP -> SWITCH_TRAVEL -> SWITCH_SETTLE -> OPEN`, and
+`CLOSE_FADE_OUT -> CLOSE_TRAVEL -> CLOSE_SETTLE`.
+
+Preparation is no longer inferred from a normalized travel progress. A tick advances every fully elapsed phase in a
+bounded loop and carries `elapsed - stageDuration` into the next phase by retaining the original transition timestamp
+plus the completed duration. A single render frame timestamp is sampled in `ClickGuiScreen.extractRenderState()` and
+passed through `morph.tick(frameTimeNanos)` and `morph.frame(frameTimeNanos)` to all morph rendering helpers.
+
+### Final timing and distance model
+
+- Opening: `70 ms` preparation, distance-aware `260..340 ms` travel, `100 ms` settle.
+- Closing: `75 ms` content fade, distance-aware `220..300 ms` travel, `65 ms` settle.
+- Switching: `70 ms` old-content fade, `55 ms` incoming-card preparation, distance-aware `240..320 ms` travel,
+  `90 ms` settle.
+
+Travel duration is deterministic and pure: Euclidean center distance is normalized over the practical `150..275`
+local-pixel range and clamped to the configured min/max. Representative opening durations for cards 0, 1, 4, and 9
+are `339, 261, 334, 263 ms`; corresponding closing durations are `299, 221, 294, 223 ms`; switching durations are
+`319, 241, 314, 243 ms`. Zero-distance transitions remain finite and use the configured minimum.
+
+### Clock, easing, and interruption behavior
+
+Morph and ClickGUI root animation timing now use `System.nanoTime()` through the controller clock abstraction; no
+`System.currentTimeMillis()` remains in the morph controller. Geometry remains floating point and snaps exactly to
+accepted endpoints. Position uses a correctly X-solved cubic-bezier equivalent to `cubic-bezier(0.22, 1, 0.36, 1)`;
+width uses `cubic-bezier(0.4, 0, 0.2, 1)`; height uses the same size curve with a subtle `40 ms` delay; radius uses
+monotonic smoothstep; header/settings/card alpha use separate staged curves. The flight arc is distance-scaled to
+`5..11` local pixels rather than a fixed `14 px` lift.
+
+When a transition is interrupted, the controller samples the actual current rectangle and velocity. Active flights
+reverse with cubic Hermite interpolation ending at zero velocity; stationary content fades keep the configured
+fade stage. The same actual rectangle is retained through reversal, with finite clamped dimensions and deterministic
+endpoints. No bounce, blur, trail, afterimage, particle, extra pass, or rendering-ownership change was added.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ModuleSettingsMorphController.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/ClickGuiScreen.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiAnimation.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiMorphTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/SilentClickGuiStaticTest.kt`
+- this append-only history entry.
+
+### Verification
+
+- `git diff --check`: passed.
+- Focused ClickGUI suite using `.codex-tmp/clickgui-focused-test.init.gradle`: `BUILD SUCCESSFUL`; 52 tests passed,
+  including stage timing, distance representatives, Bézier bounds/monotonicity, overshoot, 30/60/90/120/144 FPS,
+  irregular and stalled frames, interruption velocity continuity, switch-close interruption, ownership, pose/scissor,
+  and no-trail/static regressions.
+- `compileKotlin`: `BUILD SUCCESSFUL`.
+- Required clean assembly:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=$JAVA_HOME/bin:$PATH sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`:
+  `BUILD SUCCESSFUL`.
+- Main JAR: `build/libs/liquidbounce-0.31.2.jar`; SHA-256
+  `abca9297cf31d36f462ed393d1b73c78ca3f9ac61d67def2467e1d5616de05c2`.
+- Sources JAR SHA-256:
+  `9a88501699689e27eded7fb22b4cdae085fb70021f2cfc5a7c50b8494b347f30`.
+- Unfiltered normal `test` remains blocked during existing unrelated test compilation by
+  `SmartCriticalDecisionTest.kt`, `PointFindingKtTest.kt`, and `ItemCooldownProgressTest.kt`; none was modified.
+
+### Runtime status, commit, and supersession
+
+FCL/Android visual testing was not available in this headless Termux workspace. Compilation and focused tests do not
+prove professional motion quality. The user must test Minecraft `26.1.2`, FCL/Android, GUI scale `2`, approximately
+`535 x 243`, including top/bottom cards, repeated open/close, switching, irregular FPS, temporary stalls, and rapid
+reversal. No runtime approval is claimed.
+
+Implementation/test commit: `c7970be4` - `refactor(clickgui): use explicit distance-aware morph stages`.
+Documentation commit and push result will be recorded in the post-push update. This entry supersedes the prior
+compact morph timing claims that described `320 ms` opening, `280 ms` closing, or `160 ms` switch motion without
+separate full-duration preparation/travel stages.
