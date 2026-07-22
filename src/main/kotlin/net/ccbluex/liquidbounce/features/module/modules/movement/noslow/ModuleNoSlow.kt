@@ -29,12 +29,12 @@ import net.ccbluex.liquidbounce.event.events.OutgoingPacketSentEvent
 import net.ccbluex.liquidbounce.event.events.PlayerMovementTickEvent
 import net.ccbluex.liquidbounce.event.events.PlayerSneakMultiplier
 import net.ccbluex.liquidbounce.event.events.PlayerUseMultiplier
-import net.ccbluex.liquidbounce.event.events.SprintEvent
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
+import net.ccbluex.liquidbounce.features.module.modules.movement.ModuleSprint
 import net.ccbluex.liquidbounce.utils.client.interaction
 import net.ccbluex.liquidbounce.utils.client.logger
 import net.ccbluex.liquidbounce.utils.client.mc
@@ -153,6 +153,7 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
             phase = grimTickController.phase,
             bypass = bypass,
         )
+        observeAiStepStart(localPlayer)
         if (grimTickController.boundaryIssue == GrimTickNoSlowController.BoundaryIssue.MISSING_TICK_END) {
             diagnostic("tick-end missing before new movement begin; failed closed to recovery")
         }
@@ -186,8 +187,22 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
             }
 
             is ServerboundPlayerCommandPacket -> when (packet.action) {
-                ServerboundPlayerCommandPacket.Action.START_SPRINTING -> diagnosticTick.sprintCommand = "START"
-                ServerboundPlayerCommandPacket.Action.STOP_SPRINTING -> diagnosticTick.sprintCommand = "STOP"
+                ServerboundPlayerCommandPacket.Action.START_SPRINTING -> {
+                    diagnosticTick.sprintCommand = "START"
+                    diagnosticSession?.let {
+                        if (it.initialNetworkSprint == null) it.initialNetworkSprint = false
+                        it.startCommands++
+                        it.networkSprintState = true
+                    }
+                }
+                ServerboundPlayerCommandPacket.Action.STOP_SPRINTING -> {
+                    diagnosticTick.sprintCommand = "STOP"
+                    diagnosticSession?.let {
+                        if (it.initialNetworkSprint == null) it.initialNetworkSprint = true
+                        it.stopCommands++
+                        it.networkSprintState = false
+                    }
+                }
                 else -> Unit
             }
 
@@ -209,6 +224,16 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
         val completed = grimTickController.completeAtNaturalTickEnd(naturalTickEndSerial)
 
         if (isDiagnosticActive()) {
+            diagnosticSession?.let { session ->
+                session.naturalBoundaries++
+                when (completedPhase) {
+                    GrimTickNoSlowController.Phase.FAST -> session.fastBoundaries++
+                    GrimTickNoSlowController.Phase.WARMUP,
+                    GrimTickNoSlowController.Phase.RECOVERY,
+                    GrimTickNoSlowController.Phase.RECOVERY_CONFIRM -> session.recoveryBoundaries++
+                    GrimTickNoSlowController.Phase.INACTIVE -> Unit
+                }
+            }
             if (!completed) {
                 diagnostic("tick-end ignored issue=${grimTickController.boundaryIssue} serial=$naturalTickEndSerial")
             } else {
@@ -221,22 +246,6 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
                 }
             }
             logDiagnosticTick()
-        }
-    }
-
-    @Suppress("unused")
-    private val grimTickSprintRecoveryHandler = handler<SprintEvent>(priority = Short.MIN_VALUE) { event ->
-        if (mode != Mode.GrimTick || !grimTickController.isRecoveryCycle()) {
-            return@handler
-        }
-        val before = event.sprint
-        if (event.source == SprintEvent.Source.INPUT ||
-            event.source == SprintEvent.Source.MOVEMENT_TICK ||
-            event.source == SprintEvent.Source.NETWORK
-        ) {
-            event.sprint = false
-            diagnosticTick.sprintBefore = diagnosticTick.sprintBefore ?: before
-            diagnosticTick.sprintAfter = false
         }
     }
 
@@ -332,8 +341,38 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
         }
     }
 
-    fun isGrimTickRecoveryCycle(): Boolean =
-        running && mode == Mode.GrimTick && grimTickController.isRecoveryCycle()
+    /** Captures the local/input state at the beginning of the real aiStep movement tick. */
+    fun observeAiStepStart(localPlayer: net.minecraft.client.player.LocalPlayer? = mc.player) {
+        if (!isDiagnosticActive()) {
+            return
+        }
+        localPlayer ?: return
+
+        diagnosticTick.sprintBefore = localPlayer.isSprinting
+        diagnosticTick.physicalSprintInput = mc.options.keySprint.isDown
+        diagnosticTick.inputSprintBefore = localPlayer.input.playerInput.sprint()
+    }
+
+    /** Captures the state after vanilla aiStep has applied sprint transitions. */
+    fun observeAiStepEnd() {
+        if (!isDiagnosticActive()) {
+            return
+        }
+
+        val localPlayer = mc.player ?: return
+        diagnosticTick.sprintAfter = localPlayer.isSprinting
+        diagnosticTick.inputSprintAfter = localPlayer.input.playerInput.sprint()
+        val before = diagnosticTick.sprintBefore ?: return
+        if (before != localPlayer.isSprinting) {
+            diagnosticSession?.let {
+                it.lastLocalSprint = localPlayer.isSprinting
+                it.sprintStateTransitions++
+            }
+            if (before && !localPlayer.isSprinting) {
+                diagnosticTick.sprintLossReason = sprintLossReason(localPlayer)
+            }
+        }
+    }
 
     fun observeVanillaItemSlowdown(before: Vec2, after: Vec2) {
         if (!isDiagnosticActive() || mode != Mode.GrimTick) {
@@ -451,6 +490,9 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
             useSessionId = localPlayer.tickCount - localPlayer.ticksUsingItem,
             selectedSlot = localPlayer.inventory.selectedSlot,
             settingsFingerprint = settingsFingerprint(),
+            initialLocalSprint = localPlayer.isSprinting,
+            initialPhysicalSprintInput = mc.options.keySprint.isDown,
+            moduleSprintState = ModuleSprint.diagnosticState(),
         )
         val current = diagnosticSession
         if (current != null && current.sameAs(next)) {
@@ -459,15 +501,21 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
 
         endDiagnosticSession("new use session")
         diagnosticSession = next
+        next.lastLocalSprint = next.initialLocalSprint
         diagnosticBoundariesRemaining = MAX_DIAGNOSTIC_BOUNDARIES
         diagnosticMessagesRemaining = MAX_DIAGNOSTIC_MESSAGES
-        diagnostic("use session starts hand=${next.hand} item=${itemId(next.stack)} slot=${next.selectedSlot}")
+        diagnostic(
+            "use session starts hand=${next.hand} item=${itemId(next.stack)} slot=${next.selectedSlot} " +
+                "localSprint=${next.initialLocalSprint} physicalSprint=${next.initialPhysicalSprintInput} " +
+                "moduleSprint=${next.moduleSprintState} initialNetworkSprint=unknown"
+        )
         diagnostic("phase resets to warm-up recovery")
     }
 
     private fun endDiagnosticSession(reason: String) {
         if (diagnosticSession != null) {
             diagnostic("phase resets reason=$reason")
+            logDiagnosticSummary(reason)
         }
         diagnosticSession = null
         diagnosticTick = DiagnosticTick()
@@ -495,14 +543,49 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
                 "sprint=${diagnosticTick.sprintBefore ?: localPlayer.isSprinting}->" +
                 "${diagnosticTick.sprintAfter ?: localPlayer.isSprinting} move=${diagnosticTick.movementPacket} " +
                 "pos=${diagnosticTick.movementHasPosition} rot=${diagnosticTick.movementHasRotation} " +
-                "playerInput=${diagnosticTick.playerInput} inputSprint=${diagnosticTick.playerInputSprint} " +
-                "sprintCmd=${diagnosticTick.sprintCommand} actions=${diagnosticTick.actions.joinToString(",")} " +
+                "physicalSprint=${diagnosticTick.physicalSprintInput} " +
+                "inputSprint=${diagnosticTick.inputSprintBefore ?: "unknown"}->" +
+                "${diagnosticTick.inputSprintAfter ?: diagnosticTick.playerInputSprint ?: "unknown"} " +
+                "playerInput=${diagnosticTick.playerInput} sprintCmd=${diagnosticTick.sprintCommand} " +
+                "sprintLoss=${diagnosticTick.sprintLossReason ?: "none"} " +
+                "actions=${diagnosticTick.actions.joinToString(",")} " +
                 "tickEnd=${diagnosticTick.tickEndObserved}"
         )
         diagnosticBoundariesRemaining--
         diagnosticTick = DiagnosticTick()
         if (diagnosticBoundariesRemaining == 0) {
-            diagnostic("diagnostic boundary budget exhausted limit=$MAX_DIAGNOSTIC_BOUNDARIES")
+            logDiagnosticSummary("diagnostic budget exhausted")
+        }
+    }
+
+    private fun logDiagnosticSummary(reason: String) {
+        val session = diagnosticSession ?: return
+        if (session.summaryLogged) {
+            return
+        }
+        session.summaryLogged = true
+        logger.info(
+            "$DIAGNOSTIC_PREFIX session summary reason=$reason boundaries=${session.naturalBoundaries} " +
+                "fast=${session.fastBoundaries} recovery=${session.recoveryBoundaries} " +
+                "start=${session.startCommands} stop=${session.stopCommands} " +
+                "sprintTransitions=${session.sprintStateTransitions} " +
+                "initialLocalSprint=${session.initialLocalSprint} " +
+                "initialNetworkSprint=${session.initialNetworkSprint ?: "unknown"} " +
+                "networkSprint=${session.networkSprintState ?: "unknown"} " +
+                "physicalSprint=${session.initialPhysicalSprintInput} " +
+                "moduleSprint=${session.moduleSprintState}"
+        )
+    }
+
+    private fun sprintLossReason(localPlayer: net.minecraft.client.player.LocalPlayer): String {
+        val input = localPlayer.input.playerInput
+        return when {
+            !localPlayer.input.hasForwardImpulse() -> "no-forward-impulse"
+            input.backward() -> "backward-input"
+            localPlayer.horizontalCollision -> "horizontal-collision"
+            localPlayer.hungerManager.foodLevel <= 6 -> "hunger"
+            localPlayer.isUsingItem -> "item-use-vanilla-stop"
+            else -> "vanilla-stop-condition"
         }
     }
 
@@ -512,6 +595,9 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
         }
         diagnosticMessagesRemaining--
         logger.info("$DIAGNOSTIC_PREFIX $message")
+        if (diagnosticMessagesRemaining == 0) {
+            logDiagnosticSummary("diagnostic message budget exhausted")
+        }
     }
 
     private fun itemId(stack: net.minecraft.world.item.ItemStack) = BuiltInRegistries.ITEM.getKey(stack.item)
@@ -525,6 +611,19 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
         val useSessionId: Int,
         val selectedSlot: Int,
         val settingsFingerprint: Int,
+        val initialLocalSprint: Boolean,
+        val initialPhysicalSprintInput: Boolean,
+        val moduleSprintState: String,
+        var lastLocalSprint: Boolean = initialLocalSprint,
+        var initialNetworkSprint: Boolean? = null,
+        var networkSprintState: Boolean? = null,
+        var naturalBoundaries: Int = 0,
+        var fastBoundaries: Int = 0,
+        var recoveryBoundaries: Int = 0,
+        var startCommands: Int = 0,
+        var stopCommands: Int = 0,
+        var sprintStateTransitions: Int = 0,
+        var summaryLogged: Boolean = false,
     ) {
         fun sameAs(other: DiagnosticSession) = player === other.player && hand == other.hand && stack === other.stack &&
             useSessionId == other.useSessionId && selectedSlot == other.selectedSlot &&
@@ -540,12 +639,16 @@ object ModuleNoSlow : ClientModule("NoSlow", Category.MOVEMENT) {
         var inputAfter: String? = null,
         var sprintBefore: Boolean? = null,
         var sprintAfter: Boolean? = null,
+        var physicalSprintInput: Boolean? = null,
+        var inputSprintBefore: Boolean? = null,
+        var inputSprintAfter: Boolean? = null,
         var movementPacket: String = "none",
         var movementHasPosition: Boolean? = null,
         var movementHasRotation: Boolean? = null,
         var playerInput: String = "unchanged",
         var playerInputSprint: Boolean? = null,
         var sprintCommand: String = "none",
+        var sprintLossReason: String? = null,
         val actions: MutableList<String> = mutableListOf(),
         var tickEndObserved: Boolean = false,
     )

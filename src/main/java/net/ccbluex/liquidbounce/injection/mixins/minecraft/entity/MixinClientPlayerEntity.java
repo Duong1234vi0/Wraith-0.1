@@ -104,6 +104,11 @@ public abstract class MixinClientPlayerEntity extends MixinPlayerEntity implemen
         EventManager.INSTANCE.callEvent(PlayerMovementTickEvent.INSTANCE);
     }
 
+    @Inject(method = "aiStep", at = @At("RETURN"))
+    private void hookMovementTickPost(CallbackInfo callbackInfo) {
+        ModuleNoSlow.INSTANCE.observeAiStepEnd();
+    }
+
     /**
      * Hook entity movement tick event at HEAD and call out PRE tick movement event
      */

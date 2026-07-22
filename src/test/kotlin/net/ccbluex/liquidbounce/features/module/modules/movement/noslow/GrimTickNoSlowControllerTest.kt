@@ -205,16 +205,15 @@ class GrimTickNoSlowControllerTest {
     }
 
     @Test
-    fun recoverySprintRestrictionIsNarrowFinalAndCoversBothSources() {
+    fun recoveryDoesNotOverrideSprintAndModuleSprintRunsNormally() {
         val noSlow = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/noslow/ModuleNoSlow.kt")
         val sprint = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/movement/ModuleSprint.kt")
 
-        assertTrue(sprint.contains("ModuleNoSlow.isGrimTickRecoveryCycle()"))
-        assertTrue(noSlow.contains("handler<SprintEvent>(priority = Short.MIN_VALUE)"))
-        assertTrue(noSlow.contains("SprintEvent.Source.INPUT"))
-        assertTrue(noSlow.contains("SprintEvent.Source.MOVEMENT_TICK"))
-        assertTrue(noSlow.contains("SprintEvent.Source.NETWORK"))
-        assertTrue(noSlow.contains("event.sprint = false"))
+        assertFalse(sprint.contains("ModuleNoSlow.isGrimTickRecoveryCycle()"))
+        assertFalse(noSlow.contains("grimTickSprintRecoveryHandler"))
+        assertFalse(noSlow.contains("event.sprint = false"))
+        assertFalse(noSlow.contains("setSprinting(false)"))
+        assertFalse(noSlow.contains("network.sendPacket(ServerboundPlayerCommandPacket"))
     }
 
     @Test
