@@ -12901,3 +12901,11 @@ claimed before that retest.
 - Documentation commit and push result: pending at entry creation; a post-push update will record both.
 - This entry corrects only the terminal close logic in the preceding motion-polish entry; it does not supersede any
   accepted timing, easing, geometry, or render-quality decisions.
+
+## Wraith compact ClickGUI terminal close repair — post-push update — 2026-07-22
+
+- Implementation/test commit: `b2a217cf` — `fix(clickgui): terminate settings close morph`.
+- Documentation commit: `2cffbb0b1` — `docs(agent1): record clickgui terminal close repair`.
+- Push succeeded: `53946971c..2cffbb0b1 main -> main` to `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+- Local `HEAD` was verified equal to `origin/main` after the push.
+- FCL/Android retest remains pending; no runtime success is claimed from compilation or focused tests.
