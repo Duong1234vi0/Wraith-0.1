@@ -132,8 +132,8 @@ class SilentClickGuiStaticTest {
         assertEquals(0.94f, SilentClickGuiAnimation.MIN_SCALE)
         assertEquals(220L, SilentClickGuiAnimation.OPEN_SCALE_MS)
         assertEquals(180L, SilentClickGuiAnimation.OPEN_ALPHA_MS)
-        assertTrue(SilentClickGuiAnimation.openScale(0) >= 0.94f)
-        assertTrue(SilentClickGuiAnimation.openScale(220) <= 1f)
+        assertTrue(SilentClickGuiAnimation.openScale(0.0) >= 0.94f)
+        assertTrue(SilentClickGuiAnimation.openScale(220.0) <= 1f)
     }
 
     @Test

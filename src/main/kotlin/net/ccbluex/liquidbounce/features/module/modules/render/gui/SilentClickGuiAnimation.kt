@@ -29,14 +29,14 @@ object SilentClickGuiAnimation {
         return if (t >= 1f) 1f else 1f - Math.pow(2.0, (-10f * t).toDouble()).toFloat()
     }
 
-    fun openScale(elapsedMs: Long): Float =
-        MIN_SCALE + (1f - MIN_SCALE) * expoOut(elapsedMs.toFloat() / OPEN_SCALE_MS.toFloat())
+    fun openScale(elapsedMs: Double): Float =
+        MIN_SCALE + (1f - MIN_SCALE) * expoOut((elapsedMs / OPEN_SCALE_MS.toDouble()).toFloat())
 
-    fun openAlpha(elapsedMs: Long): Float =
-        expoOut(elapsedMs.toFloat() / OPEN_ALPHA_MS.toFloat())
+    fun openAlpha(elapsedMs: Double): Float =
+        expoOut((elapsedMs / OPEN_ALPHA_MS.toDouble()).toFloat())
 
-    fun closeValue(start: Float, end: Float, elapsedMs: Long, durationMs: Long): Float {
-        val eased = expoOut(elapsedMs.toFloat() / durationMs.toFloat())
+    fun closeValue(start: Float, end: Float, elapsedMs: Double, durationMs: Long): Float {
+        val eased = expoOut((elapsedMs / durationMs.toDouble()).toFloat())
         return start + (end - start) * eased
     }
 }
