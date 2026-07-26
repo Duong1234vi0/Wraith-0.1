@@ -1064,7 +1064,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     }
 
     /** V-Core Track pitch acceleration range: attack range plus aim range, without Aura's +4 acquisition allowance. */
-    internal fun isTrackPitchRaytracingTarget(target: Entity, rotation: Rotation): Boolean {
+    internal fun isVCorePitchRaytracingTarget(target: Entity, rotation: Rotation): Boolean {
         val traceRange = trackPitchRaytraceRange().toDouble()
         return evaluateTrackPitchRaytrace(
             isCurrentTarget = targetTracker.target === target,
