@@ -12998,3 +12998,14 @@ The required clean assembly, artifact hash, commits, and push are recorded in th
 FCL retesting on the same server/configuration remains pending. Compilation and model tests do not prove Grim-safe
 runtime behavior; the previous Focused Full parity/safety claims are superseded until the requested 30-run acquisition,
 five-minute target-switch, Sprint, movement, and watch-check matrix passes without Simulation alerts or `0.546` tails.
+
+### Post-build / push update
+
+- Implementation, diagnostics, target ownership, Sprint legality, and focused model/wiring tests: `0460425c` —
+  `fix(movefix): atomically latch focused full movement context`.
+- Required clean assembly: `BUILD SUCCESSFUL`; JAR `build/libs/liquidbounce-0.31.2.jar`; SHA-256
+  `8422a0ae925554a582f95d4c28ac7365be1fcdf9b82af0bc4e83b889c5c83674`.
+- Sources JAR SHA-256: `84dd09e7426a6d1bb394edc60e4451f852588b49f2c1dffb47ad96a144a1a7b4`.
+- Normal tests remain blocked by unrelated stale test symbols; focused suites pass. FCL retest was not run in this
+  Termux workspace, and no Grim-safe runtime claim is made.
+- Documentation append commit and push are pending this post-build update.
