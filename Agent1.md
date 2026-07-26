@@ -13136,3 +13136,13 @@ runtime tracking quality or Grim acceptance.
 - Focused-test commit: `9bb2ff77` — `test(rotation): cover linear elytra tracking parity`.
 - Documentation commit and push result are pending after this append-only entry is staged by itself.
 - The existing dirty worktree, including the prior Agent1 deletion and unrelated gameplay edits, remains preserved.
+
+## Linear direct V-Core Elytra pitch tracking — post-push update — 2026-07-26
+
+- Implementation commit: `de22b87a` — `feat(rotation): add track elytra pitch handling to linear`.
+- Focused-test commit: `9bb2ff77` — `test(rotation): cover linear elytra tracking parity`.
+- Documentation commit: `1240a2f3` — `docs(agent1): record linear track elytra integration`.
+- First push succeeded: `d2505c476..1240a2f39 main -> main` to
+  `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+- This post-push documentation update is committed and pushed separately; its final hash is reported in the task
+  handoff. FCL runtime comparison remains pending, and no runtime tracking-quality claim is made.
