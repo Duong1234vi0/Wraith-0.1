@@ -13008,4 +13008,6 @@ five-minute target-switch, Sprint, movement, and watch-check matrix passes witho
 - Sources JAR SHA-256: `84dd09e7426a6d1bb394edc60e4451f852588b49f2c1dffb47ad96a144a1a7b4`.
 - Normal tests remain blocked by unrelated stale test symbols; focused suites pass. FCL retest was not run in this
   Termux workspace, and no Grim-safe runtime claim is made.
-- Documentation append commit and push are pending this post-build update.
+- Documentation append commit: `9a1511ab5` — `docs(agent1): record focused full simulation correction`.
+- Push succeeded: `de04b7da8..9a1511ab5 main -> main` to `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+- Local `HEAD` equals `origin/main` at `9a1511ab51483dee1cfda4aedbd017d59a35d58e`.
