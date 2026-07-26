@@ -34,6 +34,7 @@ import net.ccbluex.liquidbounce.features.module.modules.movement.noslow.ModuleNo
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleFreeCam;
 import net.ccbluex.liquidbounce.interfaces.ClientPlayerEntityAddition;
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager;
+import net.ccbluex.liquidbounce.utils.aiming.features.FocusedFullMovementContextManager;
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation;
 import net.ccbluex.liquidbounce.utils.movement.DirectionalInput;
 import net.minecraft.client.Minecraft;
@@ -146,6 +147,7 @@ public abstract class MixinClientPlayerEntity extends MixinPlayerEntity implemen
     private void hookMovementPost(CallbackInfo callbackInfo) {
         LocalPlayer player = (LocalPlayer) (Object) this;
         EventManager.INSTANCE.callEvent(new PlayerNetworkMovementTickEvent(EventState.POST, player.getX(), player.getY(), player.getZ(), player.onGround()));
+        FocusedFullMovementContextManager.completeCycle();
     }
 
     /**
@@ -414,6 +416,7 @@ public abstract class MixinClientPlayerEntity extends MixinPlayerEntity implemen
     private boolean hookNetworkSprint(boolean original) {
         var event = new SprintEvent(new DirectionalInput(input), original, SprintEvent.Source.NETWORK);
         EventManager.INSTANCE.callEvent(event);
+        FocusedFullMovementContextManager.observeNetworkSprintDecision(event.getSprint());
         return event.getSprint();
     }
 

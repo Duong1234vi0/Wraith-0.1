@@ -68,6 +68,16 @@ object ModuleSprint : ClientModule("Sprint", Category.MOVEMENT) {
 
     fun diagnosticState(): String = "running=$running mode=$sprintMode"
 
+    /** Pure preview used before Focused Full latches its one input for this movement cycle. */
+    @JvmStatic
+    fun willRequestSprintFor(input: DirectionalInput): Boolean {
+        if (!running || !input.isMoving || player.horizontalCollision && !shouldIgnoreCollision) {
+            return false
+        }
+
+        return sprintMode != SprintMode.LEGIT || input.forwards && !input.backwards
+    }
+
     @Suppress("unused")
     private val sprintHandler = handler<SprintEvent>(priority = CRITICAL_MODIFICATION) { event ->
         if (!event.directionalInput.isMoving) {

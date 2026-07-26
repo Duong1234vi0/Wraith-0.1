@@ -47,6 +47,7 @@ object FocusedFullMoveFix {
         quantizedTargetYaw: Float,
         forward: Float,
         strafe: Float,
+        sprinting: Boolean = false,
     ): FloatArray {
         if (forward == 0.0f && strafe == 0.0f) {
             return floatArrayOf(0.0f, 0.0f)
@@ -57,7 +58,7 @@ object FocusedFullMoveFix {
         var closestStrafe = 0.0f
         var closestDifference = Float.MAX_VALUE
 
-        for (candidate in candidateInputs()) {
+        for (candidate in candidateInputs(sprinting)) {
             val predictedAngle = wrapDegrees(
                 Math.toDegrees(direction(activeRotationYaw, candidate[0], candidate[1]))
             )
@@ -73,15 +74,22 @@ object FocusedFullMoveFix {
     }
 
     @JvmStatic
-    fun candidateInputs(): Array<FloatArray> = buildList {
+    fun candidateInputs(sprinting: Boolean = false): Array<FloatArray> = buildList {
         for (forward in -1..1) {
             for (strafe in -1..1) {
                 if (forward != 0 || strafe != 0) {
+                    if (sprinting && forward != 1) {
+                        continue
+                    }
                     add(floatArrayOf(forward.toFloat(), strafe.toFloat()))
                 }
             }
         }
     }.toTypedArray()
+
+    @JvmStatic
+    fun isSprintLegal(forward: Float, strafe: Float): Boolean =
+        forward > 0.0f && strafe in -1.0f..1.0f
 
     @JvmStatic
     fun directionDegrees(rotationYaw: Float, forward: Float, strafe: Float): Double =

@@ -32,6 +32,7 @@ import net.ccbluex.liquidbounce.features.module.modules.combat.backtrack.ModuleB
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
 import net.ccbluex.liquidbounce.utils.aiming.features.MovementCorrection
+import net.ccbluex.liquidbounce.utils.aiming.features.FocusedFullMovementContextManager
 import net.ccbluex.liquidbounce.utils.aiming.utils.setRotation
 import net.ccbluex.liquidbounce.utils.aiming.utils.withFixedYaw
 import net.ccbluex.liquidbounce.utils.client.PacketQueueManager
@@ -106,7 +107,17 @@ object RotationManager : EventListener {
 
     private var theoreticalServerRotation = Rotation.ZERO
 
-    fun movementPacketRotation(): Rotation? = currentRotation
+    fun movementPacketRotation(): Rotation? {
+        FocusedFullMovementContextManager.packetRotation()?.let { return it }
+
+        val target = activeRotationTarget
+        if (target?.movementCorrection == MovementCorrection.FOCUSED_FULL && target.provider === ModuleKillAura) {
+            // Never send a silent Focused Full yaw unless keyboard/local movement latched the same yaw.
+            return null
+        }
+
+        return currentRotation
+    }
 
     @Suppress("LongParameterList")
     fun setRotationTarget(
@@ -250,9 +261,15 @@ object RotationManager : EventListener {
 
     @Suppress("unused")
     private val velocityHandler = handler<PlayerVelocityStrafe>(priority = MODEL_STATE) { event ->
+        FocusedFullMovementContextManager.movementYaw()?.let { movementYaw ->
+            val velocity = movementInputToVelocity(event.movementInput, event.speed, movementYaw)
+            FocusedFullMovementContextManager.observeVelocity(movementYaw, velocity)
+            event.velocity = velocity
+            return@handler
+        }
+
         val movementCorrection = activeRotationTarget?.movementCorrection
-        if (movementCorrection != MovementCorrection.OFF &&
-            (movementCorrection != MovementCorrection.FOCUSED_FULL || ModuleKillAura.isFocusedFullMoveFixActive())) {
+        if (movementCorrection != MovementCorrection.OFF && movementCorrection != MovementCorrection.FOCUSED_FULL) {
             val rotation = currentRotation ?: return@handler
 
             event.velocity = movementInputToVelocity(
@@ -282,6 +299,10 @@ object RotationManager : EventListener {
     val packetHandler = handler<PacketEvent>(
         priority = EventPriorityConvention.READ_FINAL_STATE
     ) { event ->
+        if (!event.isCancelled) {
+            FocusedFullMovementContextManager.observePacket(event.packet)
+        }
+
         val rotation = when (val packet = event.packet) {
             is ServerboundMovePlayerPacket -> {
                 // If we are not changing the look, we don't need to update the rotation

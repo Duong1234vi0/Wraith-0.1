@@ -53,6 +53,20 @@ class VCoreFocusedFullMoveFixTest {
     }
 
     @Test
+    fun sprintingCandidateSetContainsOnlyForwardBearingInputs() {
+        val candidates = FocusedFullMoveFix.candidateInputs(sprinting = true)
+        assertEquals(3, candidates.size)
+        assertTrue(candidates.all { it[0] == 1.0f })
+        assertEquals(setOf(-1.0f, 0.0f, 1.0f), candidates.map { it[1] }.toSet())
+        assertTrue(candidates.all { FocusedFullMoveFix.isSprintLegal(it[0], it[1]) })
+    }
+
+    @Test
+    fun sprintFalseStillPermitsEveryVCoreDirection() {
+        assertEquals(8, FocusedFullMoveFix.candidateInputs(sprinting = false).size)
+    }
+
+    @Test
     fun zeroInputRemainsZero() {
         assertArrayEquals(
             floatArrayOf(0.0f, 0.0f),
@@ -94,49 +108,82 @@ class VCoreFocusedFullMoveFixTest {
         val focused = source.substringAfter("if (movementCorrection == MovementCorrection.FOCUSED_FULL)")
             .substringBefore("if (movementCorrection == MovementCorrection.FULL)")
         assertTrue(focused.contains("resetFullMoveFixState();"))
-        assertTrue(focused.contains("getVCoreFocusedFullInput") || focused.contains("FocusedFullMoveFix.selectInput"))
+        assertTrue(source.contains("FocusedFullMovementContextManager.latch("))
         assertFalse(focused.contains("getCorrectedInputSmooth"))
         assertFalse(focused.contains("previousFullForward"))
     }
 
     @Test
     fun autoCartOwnershipDisablesFocusedFull() {
-        val source = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt")
-        assertTrue(source.contains("!ModuleAutoCart.isAutoCartMoveFixActive()"))
+        val source = source("src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/FocusedFullMovementContext.kt")
+        assertTrue(source.contains("ModuleAutoCart.isAutoCartMoveFixActive() -> \"autocart-owns-movement\""))
     }
 
     @Test
     fun passengerDisablesFocusedFull() {
-        val source = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt")
-        assertTrue(source.contains("!player.isPassenger"))
+        val source = source("src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/FocusedFullMovementContext.kt")
+        assertTrue(source.contains("player.isPassenger"))
     }
 
     @Test
     fun nonKillAuraProviderDoesNotActivateScopedPort() {
-        val source = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt")
-        assertTrue(source.contains("rotationTarget.provider === this"))
-        assertTrue(source.contains("rotationTarget.entity === target"))
+        val source = source("src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/FocusedFullMovementContext.kt")
+        assertTrue(source.contains("rotationTarget.provider !== ModuleKillAura"))
     }
 
     @Test
     fun killAuraTargetAndRotationOwnershipEnablesScopedPort() {
-        val source = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt")
-        assertTrue(source.contains("val target = targetTracker.target ?: return false"))
-        assertTrue(source.contains("val rotation = RotationManager.currentRotation ?: return false"))
+        val source = source("src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/FocusedFullMovementContext.kt")
+        assertTrue(source.contains("val target = rotationTarget.entity"))
+        assertTrue(source.contains("val rotation = RotationManager.currentRotation"))
         assertTrue(source.contains("MovementCorrection.FOCUSED_FULL"))
+        assertFalse(source.substringAfter("fun latch(").substringBefore("fun observeInputSprintDecision")
+            .contains("targetTracker.target ==="))
     }
 
     @Test
     fun groundVelocityUsesActiveRotationYaw() {
         val source = source("src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/RotationManager.kt")
-        assertTrue(source.contains("movementInputToVelocity(") && source.contains("rotation.yaw"))
+        assertTrue(source.contains("FocusedFullMovementContextManager.movementYaw()"))
+        assertTrue(source.contains("movementInputToVelocity(event.movementInput, event.speed, movementYaw)"))
     }
 
     @Test
     fun jumpVectorUsesActiveRotationYaw() {
         val source = source("src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/entity/MixinLivingEntity.java")
-        assertTrue(source.contains("rotation.getYaw() * 0.017453292F"))
+        assertTrue(source.contains("FocusedFullMovementContextManager.jumpYaw()"))
         assertTrue(source.contains("new Vec3(-Mth.sin(yaw) * 0.2F"))
+    }
+
+    @Test
+    fun packetAndLocalMovementReadTheSameLatchedContext() {
+        val rotationManager = source("src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/RotationManager.kt")
+        val keyboard = source("src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/client/MixinKeyboardInput.java")
+        val living = source("src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/entity/MixinLivingEntity.java")
+        assertTrue(keyboard.contains("FocusedFullMovementContextManager.latch("))
+        assertTrue(rotationManager.contains("FocusedFullMovementContextManager.packetRotation()"))
+        assertTrue(rotationManager.contains("FocusedFullMovementContextManager.movementYaw()"))
+        assertTrue(living.contains("FocusedFullMovementContextManager.jumpYaw()"))
+    }
+
+    @Test
+    fun targetSwitchDoesNotUseMutableTrackerAsCycleGate() {
+        val keyboard = source("src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/client/MixinKeyboardInput.java")
+        val rotationManager = source("src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/RotationManager.kt")
+        val living = source("src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/entity/MixinLivingEntity.java")
+        assertFalse(keyboard.contains("ModuleKillAura.isFocusedFullMoveFixActive()"))
+        assertFalse(rotationManager.substringAfter("private val velocityHandler").substringBefore("private val gameTickHandler")
+            .contains("ModuleKillAura.isFocusedFullMoveFixActive()"))
+        val jump = living.substringAfter("private Vec3 hookFixRotation").substringBefore("@Inject(method = \"push\"")
+        assertFalse(jump.contains("ModuleKillAura.isFocusedFullMoveFixActive()"))
+    }
+
+    @Test
+    fun noInputOrSprintPacketSpoofingWasAdded() {
+        val context = source("src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/FocusedFullMovementContext.kt")
+        assertFalse(context.contains("connection.send("))
+        assertFalse(context.contains("ServerboundPlayerCommandPacket"))
+        assertFalse(context.contains("ServerboundPlayerInputPacket("))
     }
 
     @Test

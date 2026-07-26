@@ -26,6 +26,7 @@ import net.ccbluex.liquidbounce.event.events.PlayerJumpEvent;
 import net.ccbluex.liquidbounce.features.module.modules.movement.*;
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura;
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager;
+import net.ccbluex.liquidbounce.utils.aiming.features.FocusedFullMovementContextManager;
 import net.ccbluex.liquidbounce.utils.aiming.features.MovementCorrection;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Holder;
@@ -168,12 +169,15 @@ public abstract class MixinLivingEntity extends MixinEntity {
             return original;
         }
 
-        if (rotationTarget == null || rotationTarget.getMovementCorrection() == MovementCorrection.OFF || rotation == null) {
-            return original;
+        Float focusedFullYaw = FocusedFullMovementContextManager.jumpYaw();
+        if (focusedFullYaw != null) {
+            FocusedFullMovementContextManager.observeJumpYaw(focusedFullYaw);
+            float yaw = focusedFullYaw * 0.017453292F;
+            return new Vec3(-Mth.sin(yaw) * 0.2F, 0.0, Mth.cos(yaw) * 0.2F);
         }
 
-        if (rotationTarget.getMovementCorrection() == MovementCorrection.FOCUSED_FULL &&
-                !ModuleKillAura.isFocusedFullMoveFixActive()) {
+        if (rotationTarget == null || rotationTarget.getMovementCorrection() == MovementCorrection.OFF ||
+                rotationTarget.getMovementCorrection() == MovementCorrection.FOCUSED_FULL || rotation == null) {
             return original;
         }
 

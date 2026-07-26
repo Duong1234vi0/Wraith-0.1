@@ -25,11 +25,10 @@ import net.ccbluex.liquidbounce.event.EventManager;
 import net.ccbluex.liquidbounce.event.events.MovementInputEvent;
 import net.ccbluex.liquidbounce.event.events.SprintEvent;
 import net.ccbluex.liquidbounce.features.module.modules.movement.inventorymove.ModuleInventoryMove;
-import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura;
 import net.ccbluex.liquidbounce.features.module.modules.movement.noslow.ModuleNoSlow;
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager;
 import net.ccbluex.liquidbounce.utils.aiming.features.MovementCorrection;
-import net.ccbluex.liquidbounce.utils.aiming.features.FocusedFullMoveFix;
+import net.ccbluex.liquidbounce.utils.aiming.features.FocusedFullMovementContextManager;
 import net.ccbluex.liquidbounce.utils.input.InputTracker;
 import net.ccbluex.liquidbounce.utils.movement.DirectionalInput;
 import net.minecraft.client.Minecraft;
@@ -108,10 +107,18 @@ public abstract class MixinKeyboardInput extends MixinInput {
         var event = new MovementInputEvent(new DirectionalInput(original), original.jump(), original.shift());
         EventManager.INSTANCE.callEvent(event);
         var untransformedDirectionalInput = event.getDirectionalInput();
-        var directionalInput = transformDirection(untransformedDirectionalInput);
+        var focusedFullInput = FocusedFullMovementContextManager.latch(
+                new DirectionalInput(original),
+                untransformedDirectionalInput,
+                original.sprint()
+        );
+        var directionalInput = focusedFullInput != null
+                ? focusedFullInput
+                : transformDirection(untransformedDirectionalInput);
 
         var sprintEvent = new SprintEvent(directionalInput, original.sprint(), SprintEvent.Source.INPUT);
         EventManager.INSTANCE.callEvent(sprintEvent);
+        FocusedFullMovementContextManager.observeInputSprintDecision(sprintEvent.getSprint());
 
         // Store the untransformed input for later use
         this.untransformed = new Input(
@@ -151,26 +158,10 @@ public abstract class MixinKeyboardInput extends MixinInput {
         }
 
         if (movementCorrection == MovementCorrection.FOCUSED_FULL) {
-            if (!ModuleKillAura.isFocusedFullMoveFixActive()) {
-                resetFullMoveFixState();
-                return input;
-            }
-
-            var entity = configurable.getEntity();
-            if (entity == null || (z == 0.0f && x == 0.0f)) {
-                resetFullMoveFixState();
-                return input;
-            }
-
             resetFullMoveFixState();
-            // #Edit By Codex: Focused Full now follows VCore's quantized target-position input search.
-            float directionYaw = FocusedFullMoveFix.quantizedTargetYaw(
-                    player.getX(), player.getEyeY(), player.getZ(),
-                    entity.getX(), entity.getY(), entity.getZ(),
-                    Minecraft.getInstance().options.sensitivity().get()
-            );
-            float[] movementInput = FocusedFullMoveFix.selectInput(rotation.getYaw(), directionYaw, z, x);
-            return new DirectionalInput(movementInput[0], movementInput[1]);
+            // A valid Focused Full cycle was already latched before this generic path.
+            // Invalid snapshots remain raw here and movementPacketRotation() also falls back to visual yaw.
+            return input;
         }
 
         if (movementCorrection == MovementCorrection.FULL) {

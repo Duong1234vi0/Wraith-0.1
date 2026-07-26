@@ -55,6 +55,7 @@ import net.ccbluex.liquidbounce.features.module.modules.misc.debugrecorder.modes
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleDebug
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
 import net.ccbluex.liquidbounce.render.renderEnvironmentForWorld
+import net.ccbluex.liquidbounce.utils.aiming.features.FocusedFullMovementContextManager
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
 import net.ccbluex.liquidbounce.utils.aiming.data.RotationWithVector
@@ -189,7 +190,8 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     }
 
     override fun disable() {
-        targetTracker.reset()
+        resetTrackedTarget("module-disable")
+        FocusedFullMovementContextManager.endSession("killaura-disable")
         rotationPoint = Vec3.ZERO
         rotationMotion = Vec3.ZERO
         trackAimPointCache.clear()
@@ -202,6 +204,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     }
 
     override fun enable() {
+        FocusedFullMovementContextManager.beginSession()
         rotationPoint = Vec3.ZERO
         rotationMotion = Vec3.ZERO
         trackAimPointCache.clear()
@@ -249,7 +252,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
         if (isInInventoryScreen && !ignoreOpenInventory || shouldResetTarget) {
             // Reset current target
-            targetTracker.reset()
+            resetTrackedTarget("rotation-update-invalidation")
             return@handler
         }
 
@@ -319,7 +322,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
 
         if (crosshairTarget is LivingEntity && crosshairTarget.shouldBeAttacked() &&
             !ModuleEMaceHelper.shouldSkipAuraTarget(crosshairTarget) && crosshairTarget != target) {
-            targetTracker.target = crosshairTarget
+            setTrackedTarget(crosshairTarget, "crosshair-substitution")
         }
 
         attackTarget(this, crosshairTarget, rotation)
@@ -520,7 +523,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
             ?: candidates.firstOrNull { entity -> processTarget(entity, maximumRange, situation) }
 
         if (target != null) {
-            targetTracker.target = target
+            setTrackedTarget(target, "update-target")
         } else if (KillAuraFightBot.enabled) {
             KillAuraFightBot.updateTarget()
 
@@ -533,8 +536,20 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
                 provider = ModuleKillAura
             )
         } else {
-            targetTracker.reset()
+            resetTrackedTarget("no-valid-target")
         }
+    }
+
+    private fun setTrackedTarget(target: LivingEntity, source: String) {
+        val oldId = targetTracker.target?.id
+        targetTracker.target = target
+        FocusedFullMovementContextManager.noteTargetChange(oldId, target.id, source)
+    }
+
+    private fun resetTrackedTarget(source: String) {
+        val oldId = targetTracker.target?.id
+        targetTracker.reset()
+        FocusedFullMovementContextManager.noteTargetChange(oldId, null, source)
     }
 
     @Suppress("ReturnCount")
@@ -1091,19 +1106,7 @@ object ModuleKillAura : ClientModule("KillAura", Category.COMBAT) {
     }
 
     @JvmStatic
-    fun isFocusedFullMoveFixActive(): Boolean {
-        val target = targetTracker.target ?: return false
-        val rotation = RotationManager.currentRotation ?: return false
-        val rotationTarget = RotationManager.activeRotationTarget ?: return false
-
-        return running && !target.isRemoved && !player.isPassenger &&
-            rotation.yaw.isFinite() && rotation.pitch.isFinite() &&
-            isActiveKillAuraRotationFor(target) &&
-            rotationTarget.movementCorrection ==
-                net.ccbluex.liquidbounce.utils.aiming.features.MovementCorrection.FOCUSED_FULL &&
-            !ModuleAutoCart.isAutoCartMoveFixActive() &&
-            !CombatManager.shouldPauseCombat && !CombatManager.shouldPauseRotation
-    }
+    fun isFocusedFullMoveFixActive(): Boolean = FocusedFullMovementContextManager.isActive()
 
     private fun squaredDistanceToTargetPoint(entity: Entity): Double {
         val living = entity as? LivingEntity

@@ -12909,3 +12909,92 @@ claimed before that retest.
 - Push succeeded: `53946971c..2cffbb0b1 main -> main` to `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - Local `HEAD` was verified equal to `origin/main` after the push.
 - FCL/Android retest remains pending; no runtime success is claimed from compilation or focused tests.
+
+## Focused Full Grim Simulation ownership correction — 2026-07-26
+
+### User reproductions and runtime evidence
+
+The requested reproductions are: (A) hold `S` and walk backward toward a target, enable KillAura when it enters
+ScanRange, and continue holding `S` while Aura silently turns approximately 180 degrees; (B) stand among several
+targets, enable KillAura, hold `S`, and switch from target A to target B. The user-supplied run reports exactly 73
+visible Grim `Simulation` alerts: first `00:19:43 — vl:0.0 — offset .100841`, final `00:20:09 — vl:72.0 — offset .125727`,
+and a maximum visible offset of at least `.230270`. No other visible Grim check appears in that supplied run: no
+Sprint, PacketOrder, MultiActions, BadPackets, Timer, or NoSlow alert.
+
+The checked workspace `WorkSpace/Log/latest_game.log` is a different 627-line FCL/Android startup/crash log from
+2026-07-15 and contains zero Simulation alerts, so the 73-alert run is recorded as user-supplied authority rather
+than falsely attributed to that file. The supplied first five offsets produce exactly four adjacent pairs within
+`0.001` of the `0.546` factor (`0.6 × 0.91`); the complete supplied sequence is not present in the workspace, so no
+larger pair count is claimed. This is strong discrete wrong-vector plus grounded-friction evidence, not a minor flag.
+
+### Authority and source behavior
+
+The complete required Skill workflow files, current Wraith movement/rotation/KillAura/Sprint/input sources and tests,
+V-Core MoveFix/Aura/Track/Grim/keyboard/player/Sprint/event sources, supplied Grim 2.0 Simulation/prediction/input/
+packet/Sprint/BadPackets sources, mapped Minecraft 26.1.2 sources, and the complete workspace log were read. V-Core
+Full retains its quantized target-position yaw, eight nonzero directional candidates, and intentionally unwrapped final
+angle subtraction. The `+179/-179` wrapped-angle quirk is retained: it is a direction-quality quirk, not a proven
+Simulation cause when local input/yaw and packet yaw are shared.
+
+Grim Simulation is the generic prediction offset check (default threshold about `0.001`, immediate setback about `0.1`).
+Modern 1.21.2+ prediction consumes KnownInput from `PLAYER_INPUT`, uses packet-visible yaw, modern square-input
+normalization, and while server Sprint is active outside swimming only represents forward, forward-left, and
+forward-right movement. Backward and pure-sideways candidates are not valid Sprint predictions.
+
+### Root cause established
+
+The old live `isFocusedFullMoveFixActive()` gate independently required KillAura running, mutable
+`targetTracker.target`, `currentRotation`, active RotationTarget ownership, target identity equality, Focused Full,
+and pause/vehicle/AutoCart conditions. Source order proves KillAura can mutate `targetTracker.target` through normal
+`updateTarget` or later crosshair/raycast substitution after RotationManager has already prepared the active rotation
+for that movement tick. The tracker and active RotationTarget therefore diverged during a real transition.
+
+During that gap the keyboard and velocity hooks fell back to raw visual-yaw movement while
+`movementPacketRotation()` still returned the silent current rotation. That mixed local acceleration with silent packet
+yaw, exactly the local/server ownership mismatch Grim predicts as Simulation; Sprint can amplify it when a remapped
+backward/side input is retained while server Sprint remains active.
+
+### Atomic movement context correction
+
+Added `FocusedFullMovementContextManager` and `FocusedFullMovementContext`. Minecraft 26.1.2 ordering is now source-
+documented: Wraith GameTick/RotationUpdate/RotationManager commit, then `LocalPlayer.aiStep()` calls
+`KeyboardInput.tick()`, then local travel/jump, then `PLAYER_INPUT`, Sprint command, movement packet, and natural tick-end.
+The context latches one finite KillAura-owned active RotationTarget, target-position snapshot, movement/packet yaw
+snapshot, raw/post-event/corrected input, and Sprint legality before local movement. Keyboard remapping,
+PlayerVelocityStrafe, jump, and movement packet yaw all consume that same snapshot; it is released only after
+`sendPosition()` returns. If no valid snapshot exists, both local correction and packet yaw fall back to vanilla together.
+
+Target tracker changes are recorded through `update-target`, `crosshair-substitution`, invalidation, acquisition,
+death/range loss, enable/disable, and reset paths. A tracker mutation after input latching does not invalidate the
+current cycle or rewrite its input; the old target context completes, and the new committed RotationTarget is latched
+on the next cycle. Provider changes, pause, passenger, death, AutoCart, world change, disconnect, and invalid rotation
+remain hard invalidators. No live mutable target-equality gate remains in individual movement hooks.
+
+### Sprint adaptation
+
+Focused Full now restricts candidates to forward, forward-left, and forward-right only when the server-facing Sprint
+state is expected to remain active (forward-bearing vanilla/physical Sprint or an unblocked ModuleSprint request).
+Vanilla/Sprint Legit backward or pure-sideways input is allowed to stop Sprint before travel, after which all eight V-Core
+candidates are legal again. The actual network Sprint value is observed at `sendIsSprintingIfNeeded()` for diagnostics.
+No duplicate/manual Sprint packets, input spoofing, movement cancellation, timer change, or local/packet input split
+was added.
+
+### Diagnostics, tests, and status
+
+Bounded `[FocusedFullDiag]` diagnostics reset per KillAura session and stop at 200 movement cycles or 30 seconds. They
+capture cycle/tick, raw/post/selected input, local/input/network Sprint, physical Sprint, Sprint mode, visual/current/
+actual-server/movement/packet yaw, velocity/jump yaw, target/active target/provider, target-change source and timing,
+desired/world angle, input bits, packet subtype/yaw, actual delta, expected acceleration, mismatch warnings, and a
+single summary with acquisitions/switches, ownership mismatches, mixed-fallback prevention, Sprint-illegal attempts,
+legal fallbacks, modeled difference, and delta discontinuity.
+
+Focused V-Core, atomic wiring, and Grim model tests pass with the repository's existing unrelated stale test sources
+excluded. The model covers the two reproductions, one-tick mismatch/friction tail, atomic zero-offset behavior, modern
+normalization, Sprint candidate legality, target-A/B boundary latching, swimming/diagonal/cardinal direction behavior,
+and the retained wrapped-angle quirk. Normal unfiltered test compilation remains blocked by unrelated
+`calculateItemCooldownProgress`/`ITEM_COOLDOWN_SAMPLE_TICK_DELTA` and stale PointFinding symbols. `compileKotlin` passes.
+The required clean assembly, artifact hash, commits, and push are recorded in the post-push update below.
+
+FCL retesting on the same server/configuration remains pending. Compilation and model tests do not prove Grim-safe
+runtime behavior; the previous Focused Full parity/safety claims are superseded until the requested 30-run acquisition,
+five-minute target-switch, Sprint, movement, and watch-check matrix passes without Simulation alerts or `0.546` tails.
