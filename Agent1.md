@@ -13011,3 +13011,128 @@ five-minute target-switch, Sprint, movement, and watch-check matrix passes witho
 - Documentation append commit: `9a1511ab5` — `docs(agent1): record focused full simulation correction`.
 - Push succeeded: `de04b7da8..9a1511ab5 main -> main` to `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - Local `HEAD` equals `origin/main` at `9a1511ab51483dee1cfda4aedbd017d59a35d58e`.
+
+## Linear direct V-Core Elytra pitch tracking — 2026-07-26, Codex
+
+### Request and scope
+
+The user requested that V-Core Track's Elytra-specific vertical tracking be integrated directly into Wraith's
+existing `Linear` angle smoother for Minecraft 26.1.2. The final selected smoother must remain `Linear`.
+Profiles, Boolean settings, selectors, hidden Track switching, delegation to `TrackAngleSmooth`, instantiating a
+Track smoother, changing `activeAngleSmooth`, and temporary Track selection were explicitly rejected.
+
+### Authority and files checked
+
+Read the required Skill workflow files (`README.md`, `Agen.md`, `AGENT1_USAGE.md`, `CODEBASE_RULES.md`,
+`CLAUDE_PORT_SKID_MODULE_GUIDE.md`, `PORT_EVIDENCE_TEMPLATE.md`, `PORT_REVIEW_CHECKLIST.md`, and
+`Notes_/WORK_NOTES.md`), the relevant later Agent1 entries, and the live Wraith sources for `LinearAngleSmooth`,
+`TrackAngleSmooth`, `FactorAngleSmooth`, `AngleSmooth`, `Rotation`, `RotationTarget`, `RotationManager`,
+`RotationsConfigurable`, `ModuleElytraTarget`, `ModuleEMaceHelper`, `ModuleKillAura`,
+`KillAuraRotationsConfigurable`, and `ModuleWallsBypass`.
+
+Read the complete supplied V-Core `Track.java`, `Aura.java`, `ElytraTarget.java`, `EMaceHelper.java`,
+`WallsBypass.java`, `AuraRotationManager.java`, `PlayerManager.java`, and `MathUtility.java`, plus the current
+V-Core Aura/EMace fidelity tests and the mapped Minecraft 26.1.2 flight API evidence. V-Core references remained
+read-only.
+
+### Existing Wraith routing confirmed
+
+For the generic KillAura path used by Linear, `ModuleKillAura.getSpot` already performs exactly one
+`ModuleElytraTarget.getElytraTargetVec(entity)` call for an accepted Elytra target, then exactly one
+`ModuleEMaceHelper.applyPeakAssistAimOffset(entity, point)` call before constructing the target `Rotation`.
+Ordinary targets receive PointTracker resolution followed by the single PeakAssist call. Linear does not resolve
+points, call PointTracker, predict again, or apply PeakAssist again.
+
+Track/Grim-specific point resolvers remain selected only by `KillAuraRotationsConfigurable.usesVCoreTrackAim` and
+`usesVCoreGrimAim`; those ownership contracts were not changed. `usesVCoreTrackAim` remains Track-only.
+
+### V-Core source behavior mapped
+
+The source order is: choose the target point; apply Elytra prediction; apply EMace PeakAssist; update
+`pitchAcceleration` using equal attack/wall trace range; choose pitch step; apply local-player Elytra fast pitch;
+clamp yaw and pitch independently; apply source sensitivity GCD; then determine Elytra attack readiness.
+
+The direct Linear adaptation retains only the vertical portion relevant to the supplied target Rotation:
+
+- initial pitch acceleration `1.0f`;
+- aimed pitch step `1.0f` when the source raytrace predicate is already satisfied;
+- maximum pitch step `8.0f`;
+- multiplicative acceleration `1.65f`;
+- random pitch variation approximately `-1.0f..1.0f`;
+- local-player fast pitch `180.0f` only when `player.isFallFlying && player.fallFlyingTicks > 5`;
+- independent pitch delta clamp and final `-90..90` pitch bound.
+
+The old-value branch preserves the source's one-update overshoot sequence:
+`1.0`, `1.65`, `2.7225`, `4.492125`, `7.412006`, `12.22981`, `8.0`.
+The local player's flight tick count is used; target flight ticks, target age, and acquisition age are not used.
+
+### Direct Linear design
+
+`LinearAngleSmooth.process` first calculates the normal Linear factors and exact normal `towardsLinear` result.
+The specialized branch is entered only when the primary selected smoother is this exact Linear instance,
+KillAura owns the `RotationTarget`, the target is the current valid KillAura target, and either
+`ModuleElytraTarget.shouldTarget(entity)` or the narrow `ModuleEMaceHelper.isPeakAssistAimAppliedTo(entity)`
+predicate is true. The existing Linear yaw is returned unchanged; only pitch is replaced with the Track-derived
+independent pitch step. The result remains unnormalized so Wraith's normal `RotationManager` normalization runs
+exactly once.
+
+The PeakAssist predicate is non-mutating and checks target validity, EMace PeakAssist eligibility, active offset,
+and exact current-target identity. It does not call the mutating offset method and does not alter PeakAssist,
+firework, target, or rotation state.
+
+The former Track-specific pitch raytrace implementation was extracted to the neutral
+`ModuleKillAura.isVCorePitchRaytracingTarget`; Track and Linear use the same source-proven range and ownership
+semantics. General KillAura attack raycasting is unchanged.
+
+### State and lifecycle
+
+Linear owns one bounded state object: one target identity, one local-player identity, one world identity, and one
+pitch acceleration. It resets to `1.0f` on target/player/world identity changes, context exit, ordinary/non-KillAura
+processing, choice enable/disable, world change, and disconnect. No map or stale per-entity state was introduced.
+
+### Explicit exclusions
+
+Track yaw steps/randomization, dynamic ground hitbox points, ground motion/scanning, `AccelerateOnHit`, Track
+`trackticks`, snap behavior, Grim jitter/GCD, Track custom GCD/`isNormalized = true`, `WallsBypass` `YawOffset`,
+`PeekHigh`, source attack-readiness logic, extra settings, extra modes, and any change to `calculateTicks` were
+excluded. Linear does not read Track settings and does not modify `activeAngleSmooth`.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/LinearAngleSmooth.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/VCoreTrackPitch.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/utils/aiming/features/processors/anglesmooth/impl/TrackAngleSmooth.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/ModuleEMaceHelper.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/utils/aiming/LinearElytraPitchTest.kt`
+- this append-only `Agent1.md` entry.
+
+The `ModuleKillAura.kt` working tree already contained unrelated SmartCritical diagnostic removals; those changes
+were preserved. No unrelated modified, deleted, or untracked file was changed, staged, or cleaned.
+
+### Tests and verification
+
+- `git diff --check`: passed.
+- `compileKotlin`: `BUILD SUCCESSFUL`.
+- Focused command with only unrelated stale test sources excluded: `LinearElytraPitchTest`,
+  `VCoreAuraFidelityTest`, and `EMaceFireworkPhaseCoordinatorTest` — 52 tests passed.
+- The unfiltered test task remains blocked by pre-existing unresolved references in `PointFindingKtTest.kt`,
+  `SmartCriticalDecisionTest.kt`, and `ItemCooldownProgressTest.kt`. Those tests were not modified.
+- Required clean assembly:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+  — `BUILD SUCCESSFUL`.
+- JAR: `build/libs/liquidbounce-0.31.2.jar`; SHA-256:
+  `2d796f823037e862f0b799df1b425bd297be49c87a83229fb514fed9788f8331`.
+- Sources JAR SHA-256: `c2dae157533c0eb49dc378c3c7649277c35c76f816e179cccffe18e688b5617e`.
+
+### Runtime status, commits, and push
+
+FCL/Android runtime testing was not available in this headless Termux workspace. No claim is made that Linear
+tracks better than Track until the user compares ground regression, ElytraTarget, EMace PeakAssist, target-switch,
+WallsBypass, and non-KillAura Linear scenarios in Minecraft 26.1.2. Compilation and focused tests do not prove
+runtime tracking quality or Grim acceptance.
+
+- Implementation commit: `de22b87a` — `feat(rotation): add track elytra pitch handling to linear`.
+- Focused-test commit: `9bb2ff77` — `test(rotation): cover linear elytra tracking parity`.
+- Documentation commit and push result are pending after this append-only entry is staged by itself.
+- The existing dirty worktree, including the prior Agent1 deletion and unrelated gameplay edits, remains preserved.
