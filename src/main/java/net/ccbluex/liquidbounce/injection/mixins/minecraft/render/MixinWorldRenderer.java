@@ -133,8 +133,8 @@ public abstract class MixinWorldRenderer {
             Matrix4fc modelViewMatrix,
             CallbackInfo ci
     ) {
-        // TargetESP renders its shader-reactive contribution before Iris' final composite. Ghosts use a
-        // low-energy textured base here and finish with a controlled core in the later WorldRenderEvent.
+        // #Edit By Codex 2026-06-13: let TargetESP render before Iris/Complementary final composite
+        // so shaderpack bloom can see the emissive ghost pixels. The normal WorldRenderEvent fires too late.
         ModuleTargetESP.renderShaderWorldPass(levelRenderState.cameraRenderState.pos);
     }
 }

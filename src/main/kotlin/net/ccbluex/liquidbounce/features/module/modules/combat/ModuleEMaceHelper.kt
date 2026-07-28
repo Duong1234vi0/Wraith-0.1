@@ -173,14 +173,6 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
         return offset
     }
 
-    /** True only after the current target's already-resolved aim point retained the PeakAssist offset. */
-    internal fun isPeakAssistAimAppliedTo(target: LivingEntity?): Boolean = isPeakAssistAimApplied(
-        targetValid = target != null && target.isAlive && !target.isRemoved,
-        canUsePeakAssist = canUsePeakAssist(),
-        peakOffsetActive = peakOffsetActive,
-        isCurrentTarget = ModuleKillAura.targetTracker.target === target,
-    )
-
     fun isPeakAssistActive() = canUsePeakAssist() && peakOffsetActive
 
     fun getElytraAimRangeOverride(defaultRange: Int): Int =
@@ -415,10 +407,3 @@ object ModuleEMaceHelper : ClientModule("EMaceHelper", Category.COMBAT) {
     private fun hasPeakFireworkIntervalElapsed() =
         System.nanoTime() - peakAssistFireworkTimerNanos >= PEAK_FIREWORK_INTERVAL_MS * NANOS_PER_MILLISECOND
 }
-
-internal fun isPeakAssistAimApplied(
-    targetValid: Boolean,
-    canUsePeakAssist: Boolean,
-    peakOffsetActive: Boolean,
-    isCurrentTarget: Boolean,
-): Boolean = targetValid && canUsePeakAssist && peakOffsetActive && isCurrentTarget

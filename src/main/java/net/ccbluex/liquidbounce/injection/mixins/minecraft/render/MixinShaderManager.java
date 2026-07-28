@@ -33,7 +33,6 @@ import net.ccbluex.liquidbounce.features.module.modules.render.nametags.NameTags
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.NameTagsBlur;
 import net.ccbluex.liquidbounce.features.module.modules.render.nametags.NameTagsBlurPipelines;
 import net.ccbluex.liquidbounce.features.module.modules.render.targetesp.BabkaTargetEspPipelines;
-import net.ccbluex.liquidbounce.features.module.modules.render.targetesp.ModuleTargetESP;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleTotemParticles;
 import net.minecraft.client.renderer.ShaderManager;
 import org.spongepowered.asm.mixin.Mixin;
@@ -60,7 +59,6 @@ public abstract class MixinShaderManager {
         RoundedTextureShader.INSTANCE.precompile();
         MsdfFontShader.INSTANCE.precompile();
         AlphaDlcRenderPipelines.INSTANCE.precompile();
-        ModuleTargetESP.onResourceReload();
         BabkaTargetEspPipelines.INSTANCE.precompile();
         IrisExactHandMaskPipeline.INSTANCE.precompile();
         HandShaderPipeline.INSTANCE.precompile();

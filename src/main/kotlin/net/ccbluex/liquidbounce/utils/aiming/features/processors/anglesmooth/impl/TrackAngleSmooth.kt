@@ -46,7 +46,7 @@ class TrackAngleSmooth(parent: ChoiceConfigurable<*>) : AngleSmooth("Track", par
         val entity = rotationTarget.entity
         val ready = entity != null && ModuleKillAura.isTrackAttackReady(entity)
         val alreadyRaytracing = entity != null &&
-            ModuleKillAura.isVCorePitchRaytracingTarget(entity, currentRotation)
+            ModuleKillAura.isTrackPitchRaytracingTarget(entity, currentRotation)
 
         pitchAcceleration = updateVCoreTrackPitchAcceleration(
             pitchAcceleration = pitchAcceleration,
@@ -117,4 +117,18 @@ class TrackAngleSmooth(parent: ChoiceConfigurable<*>) : AngleSmooth("Track", par
         PITCH("Pitch"),
         BOTH("Both"),
     }
+}
+
+internal fun updateVCoreTrackPitchAcceleration(
+    pitchAcceleration: Float,
+    alreadyRaytracing: Boolean,
+    aimedPitchStep: Float,
+    maxPitchStep: Float,
+    pitchAccelerate: Float,
+): Float = if (alreadyRaytracing) {
+    aimedPitchStep
+} else if (pitchAcceleration < maxPitchStep) {
+    pitchAcceleration * pitchAccelerate
+} else {
+    maxPitchStep
 }
