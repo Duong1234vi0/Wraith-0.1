@@ -42,7 +42,6 @@ import net.ccbluex.liquidbounce.utils.entity.pop
 import net.ccbluex.liquidbounce.utils.entity.push
 import net.ccbluex.liquidbounce.utils.entity.rotation
 import net.ccbluex.liquidbounce.utils.entity.yaw
-import net.minecraft.client.Camera
 import net.minecraft.client.renderer.MultiBufferSource
 import net.minecraft.client.renderer.rendertype.RenderType
 import net.minecraft.client.renderer.rendertype.RenderTypes
@@ -150,12 +149,12 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
     private var soulTest3PreviousNano = System.nanoTime()
     private var soulTest3Value = 0.0F
     private var crystalMoving = 0.0F
-    private var shaderWorldPassRendered = false
-    private var shaderWorldPassDisabled = false
+    private var preparedFrameSerial = 0L
+    private val shaderPassCoordinator = TargetEspShaderPassCoordinator<PreparedFrame, Mode>()
     private var shaderFailureLogged = false
+    private var lateFailureLogged = false
     private var shaderMappingFallbackLogged = false
     private var normalFailureLogged = false
-    private var fallbackFrame: PreparedFrame? = null
 
     override fun disable() {
         clearAllState()
@@ -173,40 +172,61 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
 
     @Suppress("unused")
     private val renderHandler = handler<WorldRenderEvent> { event ->
-        if (shaderWorldPassRendered) {
-            shaderWorldPassRendered = false
-            return@handler
-        }
-
-        runCatching {
-            val frame = fallbackFrame ?: prepareFrame(
-                partialTicks = event.partialTicks,
-                cameraPos = event.camera.position(),
-                nowMs = System.currentTimeMillis(),
-                nowNano = System.nanoTime()
-            ) ?: return@handler
-            fallbackFrame = null
-
-            renderPreparedFrame(
-                frame = frame,
-                stack = event.matrixStack,
-                provider = mc.renderBuffers().bufferSource(),
-                camera = event.camera,
-                pass = RenderPass.NORMAL
-            )
-        }.onFailure { throwable ->
-            if (!normalFailureLogged) {
-                normalFailureLogged = true
-                logger.error("TargetESP world render failed; skipping this frame.", throwable)
+        when (val plan = shaderPassCoordinator.consumeLate(IrisShaderPack.inUse(), mode)) {
+            TargetEspLatePlan.Skip -> Unit
+            TargetEspLatePlan.PrepareNormal -> runCatching {
+                val frame = prepareFrame(
+                    partialTicks = event.partialTicks,
+                    cameraPos = event.camera.position(),
+                    nowMs = System.currentTimeMillis(),
+                    nowNano = System.nanoTime()
+                ) ?: return@handler
+                renderPreparedFrame(
+                    frame = frame,
+                    stack = event.matrixStack,
+                    provider = mc.renderBuffers().bufferSource(),
+                    pass = RenderPass.NORMAL
+                )
+            }.onFailure { throwable ->
+                if (!normalFailureLogged) {
+                    normalFailureLogged = true
+                    logger.error("TargetESP world render failed; skipping this frame.", throwable)
+                }
+            }
+            is TargetEspLatePlan.RenderNormal -> runCatching {
+                renderPreparedFrame(
+                    frame = plan.frame,
+                    stack = event.matrixStack,
+                    provider = mc.renderBuffers().bufferSource(),
+                    pass = RenderPass.NORMAL
+                )
+            }.onFailure { throwable ->
+                if (!normalFailureLogged) {
+                    normalFailureLogged = true
+                    logger.error("TargetESP fallback render failed; skipping this frame.", throwable)
+                }
+            }
+            is TargetEspLatePlan.RenderControlledGlow -> runCatching {
+                renderPreparedFrame(
+                    frame = plan.frame,
+                    stack = event.matrixStack,
+                    provider = mc.renderBuffers().bufferSource(),
+                    pass = RenderPass.LATE_CONTROLLED_GLOW
+                )
+            }.onFailure { throwable ->
+                if (!lateFailureLogged) {
+                    lateFailureLogged = true
+                    logger.error("TargetESP late controlled glow failed; skipping this frame.", throwable)
+                }
             }
         }
     }
 
     @JvmStatic
     fun renderShaderWorldPass(cameraPos: Vec3) {
-        shaderWorldPassRendered = false
+        shaderPassCoordinator.beginEarlyFrame()
 
-        if (shaderWorldPassDisabled || !running || !IrisShaderPack.inUse()) {
+        if (!running || !IrisShaderPack.inUse()) {
             return
         }
 
@@ -221,17 +241,25 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         val partialTicks = mc.deltaTracker.getGameTimeDeltaPartialTick(false)
         val nowMs = System.currentTimeMillis()
         val nowNano = System.nanoTime()
-        val frame = prepareFrame(partialTicks, cameraPos, nowMs, nowNano) ?: return
+        val frame = prepareFrame(partialTicks, cameraPos, nowMs, nowNano)
+        if (frame == null) {
+            shaderPassCoordinator.fullShaderPassRendered()
+            return
+        }
         val stack = PoseStack()
         val provider = mc.renderBuffers().bufferSource()
-        val camera = mc.gameRenderer.camera
+        val ghostHybrid = frame.mode.isHybridGhost
+        val pass = if (ghostHybrid) RenderPass.SHADER_REACTIVE_BASE else RenderPass.SHADER_WORLD
 
         runCatching {
-            renderPreparedFrame(frame, stack, provider, camera, RenderPass.SHADER_WORLD)
-            shaderWorldPassRendered = true
+            renderPreparedFrame(frame, stack, provider, pass)
+            if (ghostHybrid) {
+                shaderPassCoordinator.ghostBaseRendered(frame, frame.mode)
+            } else {
+                shaderPassCoordinator.fullShaderPassRendered()
+            }
         }.onFailure { throwable ->
-            shaderWorldPassDisabled = true
-            fallbackFrame = frame
+            shaderPassCoordinator.normalFallbackPending(frame, frame.mode)
             if (!shaderFailureLogged) {
                 shaderFailureLogged = true
                 logger.error("TargetESP shader-world pass failed; falling back to WorldRenderEvent.", throwable)
@@ -239,18 +267,26 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         }
     }
 
+    @JvmStatic
+    fun onResourceReload() {
+        shaderPassCoordinator.clear()
+        BabkaTargetEspPipelines.clearTextureCache()
+    }
+
     private fun prepareFrame(partialTicks: Float, cameraPos: Vec3, nowMs: Long, nowNano: Long): PreparedFrame? {
+        val frameMode = mode
         val previousMode = lastMode
-        if (mode != lastMode) {
-            if (previousMode == Mode.GHOST_V2 || mode == Mode.GHOST_V2) {
+        if (frameMode != lastMode) {
+            shaderPassCoordinator.clear()
+            if (previousMode == Mode.GHOST_V2 || frameMode == Mode.GHOST_V2) {
                 ghostV2Renderer.reset()
             }
             modeTimestampMs = nowMs
-            lastMode = mode
+            lastMode = frameMode
         }
 
         val rawTarget = currentTarget()
-        if (mode == Mode.GHOST_V2) {
+        if (frameMode == Mode.GHOST_V2) {
             if (rawTarget == null) {
                 ghostV2Renderer.reset()
                 lastTarget = null
@@ -258,11 +294,15 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
             }
             lastTarget = rawTarget
             updateAnimations(hasTarget = true, nowMs)
+            val ghostV2Frame = ghostV2Renderer.prepare(rawTarget, nowMs)
             return PreparedFrame(
+                serial = nextPreparedFrameSerial(),
+                mode = frameMode,
                 target = rawTarget,
                 liveTarget = rawTarget,
                 partialTicks = partialTicks,
                 cameraPos = cameraPos,
+                cameraRotation = Quaternionf(mc.gameRenderer.camera.rotation),
                 nowMs = nowMs,
                 nowNano = nowNano,
                 accentColor = clientColor(),
@@ -272,7 +312,9 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
                 soulAnimation = soulAnimation.value.toFloat(),
                 celestialAnimation = celestialAnimation.value.toFloat(),
                 soulsAnimation = soulsAnimation.value.toFloat(),
-                souls2Animation = souls2Animation.value.toFloat()
+                souls2Animation = souls2Animation.value.toFloat(),
+                ghosts2 = null,
+                ghostV2 = ghostV2Frame
             )
         }
 
@@ -309,11 +351,20 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
             return null
         }
 
+        val ghosts2Frame = if (frameMode == Mode.GHOSTS2 && targetForMode != null) {
+            prepareGhosts2Frame(targetForMode, partialTicks, cameraPos, nowMs, generalAnimation.value.toFloat())
+        } else {
+            null
+        }
+
         return PreparedFrame(
+            serial = nextPreparedFrameSerial(),
+            mode = frameMode,
             target = targetForMode,
             liveTarget = rawTarget,
             partialTicks = partialTicks,
             cameraPos = cameraPos,
+            cameraRotation = Quaternionf(mc.gameRenderer.camera.rotation),
             nowMs = nowMs,
             nowNano = nowNano,
             accentColor = clientColor(),
@@ -323,8 +374,15 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
             soulAnimation = soulAnimation.value.toFloat(),
             celestialAnimation = celestialAnimation.value.toFloat(),
             soulsAnimation = soulsAnimation.value.toFloat(),
-            souls2Animation = souls2Animation.value.toFloat()
+            souls2Animation = souls2Animation.value.toFloat(),
+            ghosts2 = ghosts2Frame,
+            ghostV2 = null
         )
+    }
+
+    private fun nextPreparedFrameSerial(): Long {
+        preparedFrameSerial += 1L
+        return preparedFrameSerial
     }
 
     private fun updateAnimations(hasTarget: Boolean, nowMs: Long) {
@@ -440,22 +498,20 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         frame: PreparedFrame,
         stack: PoseStack,
         provider: MultiBufferSource.BufferSource,
-        camera: Camera,
         pass: RenderPass
     ) {
-        val rotation = Quaternionf(camera.rotation)
-        val right = Vector3f(1.0F, 0.0F, 0.0F).rotate(rotation)
-        val up = Vector3f(0.0F, 1.0F, 0.0F).rotate(rotation)
-        val context = RenderContext(frame, stack, provider, camera, pass, right, up)
+        val right = Vector3f(1.0F, 0.0F, 0.0F).rotate(frame.cameraRotation)
+        val up = Vector3f(0.0F, 1.0F, 0.0F).rotate(frame.cameraRotation)
+        val context = RenderContext(frame, stack, provider, pass, right, up)
 
-        runCatching {
-            when (mode) {
+        try {
+            when (frame.mode) {
                 Mode.CRYSTALS -> frame.target?.let { renderCrystals(context, it, sharp = false) }
                 Mode.CRYSTALS_1 -> frame.target?.let { renderCrystals(context, it, sharp = true) }
                 Mode.CUBES -> renderCubes(context)
                 Mode.CIRCLE -> frame.target?.let { renderCircle(context, it) }
-                Mode.GHOSTS2 -> frame.target?.let { renderGhosts2(context, it) }
-                Mode.GHOST_V2 -> frame.liveTarget?.let { renderGhostV2(context, it) } ?: ghostV2Renderer.reset()
+                Mode.GHOSTS2 -> frame.ghosts2?.let { renderGhosts2(context, it) }
+                Mode.GHOST_V2 -> frame.ghostV2?.let { renderGhostV2(context, it) }
                 Mode.CELESTIAL -> frame.target?.let { renderCelestial(context, it) }
                 Mode.SOUL_2 -> frame.target?.let { renderSoul2(context, it) }
                 Mode.SOUL_TEST_3 -> frame.target?.let { renderSoulTest3(context, it) }
@@ -463,13 +519,10 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
                 Mode.SOULS -> frame.target?.let { renderSouls(context, it) }
                 Mode.SOULS_2 -> frame.target?.let { renderSouls2(context, it) }
             }
-            provider.endBatch()
-        }.onFailure { throwable ->
-            provider.endBatch()
-            if (pass == RenderPass.SHADER_WORLD) {
-                throw throwable
-            }
-            logger.error("TargetESP mode ${mode.choiceName} failed; skipping this frame.", throwable)
+            context.endOwnedBatches()
+        } catch (throwable: Throwable) {
+            runCatching { context.endOwnedBatches() }
+            throw throwable
         }
     }
 
@@ -491,7 +544,7 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         val torsoY = entityHeight * 0.55F
         val neckY = entityHeight * 0.74F
         val color = brighten(ctx.frame.accentColor, 1.3F, (200.0F * anim).roundToInt())
-        val crystalConsumer = ctx.provider.getBuffer(ctx.crystalBodyLayer())
+        val crystalConsumer = ctx.buffer(ctx.crystalBodyLayer())
 
         ctx.stack.push()
         try {
@@ -582,8 +635,8 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
             return
         }
 
-        val faceConsumer = ctx.provider.getBuffer(ctx.cubeFaceLayer())
-        val lineConsumer = ctx.provider.getBuffer(ctx.cubeLineLayer())
+        val faceConsumer = ctx.buffer(ctx.cubeFaceLayer())
+        val lineConsumer = ctx.buffer(ctx.cubeLineLayer())
         val accent = ctx.frame.accentColor
 
         for (particle in cubeParticles) {
@@ -651,19 +704,26 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         }
     }
 
-    private fun renderGhosts2(ctx: RenderContext, target: LivingEntity) {
-        val anim = ctx.frame.generalAnimation
+    private fun prepareGhosts2Frame(
+        target: LivingEntity,
+        partialTicks: Float,
+        cameraPos: Vec3,
+        nowMs: Long,
+        anim: Float
+    ): Ghosts2PreparedFrame {
         if (anim <= 0.001F) {
             ghostTrails.forEach { it.clear() }
-            return
+            return Ghosts2PreparedFrame(emptyList(), emptyList())
         }
 
-        val targetPos = target.getPosition(ctx.frame.partialTicks)
-        val baseX = targetPos.x - ctx.frame.cameraPos.x
-        val baseY = targetPos.y - ctx.frame.cameraPos.y
-        val baseZ = targetPos.z - ctx.frame.cameraPos.z
-        val speed = ctx.frame.nowMs * 0.005
+        val targetPos = target.getPosition(partialTicks)
+        val baseX = targetPos.x - cameraPos.x
+        val baseY = targetPos.y - cameraPos.y
+        val baseZ = targetPos.z - cameraPos.z
+        val speed = nowMs * 0.005
         val radius = target.bbWidth + 0.15
+        val preparedTrails = ArrayList<GhostSprite>(GHOST_COUNT * GHOST_TRAIL_LIMIT)
+        val preparedHeads = ArrayList<GhostSprite>(GHOST_COUNT)
 
         for (ghost in 0 until GHOST_COUNT) {
             val phase = ghost * (TWO_PI / GHOST_COUNT)
@@ -684,27 +744,73 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
                 val baseScale = if (segmentIndex == 0) 0.34F else 0.21F
                 val scale = baseScale * fade * anim
                 val alpha = (fade.toDouble().pow(1.8).toFloat() * anim).coerceIn(0.0F, 1.0F)
-                drawBillboard(
-                    ctx,
-                    bloomTexture,
+                preparedTrails += GhostSprite(
                     baseX + segment.x,
                     baseY + segment.y,
                     baseZ + segment.z,
                     scale,
-                    alphaColor(ctx.frame.accentColor, alpha)
+                    alpha
                 )
             }
 
-            drawBillboard(
-                ctx,
-                bloomTexture,
+            preparedHeads += GhostSprite(
                 baseX + x,
                 baseY + y,
                 baseZ + z,
                 0.2F * anim,
-                alphaColor(rgba(255, 255, 255, 255), anim)
+                anim.coerceIn(0.0F, 1.0F)
             )
         }
+
+        return Ghosts2PreparedFrame(preparedTrails.toList(), preparedHeads.toList())
+    }
+
+    private fun renderGhosts2(ctx: RenderContext, ghosts: Ghosts2PreparedFrame) {
+        when (ctx.pass) {
+            RenderPass.NORMAL -> {
+                ghosts.trails.forEach { sprite ->
+                    drawGhostSprite(ctx, sprite, ctx.frame.accentColor, sprite.alpha)
+                }
+                ghosts.heads.forEach { head ->
+                    drawGhostSprite(ctx, head, rgba(255, 255, 255, 255), head.alpha)
+                }
+            }
+            RenderPass.SHADER_REACTIVE_BASE -> ghosts.trails.forEach { sprite ->
+                drawGhostSprite(
+                    ctx,
+                    sprite,
+                    ctx.frame.accentColor,
+                    TargetEspGhostShaderStyle.alpha(sprite.alpha, TargetEspGhostShaderStyle.GHOST_SHADER_BASE_ALPHA)
+                )
+            }
+            RenderPass.LATE_CONTROLLED_GLOW -> ghosts.heads.forEach { head ->
+                drawGhostSprite(
+                    ctx,
+                    head.copy(size = TargetEspGhostShaderStyle.scale(head.size, TargetEspGhostShaderStyle.GHOST_LATE_HALO_SCALE)),
+                    ctx.frame.accentColor,
+                    TargetEspGhostShaderStyle.alpha(head.alpha, TargetEspGhostShaderStyle.GHOST_LATE_HALO_ALPHA)
+                )
+                drawGhostSprite(
+                    ctx,
+                    head,
+                    rgba(255, 255, 255, 255),
+                    TargetEspGhostShaderStyle.alpha(head.alpha, TargetEspGhostShaderStyle.GHOST_LATE_CORE_ALPHA)
+                )
+            }
+            RenderPass.SHADER_WORLD -> Unit
+        }
+    }
+
+    private fun drawGhostSprite(ctx: RenderContext, sprite: GhostSprite, color: Int, alpha: Float) {
+        drawBillboard(
+            ctx,
+            bloomTexture,
+            sprite.x,
+            sprite.y,
+            sprite.z,
+            sprite.size,
+            alphaColor(color, alpha)
+        )
     }
 
     private fun renderCelestial(ctx: RenderContext, target: LivingEntity) {
@@ -854,7 +960,7 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         val baseY = pos.y - ctx.frame.cameraPos.y
         val baseZ = pos.z - ctx.frame.cameraPos.z
         val width = target.bbWidth * 1.5F
-        val bodyConsumer = ctx.provider.getBuffer(ctx.crystalBodyLayer())
+        val bodyConsumer = ctx.buffer(ctx.crystalBodyLayer())
         val baseColor = ctx.frame.accentColor
         val top = shadeColor(baseColor, 60, (anim * 255.0F).roundToInt())
         val side1 = shadeColor(baseColor, 30, (anim * 255.0F).roundToInt())
@@ -967,13 +1073,69 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         }
     }
 
-    private fun renderGhostV2(ctx: RenderContext, target: LivingEntity) {
-        if (!isValidTarget(target)) {
-            ghostV2Renderer.reset()
-            return
+    private fun renderGhostV2(ctx: RenderContext, ghost: GhostV2PreparedFrame) {
+        when (ctx.pass) {
+            RenderPass.NORMAL -> ghost.trails.forEach { point ->
+                drawGhostV2Layer(ctx, point, point.miniSize * 2.6F, ghost.color, (point.baseAlpha * 0.11000001F).toInt())
+                drawGhostV2Layer(ctx, point, point.miniSize * 1.8F, ghost.color, (point.baseAlpha * 0.23099999F).toInt())
+                drawGhostV2Layer(ctx, point, point.miniSize, ghost.color, point.baseAlpha)
+            }
+            RenderPass.SHADER_REACTIVE_BASE -> ghost.trails.forEach { point ->
+                drawGhostV2Layer(
+                    ctx,
+                    point,
+                    TargetEspGhostShaderStyle.scale(point.miniSize, TargetEspGhostShaderStyle.GHOST_V2_SHADER_BASE_SCALE),
+                    ghost.color,
+                    TargetEspGhostShaderStyle.alphaByte(point.baseAlpha, TargetEspGhostShaderStyle.GHOST_V2_SHADER_BASE_ALPHA)
+                )
+            }
+            RenderPass.LATE_CONTROLLED_GLOW -> {
+                ghost.trails.forEach { point ->
+                    drawGhostV2Layer(
+                        ctx,
+                        point,
+                        TargetEspGhostShaderStyle.scale(point.miniSize, TargetEspGhostShaderStyle.GHOST_V2_LATE_CORE_SCALE),
+                        ghost.color,
+                        TargetEspGhostShaderStyle.alphaByte(point.baseAlpha, TargetEspGhostShaderStyle.GHOST_V2_LATE_CORE_ALPHA)
+                    )
+                }
+                ghost.heads.forEach { head ->
+                    drawGhostV2Layer(
+                        ctx,
+                        head,
+                        TargetEspGhostShaderStyle.scale(GHOST_V2_PARTICLE_SIZE, TargetEspGhostShaderStyle.GHOST_V2_HEAD_HALO_SCALE),
+                        ghost.color,
+                        TargetEspGhostShaderStyle.alphaByte(255, TargetEspGhostShaderStyle.GHOST_V2_HEAD_HALO_ALPHA)
+                    )
+                    drawGhostV2Layer(
+                        ctx,
+                        head,
+                        GHOST_V2_PARTICLE_SIZE,
+                        ghost.color,
+                        TargetEspGhostShaderStyle.alphaByte(255, TargetEspGhostShaderStyle.GHOST_V2_HEAD_CORE_ALPHA)
+                    )
+                }
+            }
+            RenderPass.SHADER_WORLD -> Unit
         }
+    }
 
-        ghostV2Renderer.render(ctx, target)
+    private fun drawGhostV2Layer(
+        ctx: RenderContext,
+        point: GhostV2Point,
+        size: Float,
+        color: Int,
+        alpha: Int
+    ) {
+        drawBillboard(
+            ctx,
+            bloomTexture,
+            point.x - ctx.frame.cameraPos.x,
+            point.y - ctx.frame.cameraPos.y,
+            point.z - ctx.frame.cameraPos.z,
+            size,
+            rgba(red(color), green(color), blue(color), alpha.coerceIn(0, 255))
+        )
     }
 
     private fun drawBillboard(
@@ -991,8 +1153,8 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
             return
         }
 
-        val layer = ctx.spriteLayer(texture, depth)
-        val consumer = ctx.provider.getBuffer(layer)
+        val binding = ctx.spriteLayer(texture, depth)
+        val consumer = ctx.buffer(binding.renderType)
         val matrix = ctx.stack.last().pose()
         val half = size * 0.5F
         val rx = ctx.right.x * half
@@ -1004,10 +1166,10 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         val leftU = if (flipU) 1.0F else 0.0F
         val rightU = if (flipU) 0.0F else 1.0F
 
-        textureVertex(consumer, matrix, x - rx + ux, y - ry + uy, z - rz + uz, leftU, 1.0F, color, ctx.entityTextureFormat)
-        textureVertex(consumer, matrix, x + rx + ux, y + ry + uy, z + rz + uz, rightU, 1.0F, color, ctx.entityTextureFormat)
-        textureVertex(consumer, matrix, x + rx - ux, y + ry - uy, z + rz - uz, rightU, 0.0F, color, ctx.entityTextureFormat)
-        textureVertex(consumer, matrix, x - rx - ux, y - ry - uy, z - rz - uz, leftU, 0.0F, color, ctx.entityTextureFormat)
+        textureVertex(consumer, matrix, x - rx + ux, y - ry + uy, z - rz + uz, leftU, 1.0F, color, binding.vertexLayout)
+        textureVertex(consumer, matrix, x + rx + ux, y + ry + uy, z + rz + uz, rightU, 1.0F, color, binding.vertexLayout)
+        textureVertex(consumer, matrix, x + rx - ux, y + ry - uy, z + rz - uz, rightU, 0.0F, color, binding.vertexLayout)
+        textureVertex(consumer, matrix, x - rx - ux, y - ry - uy, z - rz - uz, leftU, 0.0F, color, binding.vertexLayout)
     }
 
     private fun appendSoul2Quad(
@@ -1027,16 +1189,17 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         ctx.stack.push()
         try {
             ctx.stack.translate(x, y, z)
-            ctx.stack.multiply(ctx.camera.rotation)
-            val consumer = ctx.provider.getBuffer(ctx.spriteLayer(bloomTexture, depth = false))
+            ctx.stack.multiply(ctx.frame.cameraRotation)
+            val binding = ctx.spriteLayer(bloomTexture, depth = false)
+            val consumer = ctx.buffer(binding.renderType)
             val matrix = ctx.stack.last().pose()
             val half = size * 0.5F
             val left = localX - half
             val front = localZ - half
-            textureVertex(consumer, matrix, left.toDouble(), -half.toDouble(), front.toDouble(), 0.0F, 1.0F, color, ctx.entityTextureFormat)
-            textureVertex(consumer, matrix, (left + size).toDouble(), -half.toDouble(), front.toDouble(), 1.0F, 1.0F, color, ctx.entityTextureFormat)
-            textureVertex(consumer, matrix, (left + size).toDouble(), half.toDouble(), front.toDouble(), 1.0F, 0.0F, color, ctx.entityTextureFormat)
-            textureVertex(consumer, matrix, left.toDouble(), half.toDouble(), front.toDouble(), 0.0F, 0.0F, color, ctx.entityTextureFormat)
+            textureVertex(consumer, matrix, left.toDouble(), -half.toDouble(), front.toDouble(), 0.0F, 1.0F, color, binding.vertexLayout)
+            textureVertex(consumer, matrix, (left + size).toDouble(), -half.toDouble(), front.toDouble(), 1.0F, 1.0F, color, binding.vertexLayout)
+            textureVertex(consumer, matrix, (left + size).toDouble(), half.toDouble(), front.toDouble(), 1.0F, 0.0F, color, binding.vertexLayout)
+            textureVertex(consumer, matrix, left.toDouble(), half.toDouble(), front.toDouble(), 0.0F, 0.0F, color, binding.vertexLayout)
         } finally {
             ctx.stack.pop()
         }
@@ -1099,12 +1262,12 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         soulTest3PreviousNano = System.nanoTime()
         soulTest3Value = 0.0F
         crystalMoving = 0.0F
-        shaderWorldPassRendered = false
-        shaderWorldPassDisabled = false
+        preparedFrameSerial = 0L
+        shaderPassCoordinator.clear()
         shaderFailureLogged = false
+        lateFailureLogged = false
         shaderMappingFallbackLogged = false
         normalFailureLogged = false
-        fallbackFrame = null
         BabkaTargetEspPipelines.clearTextureCache()
     }
 
@@ -1235,12 +1398,12 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         u: Float,
         v: Float,
         color: Int,
-        entityFormat: Boolean
+        vertexLayout: SpriteVertexLayout
     ) {
         val vertex = consumer.addVertex(matrix, x.toFloat(), y.toFloat(), z.toFloat())
             .setUv(u, v)
             .setColor(color)
-        if (entityFormat) {
+        if (vertexLayout == SpriteVertexLayout.ENTITY_TEXTURED) {
             vertex.setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(FULL_BRIGHT)
                 .setNormal(0.0F, 1.0F, 0.0F)
@@ -1368,13 +1531,28 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         SOUL_TEST_3("Soul Test 3"),
         CRYSTAL_3DD("Crystal 3DD"),
         SOULS("Souls", arrayOf("Души")),
-        SOULS_2("Souls 2", arrayOf("Души 2"))
+        SOULS_2("Souls 2", arrayOf("Души 2"));
+
+        val isHybridGhost: Boolean
+            get() = this == GHOSTS2 || this == GHOST_V2
     }
 
     private enum class RenderPass {
         NORMAL,
-        SHADER_WORLD
+        SHADER_WORLD,
+        SHADER_REACTIVE_BASE,
+        LATE_CONTROLLED_GLOW
     }
+
+    private enum class SpriteVertexLayout {
+        POSITION_TEX_COLOR,
+        ENTITY_TEXTURED
+    }
+
+    private data class SpriteLayerBinding(
+        val renderType: RenderType,
+        val vertexLayout: SpriteVertexLayout
+    )
 
     private enum class BabkaEasing {
         EXPO_OUT,
@@ -1436,10 +1614,10 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
             .setSize(1.0F)
             .setForward(false)
 
-        fun render(ctx: RenderContext, target: LivingEntity) {
+        fun prepare(target: LivingEntity, nowMs: Long): GhostV2PreparedFrame? {
             if (!target.isAlive || target.isRemoved) {
                 reset()
-                return
+                return null
             }
 
             spawnParticleIfNeeded(target)
@@ -1451,13 +1629,18 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
 
             val movingValue = moving.get()
             val hitAnimationFactor = targetEspAnim.get()
-            val color = vCoreGhostV2Color(ctx.frame.nowMs)
+            val color = vCoreGhostV2Color(nowMs)
 
             particles.forEachIndexed { index, particle ->
                 updateParticle(index, particle, target, movingValue, hitAnimationFactor, fpsFactor)
                 particle.tick(fps)
-                particle.render(ctx, color)
             }
+
+            return GhostV2PreparedFrame(
+                color = color,
+                trails = particles.flatMap(VCoreGhostV2Particle::trailSnapshot),
+                heads = particles.map(VCoreGhostV2Particle::headSnapshot)
+            )
         }
 
         fun reset() {
@@ -1541,23 +1724,34 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
             motion = motion.scale((0.95F / safeFps.toFloat() * 300.0F).toDouble())
         }
 
-        fun render(ctx: RenderContext, color: Int) {
+        fun trailSnapshot(): List<GhostV2Point> = buildList(tail.size) {
             for (point in tail) {
                 val progress = (point.w / GHOST_V2_TRAIL_LIFETIME).coerceIn(0.0F, 1.0F)
                 if (progress <= 0.0F) {
                     continue
                 }
 
-                val miniSize = size * progress
-                val baseAlpha = (progress * 255.0F).toInt().coerceIn(0, 255)
-                val x = point.x.toDouble() - ctx.frame.cameraPos.x
-                val y = point.y.toDouble() - ctx.frame.cameraPos.y
-                val z = point.z.toDouble() - ctx.frame.cameraPos.z
-
-                drawGhostLayer(ctx, x, y, z, miniSize * 2.6F, color, (baseAlpha * 0.11000001F).toInt())
-                drawGhostLayer(ctx, x, y, z, miniSize * 1.8F, color, (baseAlpha * 0.23099999F).toInt())
-                drawGhostLayer(ctx, x, y, z, miniSize, color, baseAlpha)
+                add(
+                    GhostV2Point(
+                        x = point.x.toDouble(),
+                        y = point.y.toDouble(),
+                        z = point.z.toDouble(),
+                        miniSize = size * progress,
+                        baseAlpha = (progress * 255.0F).toInt().coerceIn(0, 255)
+                    )
+                )
             }
+        }
+
+        fun headSnapshot(): GhostV2Point {
+            val newestTrailPoint = tail.lastOrNull()
+            return GhostV2Point(
+                x = newestTrailPoint?.x?.toDouble() ?: position.x,
+                y = newestTrailPoint?.y?.toDouble() ?: position.y + GHOST_V2_TRAIL_VERTICAL_OFFSET,
+                z = newestTrailPoint?.z?.toDouble() ?: position.z,
+                miniSize = size,
+                baseAlpha = 255
+            )
         }
 
         private fun addTrailPoints(from: Vec3, to: Vec3) {
@@ -1588,25 +1782,6 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
             )
         }
 
-        private fun drawGhostLayer(
-            ctx: RenderContext,
-            x: Double,
-            y: Double,
-            z: Double,
-            size: Float,
-            color: Int,
-            alpha: Int
-        ) {
-            drawBillboard(
-                ctx,
-                bloomTexture,
-                x,
-                y,
-                z,
-                size,
-                rgba(red(color), green(color), blue(color), alpha.coerceIn(0, 255))
-            )
-        }
     }
 
     private class AnimationTimer {
@@ -1792,11 +1967,41 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         }
     }
 
+    private data class GhostSprite(
+        val x: Double,
+        val y: Double,
+        val z: Double,
+        val size: Float,
+        val alpha: Float
+    )
+
+    private data class Ghosts2PreparedFrame(
+        val trails: List<GhostSprite>,
+        val heads: List<GhostSprite>
+    )
+
+    private data class GhostV2Point(
+        val x: Double,
+        val y: Double,
+        val z: Double,
+        val miniSize: Float,
+        val baseAlpha: Int
+    )
+
+    private data class GhostV2PreparedFrame(
+        val color: Int,
+        val trails: List<GhostV2Point>,
+        val heads: List<GhostV2Point>
+    )
+
     private data class PreparedFrame(
+        val serial: Long,
+        val mode: Mode,
         val target: LivingEntity?,
         val liveTarget: LivingEntity?,
         val partialTicks: Float,
         val cameraPos: Vec3,
+        val cameraRotation: Quaternionf,
         val nowMs: Long,
         val nowNano: Long,
         val accentColor: Int,
@@ -1806,20 +2011,30 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         val soulAnimation: Float,
         val celestialAnimation: Float,
         val soulsAnimation: Float,
-        val souls2Animation: Float
+        val souls2Animation: Float,
+        val ghosts2: Ghosts2PreparedFrame?,
+        val ghostV2: GhostV2PreparedFrame?
     )
 
     private class RenderContext(
         val frame: PreparedFrame,
         val stack: PoseStack,
         val provider: MultiBufferSource.BufferSource,
-        val camera: Camera,
         val pass: RenderPass,
         val right: Vector3f,
         val up: Vector3f
     ) {
-        val entityTextureFormat: Boolean
-            get() = pass == RenderPass.SHADER_WORLD
+        private val ownedLayers = LinkedHashSet<RenderType>()
+
+        fun buffer(renderType: RenderType): VertexConsumer {
+            ownedLayers += renderType
+            return provider.getBuffer(renderType)
+        }
+
+        fun endOwnedBatches() {
+            ownedLayers.forEach(provider::endBatch)
+            ownedLayers.clear()
+        }
 
         fun crystalBodyLayer(): RenderType =
             BabkaTargetEspPipelines.trianglesTranslucentNoDepth
@@ -1830,13 +2045,22 @@ object ModuleTargetESP : ClientModule("TargetEsp", Category.RENDER) {
         fun cubeLineLayer(): RenderType =
             BabkaTargetEspPipelines.cubeLinesDepth
 
-        fun spriteLayer(texture: Identifier, depth: Boolean): RenderType =
+        fun spriteLayer(texture: Identifier, depth: Boolean): SpriteLayerBinding =
             if (pass == RenderPass.SHADER_WORLD) {
-                RenderTypes.entityTranslucentEmissive(texture, false)
+                SpriteLayerBinding(
+                    RenderTypes.entityTranslucentEmissive(texture, false),
+                    SpriteVertexLayout.ENTITY_TEXTURED
+                )
             } else if (depth) {
-                BabkaTargetEspPipelines.texturedAdditiveDepth(texture)
+                SpriteLayerBinding(
+                    BabkaTargetEspPipelines.texturedAdditiveDepth(texture),
+                    SpriteVertexLayout.POSITION_TEX_COLOR
+                )
             } else {
-                BabkaTargetEspPipelines.texturedAdditiveNoDepth(texture)
+                SpriteLayerBinding(
+                    BabkaTargetEspPipelines.texturedAdditiveNoDepth(texture),
+                    SpriteVertexLayout.POSITION_TEX_COLOR
+                )
             }
     }
 
