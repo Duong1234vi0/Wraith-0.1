@@ -13306,3 +13306,13 @@ flushing unrelated queued types. Pose pushes remain protected by `try/finally`.
   controlled glow. The historical claim remains unchanged for non-Ghost modes retained on the full shader path.
 - All unrelated modified, deleted, and untracked worktree files, including the pre-existing Agent1 deletion, were
   preserved and excluded from these commits.
+
+## TargetESP Ghost shaderpack bloom control — post-push update — 2026-07-28
+
+- Implementation commit: `03c0e1f8e` — `feat(targetesp): add hybrid shader ghost rendering`.
+- Focused-test commit: `84b137336` — `test(targetesp): cover hybrid pass ownership`.
+- Documentation commit: `af9149014` — `docs(agent1): record targetesp bloom control`.
+- First push succeeded: `bee8d0b90..af9149014 main -> main` to
+  `https://github.com/Duong1234vi0/Wraith-0.1.git`.
+- This post-push documentation update is committed and pushed separately; its final hash is reported in the task
+  handoff. FCL/Android visual testing remains pending, and compilation does not prove the bloom balance.
