@@ -13146,3 +13146,163 @@ runtime tracking quality or Grim acceptance.
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - This post-push documentation update is committed and pushed separately; its final hash is reported in the task
   handoff. FCL runtime comparison remains pending, and no runtime tracking-quality claim is made.
+
+## TargetESP Ghost shaderpack bloom control — 2026-07-28
+
+### User report and checked authority
+
+The user reported an excessively large, bright bloom cloud around TargetESP `Ghosts2` and `Ghost V2` on Minecraft
+26.1.2 with Iris 26.1 and Complementary Unbound r5.8.1. The requested result was a hybrid render that preserves
+shader lighting/color/atmosphere and a soft luminous identity while reducing the wide cloud, retaining readable
+cores, and leaving global Bloom, the shaderpack, non-shader visuals, and every non-Ghost TargetESP mode unchanged.
+
+Read the required Skill workflow/rules/render-port documents, live Wraith TargetESP/pipeline/mixin sources and tests,
+the supplied Iris API and pipeline matching/final-composite source, the complete relevant Complementary programs and
+includes, QuickProject's read-only TargetESP/event/OptiFine dispatch and texture metadata, Minecraft 26.1.2 render
+APIs/bytecode, and the latest relevant Agent1 TargetESP, Rich, Babka, shader-world, Iris, and bloom history. Reference
+archives and extracted reference workspaces remained read-only.
+
+### Root cause and source evidence
+
+- Wraith called `ModuleTargetESP.renderShaderWorldPass(...)` in
+  `MixinWorldRenderer.lambda$addMainPass$0`, after an entity buffer flush and before Iris final composite. In that
+  early pass, `RenderContext.spriteLayer()` selected `RenderTypes.entityTranslucentEmissive(texture, false)` and
+  emitted entity overlay, `FULL_BRIGHT`, and normal attributes.
+- Iris 26.1 maps `RenderPipelines.ENTITY_TRANSLUCENT_EMISSIVE` to `ShaderKey.ENTITIES_EYES_TRANS`.
+  `ENTITIES_EYES_TRANS` uses `ProgramId.SpiderEyes`, the entity vertex format, and `LightingModel.FULLBRIGHT`.
+  `IrisProgram.EMISSIVE_ENTITIES` also maps to SpiderEyes. `IrisProgram.TEXTURED` maps to ordinary `Textured` and,
+  for Wraith's `POSITION_TEX_COLOR` pipeline, resolves through the matching textured-color shader key rather than
+  SpiderEyes. `IrisApi.assignPipeline()` assigns a program to a mod pipeline; it has no generic per-object bloom
+  exclusion flag and cannot ask a shaderpack to bloom the scene except one identified TargetESP object without
+  shaderpack cooperation.
+- Complementary `gbuffers_spidereyes.glsl` samples texture times vertex color, applies approximately
+  `pow1_5(color.rgb)`, then at least a base `1.5` multiplier plus channel-sensitive `4.1/3.0/4.1`, `5.0`, and related
+  emissive adjustments before writing `colortex0`. `composite4.glsl` builds its multi-level blurred bloom data by
+  sampling `colortex0`; `composite5.glsl` reconstructs and mixes that bloom into the final scene. The supplied pack
+  has neither a TargetESP mask nor a generic mod-entity identifier. Alpha is not a dependable exclusion mask for
+  this RGB scene-color bloom path.
+- `Ghosts2` had at most `5 * 35 = 175` additive trail sprites plus five white heads, approximately 180 billboards,
+  all entering SpiderEyes in shader mode. `Ghost V2` rendered `2.6x`, `1.8x`, and `1.0x` additive layers at every
+  trail point, so all three overlapping layers entered SpiderEyes.
+- Wraith's 256x256 RGBA `bloom.png` is alpha 255 at every pixel. Its black outer region and soft white center are
+  encoded in RGB (RGB range 0..252, mean approximately 48.54), not alpha. The broad RGB halo therefore contributed
+  scene luminance whenever vertex alpha and additive overdraw supplied energy.
+- QuickProject uses additive forms including `SRC_ALPHA, ONE`; it does not explicitly select an equivalent
+  SpiderEyes/emissive-entity program. Its event is dispatched in the ordinary world renderer after OptiFine's
+  `beginEntities/endEntities` entity bracket and after particles. Its lower bloom is render-stage/overdraw/texture
+  evidence, not evidence of a generic OptiFine per-object bloom-disable API. Its 1000x1000 `orbiznew.png` uses a
+  materially different alpha shape and was inspected only; no QuickProject code, package, helper, or asset was
+  copied.
+
+The root cause is the combined SpiderEyes/full-bright choice, Complementary amplification, additive overdraw, the
+existing broad RGB halo, and Complementary's multi-level blur of `colortex0`. It is not treated as an Iris bug,
+texture-loading failure, random GPU artifact, or reason to disable the shader.
+
+### Hybrid design and exact energy budget
+
+- Added explicit `NORMAL`, `SHADER_REACTIVE_BASE`, and `LATE_CONTROLLED_GLOW` concepts while retaining the existing
+  full `SHADER_WORLD` behavior for non-Ghost modes.
+- Shader disabled: each Ghost mode prepares and renders exactly one `NORMAL` pass. Existing Ghosts2 colors, sizes,
+  trails, heads, additive/no-depth behavior and Ghost V2's exact `2.6x/0.11000001`, `1.8x/0.23099999`, and
+  `1.0x/1.0` three-layer contributions remain unchanged.
+- Shader enabled: the early hook prepares once, updates simulation once, renders a low-energy base, and stores the
+  same immutable prepared frame. `WorldRenderEvent`, after Iris' level composite/final pass, consumes that frame and
+  renders only the controlled late contribution. The late pass never prepares, inserts trails, ticks particles,
+  advances animations/damage state, changes targets, or reads the live mode for dispatch.
+- `PreparedFrame` now snapshots frame serial, selected mode, target/live-target identities, partial tick, camera
+  position and rotation, time, accent color, animation values, and immutable Ghosts2/Ghost V2 draw data.
+  `renderPreparedFrame()` switches on `frame.mode`. A live mode mutation between hooks discards the pending frame,
+  preventing a Ghosts2 base from being paired with a Ghost V2 late pass.
+- The coordinator owns at most one frame in `NONE`, `GHOST_BASE_RENDERED_PENDING_LATE`,
+  `FULL_SHADER_PASS_RENDERED`, or `NORMAL_FALLBACK_PENDING`. Disable, world change, disconnect, resource reload,
+  shader disable, mode mismatch, failures, and a newer early frame deterministically consume, clear, or replace it.
+
+Final constants:
+
+- Ghosts2 early trail alpha: `0.20 * original`.
+- Ghosts2 late head-only halo: `1.45 * head size`, `0.11 * head alpha`; late white core: current head size,
+  `0.82 * head alpha`.
+- Ghost V2 early per-point layer: `1.80 * miniSize`, `0.09 * baseAlpha`.
+- Ghost V2 late per-point core: `1.00 * miniSize`, `0.62 * baseAlpha`; three current particle heads additionally use
+  a `1.45x/0.11` halo and `1.00x/0.82` core aligned to each newest trail point.
+- Alpha and size helpers reject non-finite values, clamp alpha, and keep size nonnegative.
+
+At maximum Ghosts2 state the hybrid path is at most 175 early trail sprites plus ten head-only late sprites, about
+185 total; historical trails are not late-rendered and white heads are absent from the early pass. For `N` visible
+Ghost V2 trail points, normal remains `3N`; shader mode is `N` early plus `N` late and at most six fixed head
+contributions, `2N + 6`. Shader mode therefore uses one fewer layer per historical point and never routes a Ghost
+contribution through SpiderEyes.
+
+### Pipeline, vertex format, and render-state correction
+
+Ghost shader rendering no longer uses `entityTranslucentEmissive`, `EMISSIVE_ENTITIES`,
+`ENTITY_TRANSLUCENT_EMISSIVE`, `ENTITIES_EYES(_TRANS)`, SpiderEyes, or entity full-bright. The early Ghost base uses
+`BabkaTargetEspPipelines.texturedAdditiveNoDepth(texture)`, whose `BlendFunction.LIGHTNING`, no depth state, disabled
+culling, `POSITION_TEX_COLOR`, and Iris `TEXTURED` assignment preserve additive through-wall camera-facing sprites
+while removing SpiderEyes amplification. The same controlled textured additive pipeline is used after shaderpack
+bloom for the late pass. No framebuffer, copy, blur, post-process, dynamic texture, texture readback, or extra global
+composite was added.
+
+`spriteLayer()` now returns a `SpriteLayerBinding(renderType, vertexLayout)`. Only the retained non-Ghost full
+shader-world entity layer uses `ENTITY_TEXTURED` and writes overlay/light/normal. Normal, Ghost shader-base, and late
+custom `POSITION_TEX_COLOR` layers submit only position/UV/color. Vertex layout is no longer inferred solely from the
+high-level pass name. TargetESP also tracks and ends only its acquired render-type batches instead of globally
+flushing unrelated queued types. Pose pushes remain protected by `try/finally`.
+
+### Fallbacks and preserved scope
+
+- Iris mapping unavailable: no early partial draw; one complete normal late render and one bounded warning.
+- Early base failure: the already prepared frame becomes one complete normal late fallback; simulation is not
+  prepared again, and the early path retries on the next frame rather than being permanently disabled.
+- Late controlled-glow failure: ownership is already consumed, no same-frame full rerender occurs, one bounded error
+  is logged, and the next frame can recover.
+- Shader disabled mid-frame or mode changed: the pending hybrid frame is discarded once; normal single-pass behavior
+  resumes on the next frame without stale cross-mode data.
+- Complementary and global Bloom were not modified. No shaderpack-name detection, shaderpack mask, QuickProject
+  asset/code, legacy immediate OpenGL, or additional framebuffer/blur exists. Non-shader Ghost visuals and all
+  non-Ghost TargetESP pipeline choices/appearance remain unchanged. TotemPop and unrelated Iris mappings remain
+  untouched.
+
+### Files changed
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/targetesp/ModuleTargetESP.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/targetesp/TargetEspShaderPassCoordinator.kt`
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/targetesp/TargetEspGhostShaderStyle.kt`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/render/MixinWorldRenderer.java`
+- `src/main/java/net/ccbluex/liquidbounce/injection/mixins/minecraft/render/MixinShaderManager.java`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/targetesp/TargetEspShaderPassCoordinatorTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/targetesp/TargetEspGhostShaderStyleTest.kt`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/targetesp/TargetEspIrisPipelineStaticTest.kt`
+- this append-only `Agent1.md` entry.
+
+### Tests, build, artifact, and FCL status
+
+- `git diff --check` and cached diff checks: passed.
+- Production `compileKotlin` and `compileJava`: `BUILD SUCCESSFUL`.
+- Focused TargetESP tests passed through the existing untracked source filter that excluded only the three unrelated
+  stale test sources: 20 tests total (10 coordinator/exactly-once/same-frame/fallback/lifecycle, 3 energy and
+  contribution-budget, 7 Iris pipeline/vertex-layout/render-stage/texture/static-regression).
+- The unfiltered normal `test` task was attempted and remains blocked before tests execute by unrelated existing
+  unresolved symbols in `SmartCriticalDecisionTest.kt`, `ItemCooldownProgressTest.kt`, and `PointFindingKtTest.kt`.
+  Those files were not modified.
+- Required clean command
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+  completed with `BUILD SUCCESSFUL in 1m 51s`.
+- Main JAR: `build/libs/liquidbounce-0.31.2.jar`; SHA-256:
+  `9e027174a86865bda4c75919a55be7a32fa16b5b3284492d7a3f3ff980226186`.
+- Sources JAR SHA-256: `dcf11ceea23ddb51b26096492c4f65c3e40912a1fb5769530bc02155dd3711d3`.
+- FCL/Android runtime testing was not run in this headless Termux workspace. The requested Minecraft 26.1.2,
+  Iris 26.1, Complementary Unbound r5.8.1 Ghosts2/Ghost V2 daylight/night/cave/rain/distance/rotation/target-switch,
+  bloom comparison, other-mode, fallback/reload, and performance matrix remains pending. Compilation and tests do
+  not prove the visual bloom radius or balance, and no visual approval is claimed.
+
+### Commits, push, and superseded history
+
+- Implementation: `03c0e1f8` — `feat(targetesp): add hybrid shader ghost rendering`.
+- Tests: `84b13733` — `test(targetesp): cover hybrid pass ownership`.
+- Documentation commit and push result are recorded in the post-push update after this append is committed.
+- The earlier claim that SpiderEyes shaderpack bloom integration is desirable is superseded specifically for
+  `Ghosts2` and `Ghost V2`: these modes now deliberately use the low-energy Iris `TEXTURED` base plus a late
+  controlled glow. The historical claim remains unchanged for non-Ghost modes retained on the full shader path.
+- All unrelated modified, deleted, and untracked worktree files, including the pre-existing Agent1 deletion, were
+  preserved and excluded from these commits.
