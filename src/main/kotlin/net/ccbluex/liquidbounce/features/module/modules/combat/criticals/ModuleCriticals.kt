@@ -182,6 +182,7 @@ object ModuleCriticals : ClientModule("Criticals", Category.COMBAT) {
             }
             val naturalCriticalEnvironmentPossible = allowsCriticalHit(ignoreOnGround = true)
             val wouldDoNaturalCritical = wouldDoCriticalHit()
+            val wouldDoNaturalCriticalIgnoringSprint = wouldDoCriticalHit(ignoreSprint = true)
 
             return decideCriticalSelection(
                 CriticalsSelectionContext(
@@ -194,8 +195,10 @@ object ModuleCriticals : ClientModule("Criticals", Category.COMBAT) {
                     fallDistance = player.fallDistance.toFloat(),
                     verticalVelocity = player.deltaMovement.y,
                     sprinting = player.isSprinting,
+                    serverSprinting = player.wasSprinting,
                     attackStrengthReady = player.getAttackCooldownProgress(0.5f) > 0.9f,
                     wouldDoCriticalHit = wouldDoNaturalCritical,
+                    wouldDoCriticalHitIgnoringSprint = wouldDoNaturalCriticalIgnoringSprint,
                     smartHeuristicPermitsAttack = smartHeuristicPermitsAttack,
                 )
             )
@@ -213,7 +216,7 @@ object ModuleCriticals : ClientModule("Criticals", Category.COMBAT) {
             }
 
             // If we are about to do a critical hit, we should stop sprinting.
-            return target != null && clicker.willClickAt(1)
+            return target != null && (clicker.isClickTick || clicker.willClickAt(1))
         }
 
     }

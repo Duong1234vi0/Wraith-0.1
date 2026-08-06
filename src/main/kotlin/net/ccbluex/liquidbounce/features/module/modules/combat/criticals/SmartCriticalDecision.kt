@@ -30,8 +30,10 @@ internal data class CriticalsSelectionContext(
     val fallDistance: Float,
     val verticalVelocity: Double,
     val sprinting: Boolean,
+    val serverSprinting: Boolean,
     val attackStrengthReady: Boolean,
     val wouldDoCriticalHit: Boolean,
+    val wouldDoCriticalHitIgnoringSprint: Boolean,
     val smartHeuristicPermitsAttack: Boolean,
 )
 
@@ -39,6 +41,7 @@ internal data class CriticalsSelectionDecision(
     val context: CriticalsSelectionContext,
     val manualJumpGateActive: Boolean,
     val permitsAttack: Boolean,
+    val requiresKillAuraSprintStop: Boolean,
 )
 
 internal fun decideCriticalSelection(context: CriticalsSelectionContext): CriticalsSelectionDecision {
@@ -49,20 +52,29 @@ internal fun decideCriticalSelection(context: CriticalsSelectionContext): Critic
             gliding = context.gliding,
         )
 
+    val naturalCriticalReady = context.wouldDoCriticalHit && !context.serverSprinting
     val permitsAttack = when (context.mode) {
         CriticalsSelectionMode.IGNORE -> true
-        CriticalsSelectionMode.ALWAYS -> context.wouldDoCriticalHit
+        CriticalsSelectionMode.ALWAYS -> naturalCriticalReady
         CriticalsSelectionMode.SMART -> if (manualJumpGateActive) {
-            context.wouldDoCriticalHit
+            naturalCriticalReady
         } else {
             context.smartHeuristicPermitsAttack
         }
     }
 
+    val requiresKillAuraSprintStop = (context.sprinting || context.serverSprinting) &&
+        context.wouldDoCriticalHitIgnoringSprint && !naturalCriticalReady && when (context.mode) {
+            CriticalsSelectionMode.IGNORE -> false
+            CriticalsSelectionMode.ALWAYS -> true
+            CriticalsSelectionMode.SMART -> manualJumpGateActive
+        }
+
     return CriticalsSelectionDecision(
         context = context,
         manualJumpGateActive = manualJumpGateActive,
         permitsAttack = permitsAttack,
+        requiresKillAuraSprintStop = requiresKillAuraSprintStop,
     )
 }
 

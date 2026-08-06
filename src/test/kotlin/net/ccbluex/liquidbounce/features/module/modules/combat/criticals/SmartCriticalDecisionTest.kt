@@ -3,6 +3,8 @@ package net.ccbluex.liquidbounce.features.module.modules.combat.criticals
 import java.nio.file.Files
 import java.nio.file.Path
 import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.ModuleCriticals.CriticalsSelectionMode
+import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.CriticalAttackScope
+import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.planKillAuraCriticalSprintStop
 import net.ccbluex.liquidbounce.utils.clicking.calculateItemCooldownProgress
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -54,6 +56,137 @@ class SmartCriticalDecisionTest {
     }
 
     @Test
+    fun smartHeldJumpPreparesSprintOnlyInTheDescendingCriticalWindow() {
+        val simulation = PreparedAttackSimulation(CriticalsSelectionMode.SMART, physicalJumpKeyPressed = true)
+
+        simulation.tick(Grounded.copy(sprinting = true), clickReady = true)
+        simulation.tick(Rising.copy(sprinting = true), clickReady = false)
+
+        assertEquals(0, simulation.attacks)
+        assertEquals(0, simulation.stopSprintCommands)
+        assertEquals(0, simulation.clickConsumptions)
+        assertEquals(1, simulation.pendingClickId)
+
+        simulation.tick(FallingCritical.copy(sprinting = true), clickReady = false)
+
+        assertEquals(1, simulation.attacks)
+        assertEquals(1, simulation.stopSprintCommands)
+        assertEquals(1, simulation.clickConsumptions)
+        assertEquals(0, simulation.physicalAttackKeyPresses)
+        assertEquals(null, simulation.pendingClickId)
+    }
+
+    @Test
+    fun alwaysRemainsCriticalOnlyAndAutomaticallyPreparesAReadyFallingAttack() {
+        val simulation = PreparedAttackSimulation(CriticalsSelectionMode.ALWAYS, physicalJumpKeyPressed = false)
+
+        simulation.tick(Grounded.copy(sprinting = true), clickReady = true)
+        simulation.tick(Rising.copy(sprinting = true), clickReady = false)
+        assertEquals(0, simulation.attacks)
+        assertEquals(0, simulation.clickConsumptions)
+
+        val fallingWhileSprinting = decision(
+            mode = CriticalsSelectionMode.ALWAYS,
+            physicalJumpKeyPressed = false,
+            state = FallingCritical.copy(sprinting = true),
+        )
+        assertFalse(fallingWhileSprinting.permitsAttack)
+        assertTrue(fallingWhileSprinting.requiresKillAuraSprintStop)
+        assertEquals(0, simulation.attacks)
+
+        val serverStillSprinting = decision(
+            mode = CriticalsSelectionMode.ALWAYS,
+            physicalJumpKeyPressed = false,
+            state = FallingCritical.copy(sprinting = false),
+            serverSprinting = true,
+        )
+        assertFalse(serverStillSprinting.permitsAttack)
+        assertTrue(serverStillSprinting.requiresKillAuraSprintStop)
+
+        simulation.tick(FallingCritical.copy(sprinting = true), clickReady = false)
+
+        assertEquals(1, simulation.attacks)
+        assertEquals(1, simulation.stopSprintCommands)
+        assertEquals(1, simulation.clickConsumptions)
+        assertEquals(0, simulation.physicalAttackKeyPresses)
+    }
+
+    @Test
+    fun repeatedBunnyHopCyclesCanEachProduceExactlyOnePreparedCritical() {
+        val simulation = PreparedAttackSimulation(CriticalsSelectionMode.SMART, physicalJumpKeyPressed = true)
+
+        repeat(6) {
+            simulation.tick(Grounded.copy(sprinting = true), clickReady = true)
+            simulation.tick(Rising.copy(sprinting = true), clickReady = false)
+            simulation.tick(FallingCritical.copy(sprinting = true), clickReady = false)
+        }
+
+        assertEquals(6, simulation.attacks)
+        assertEquals(6, simulation.stopSprintCommands)
+        assertEquals(6, simulation.clickConsumptions)
+        assertEquals(6, simulation.attackedClickIds.distinct().size)
+        assertEquals(0, simulation.physicalAttackKeyPresses)
+    }
+
+    @Test
+    fun sprintStopPlanSynchronizesOnlyWhatIsStillSprinting() {
+        val fullySprinting = planKillAuraCriticalSprintStop(localSprinting = true, serverSprinting = true)
+        assertTrue(fullySprinting.sendStopCommand)
+        assertTrue(fullySprinting.clearLocalSprint)
+
+        val serverAlreadyStopped = planKillAuraCriticalSprintStop(localSprinting = true, serverSprinting = false)
+        assertFalse(serverAlreadyStopped.sendStopCommand)
+        assertTrue(serverAlreadyStopped.clearLocalSprint)
+
+        val localAlreadyStopped = planKillAuraCriticalSprintStop(localSprinting = false, serverSprinting = true)
+        assertTrue(localAlreadyStopped.sendStopCommand)
+        assertFalse(localAlreadyStopped.clearLocalSprint)
+
+        val alreadyPrepared = planKillAuraCriticalSprintStop(localSprinting = false, serverSprinting = false)
+        assertFalse(alreadyPrepared.sendStopCommand)
+        assertFalse(alreadyPrepared.clearLocalSprint)
+    }
+
+    @Test
+    fun secondValidationCannotDuplicateOrCancelThePreparedAttack() {
+        val simulation = PreparedAttackSimulation(CriticalsSelectionMode.ALWAYS, physicalJumpKeyPressed = false)
+
+        simulation.tick(FallingCritical.copy(sprinting = true), clickReady = true)
+        simulation.tick(FallingCritical.copy(sprinting = false), clickReady = false)
+
+        assertEquals(1, simulation.attacks)
+        assertEquals(1, simulation.clickConsumptions)
+        assertEquals(1, simulation.stopSprintCommands)
+        assertEquals(listOf(1), simulation.attackedClickIds)
+    }
+
+    @Test
+    fun criticalPreparationScopeRejectsTargetWorldPlayerAndLifecycleChanges() {
+        val player = Any()
+        val world = Any()
+        val target = Any()
+        val scope = CriticalAttackScope(player, world, target)
+
+        fun matches(
+            currentPlayer: Any? = player,
+            currentWorld: Any? = world,
+            currentTarget: Any? = target,
+            targetWorld: Any? = world,
+            running: Boolean = true,
+            removed: Boolean = false,
+        ) = scope.matches(currentPlayer, currentWorld, currentTarget, targetWorld, running, removed)
+
+        assertTrue(matches())
+        assertFalse(matches(currentTarget = null), "target loss")
+        assertFalse(matches(currentTarget = Any()), "target change")
+        assertFalse(matches(currentPlayer = Any()), "player replacement")
+        assertFalse(matches(currentWorld = Any()), "world replacement")
+        assertFalse(matches(targetWorld = Any()), "target from another world")
+        assertFalse(matches(running = false), "module disable")
+        assertFalse(matches(removed = true), "removed target")
+    }
+
+    @Test
     fun schedulerRetentionDoesNotConsumeRejectedManualJumpSmartDecisions() {
         val scheduler = RetainedClickSimulation()
 
@@ -77,14 +210,14 @@ class SmartCriticalDecisionTest {
 
     @Test
     fun modesKeepTheirOriginalMeaning() {
-        assertTrue(
-            decision(
-                mode = CriticalsSelectionMode.IGNORE,
-                physicalJumpKeyPressed = true,
-                state = Grounded,
-                smartHeuristicPermitsAttack = false,
-            ).permitsAttack
+        val ignore = decision(
+            mode = CriticalsSelectionMode.IGNORE,
+            physicalJumpKeyPressed = true,
+            state = FallingCritical.copy(sprinting = true),
+            smartHeuristicPermitsAttack = false,
         )
+        assertTrue(ignore.permitsAttack)
+        assertFalse(ignore.requiresKillAuraSprintStop)
 
         assertFalse(
             decision(
@@ -217,16 +350,26 @@ class SmartCriticalDecisionTest {
     fun productionStillUsesTheSmartHelperAndDoesNotChangeCooldownOrPacketCriticalPaths() {
         val criticals = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/criticals/ModuleCriticals.kt")
         val killAura = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt")
+        val killAuraClicker = source(
+            "src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/KillAuraClicker.kt"
+        )
         val cooldown = source("src/main/kotlin/net/ccbluex/liquidbounce/utils/clicking/ItemCooldown.kt")
 
         assertTrue(criticals.contains("fun isCriticalHit(target: Entity): Boolean = evaluateCriticalHit(target).permitsAttack"))
         assertTrue(criticals.contains("!shouldWaitForCrit(target, ignoreState = true)"))
         assertTrue(criticals.contains("physicalJumpKeyPressed = mc.options.jumpKey.isPressed"))
         assertTrue(criticals.contains("wouldDoCriticalHit = wouldDoNaturalCritical"))
-        assertTrue(killAura.contains("MAX_SMART_CRITICAL_DIAGNOSTICS"))
-        assertTrue(killAura.contains("\"physicalJumpKeyPressed\""))
-        assertTrue(killAura.contains("\"clickConsumed\""))
-        assertTrue(killAura.contains("\"attackEmitted\""))
+        assertTrue(criticals.contains("wouldDoCriticalHitIgnoringSprint = wouldDoNaturalCriticalIgnoringSprint"))
+        assertTrue(criticals.contains("clicker.isClickTick || clicker.willClickAt(1)"))
+        assertTrue(killAura.contains("prepareCriticalAttackIfNeeded(target, criticalAttackScope)"))
+        assertTrue(killAura.contains("ServerboundPlayerCommandPacket.Action.STOP_SPRINTING"))
+        assertTrue(killAura.contains("player.setSprinting(false)"))
+        assertTrue(killAura.contains("player.wasSprinting = false"))
+        assertTrue(killAura.contains("target.attack(true, keepSprint && !shouldBlockSprinting)"))
+        assertFalse(killAura.contains("MAX_SMART_CRITICAL_DIAGNOSTICS"))
+        assertFalse(killAura.contains("Action.START_SPRINTING"))
+        assertTrue(killAuraClicker.contains("simulateKeybindPress = false"))
+        assertFalse(killAura.contains("options.attackKey.isPressed"))
         assertTrue(cooldown.contains("ITEM_COOLDOWN_SAMPLE_TICK_DELTA"))
         assertFalse(killAura.contains("ServerboundMovePlayerPacket"))
     }
@@ -241,6 +384,9 @@ class SmartCriticalDecisionTest {
     ) {
         val wouldDoCriticalHit: Boolean
             get() = attackStrengthReady && !sprinting && !onGround && fallDistance > 0.0f
+
+        val wouldDoCriticalHitIgnoringSprint: Boolean
+            get() = attackStrengthReady && !onGround && fallDistance > 0.0f
     }
 
     private data class ReadyWindow(
@@ -297,6 +443,68 @@ class SmartCriticalDecisionTest {
         }
     }
 
+    private inner class PreparedAttackSimulation(
+        private val mode: CriticalsSelectionMode,
+        private val physicalJumpKeyPressed: Boolean,
+    ) {
+        var pendingClickId: Int? = null
+            private set
+        private var nextPendingClickId = 0
+        var attacks = 0
+            private set
+        var clickConsumptions = 0
+            private set
+        var stopSprintCommands = 0
+            private set
+        val physicalAttackKeyPresses = 0
+        val attackedClickIds = mutableListOf<Int>()
+
+        fun tick(state: CriticalState, clickReady: Boolean) {
+            if (clickReady && pendingClickId == null) {
+                pendingClickId = ++nextPendingClickId
+            }
+            val activeClick = pendingClickId ?: return
+
+            var currentState = state
+            var serverSprinting = state.sprinting
+            var currentDecision = decision(
+                mode = mode,
+                physicalJumpKeyPressed = physicalJumpKeyPressed,
+                state = currentState,
+                serverSprinting = serverSprinting,
+            )
+            if (!currentDecision.permitsAttack && currentDecision.requiresKillAuraSprintStop) {
+                val stopPlan = planKillAuraCriticalSprintStop(
+                    localSprinting = currentState.sprinting,
+                    serverSprinting = serverSprinting,
+                )
+                if (stopPlan.sendStopCommand) {
+                    stopSprintCommands++
+                }
+                if (stopPlan.clearLocalSprint) {
+                    currentState = currentState.copy(sprinting = false)
+                }
+                if (stopPlan.sendStopCommand) {
+                    serverSprinting = false
+                }
+                currentDecision = decision(
+                    mode = mode,
+                    physicalJumpKeyPressed = physicalJumpKeyPressed,
+                    state = currentState,
+                    serverSprinting = serverSprinting,
+                )
+            }
+            if (!currentDecision.permitsAttack) {
+                return
+            }
+
+            attacks++
+            clickConsumptions++
+            attackedClickIds += activeClick
+            pendingClickId = null
+        }
+    }
+
     private fun simulateContinuousJump(
         period: Float,
         threshold: Float,
@@ -313,7 +521,7 @@ class SmartCriticalDecisionTest {
         while (cooldownReadyWindows < REQUIRED_READY_WINDOWS) {
             tick++
             lastAttackedTicks++
-            val phase = JumpCycle[(tick + phaseOffset) % JumpCycle.size]
+            val phase = JumpCycle[(tick + phaseOffset) % JumpCycle.size].copy(sprinting = true)
             val cooldownReady = calculateItemCooldownProgress(lastAttackedTicks, 0, period) >= threshold
             if (!cooldownReady) {
                 continue
@@ -326,14 +534,32 @@ class SmartCriticalDecisionTest {
             val activePendingClickId = pendingClickId ?: error("pending click was not initialized")
 
             val readyWindow = ReadyWindow(tick, phase, activePendingClickId)
-            val decision = decision(
+            var finalPhase = phase
+            var serverSprinting = true
+            var decision = decision(
                 physicalJumpKeyPressed = true,
-                state = phase,
+                state = finalPhase,
+                serverSprinting = serverSprinting,
                 smartHeuristicPermitsAttack = true,
             )
+            if (decision.requiresKillAuraSprintStop) {
+                val stopPlan = planKillAuraCriticalSprintStop(
+                    localSprinting = finalPhase.sprinting,
+                    serverSprinting = true,
+                )
+                assertTrue(stopPlan.sendStopCommand)
+                finalPhase = finalPhase.copy(sprinting = false)
+                serverSprinting = false
+                decision = decision(
+                    physicalJumpKeyPressed = true,
+                    state = finalPhase,
+                    serverSprinting = serverSprinting,
+                    smartHeuristicPermitsAttack = true,
+                )
+            }
 
             if (decision.permitsAttack) {
-                attacks += readyWindow
+                attacks += readyWindow.copy(phase = finalPhase)
                 pendingClickId = null
                 lastAttackedTicks = 0
             } else {
@@ -358,6 +584,7 @@ class SmartCriticalDecisionTest {
         naturalCriticalEnvironmentPossible: Boolean = true,
         gliding: Boolean = false,
         state: CriticalState,
+        serverSprinting: Boolean = state.sprinting,
         smartHeuristicPermitsAttack: Boolean = true,
     ) = decideCriticalSelection(
         CriticalsSelectionContext(
@@ -370,8 +597,11 @@ class SmartCriticalDecisionTest {
             fallDistance = state.fallDistance,
             verticalVelocity = state.verticalVelocity,
             sprinting = state.sprinting,
+            serverSprinting = serverSprinting,
             attackStrengthReady = state.attackStrengthReady,
             wouldDoCriticalHit = naturalCriticalEnvironmentPossible && !gliding && state.wouldDoCriticalHit,
+            wouldDoCriticalHitIgnoringSprint = naturalCriticalEnvironmentPossible && !gliding &&
+                state.wouldDoCriticalHitIgnoringSprint,
             smartHeuristicPermitsAttack = smartHeuristicPermitsAttack,
         )
     )

@@ -13438,3 +13438,143 @@ the supported batched GUI path preserves the requested result without unrelated 
 source blocker and FCL status are recorded above. Documentation commit and push result are reported after this entry is
 committed. The pre-existing unrelated Agent1 deletion and all other dirty/untracked worktree files were preserved and
 excluded.
+
+## KillAura Smart/Always natural-critical sprint preparation — 2026-08-06
+
+### Reported symptoms and scope
+
+Minecraft/Fabric `26.1.2` runtime configuration used KillAura with ItemCooldown, `KeepSprint=false`, Sprint `Legit`,
+and standalone Criticals disabled. With KillAura `Criticals=Smart`, holding physical forward and Jump continuously
+prevented automatic attacks in the natural descending critical window; releasing Jump restored ordinary ground hits,
+and tapping/releasing Jump could still critical. Enabling standalone Criticals `Jump` made Smart appear to work even
+though held physical Jump did not. With KillAura `Criticals=Always`, ground hits were correctly rejected and KillAura
+aimed during a manual jump, but it did not automatically attack while falling; pressing the physical attack key in the
+same state could produce the critical.
+
+The standalone `ModuleCriticals` system and KillAura's internal `Smart`/`Always`/`Ignore` selection remain separate.
+This correction is limited to KillAura-owned natural-critical sprint preparation. It adds no spoofed/position critical,
+timer change, synthetic key input, extra setting, repeated attack attempt, or global Clicker/ItemCooldown semantic
+change.
+
+### Files and event order inspected
+
+Read the required repository workflow documents and relevant chronological history, then the complete live requested
+paths: `ModuleKillAura.kt`, `KillAuraClicker.kt`, `ModuleCriticals.kt`, `SmartCriticalDecision.kt`, `CriticalsJump.kt`,
+`ModuleSprint.kt`, `Clicker.kt`, `ItemCooldown.kt`, `CombatExtensions.kt`, `MixinClientPlayerEntity.java`,
+`MixinKeyboardInput.java`, and `SmartCriticalDecisionTest.kt`. Direct definitions/dispatch and mutation order were
+checked in `GameEvents.kt`, `EntityEvents.kt`, `EventManager.kt`, `EventListener.kt`, `Sequence.kt`, `Priority.kt`,
+`MixinMinecraftClient.java`, and `MixinClientPlayerInteractionManager.java`. The live access widener and Minecraft
+`26.1.2` mapped `Minecraft.java`, `LocalPlayer.java`, `Player.java`, and `LivingEntity.java` sources were also inspected
+for sprint synchronization, attack cooldown, and vanilla critical conditions.
+
+The proven order is:
+
+1. Wraith dispatches `GameTickEvent` at `Minecraft.tick` HEAD. The existing KillAura tick sequence evaluates the due
+   attack before vanilla keybind handling and before the local player's movement tick.
+2. `Minecraft.handleKeybinds()` runs later, followed by `level.tickEntities()`.
+3. `LocalPlayer.tick()` reaches `Player.tick()`/`LocalPlayer.aiStep()`. `KeyboardInput.tick()` dispatches
+   `MovementInputEvent`, then INPUT `SprintEvent`; the sprint start/maintain decisions dispatch MOVEMENT_TICK
+   `SprintEvent` instances.
+4. Sprint `Legit` writes at `CRITICAL_MODIFICATION=500`; KillAura's default-priority `0` sprint handler runs later and
+   can force false. Sprint Legit therefore does not overwrite KillAura inside the same SprintEvent.
+5. After movement, `LocalPlayer.tick()` calls `sendPosition()`, whose first action is
+   `sendIsSprintingIfNeeded()`. That compares local `isSprinting` with access-widened `wasSprinting`, emits a START or
+   STOP command if they differ, and then updates `wasSprinting`.
+6. KillAura's normal path validates once before entering `KillAuraClicker.attack`, prepares its interactive scene,
+   then validates again inside the click callback. `Entity.attack` dispatches `AttackEntityEvent`, and
+   `CombatExtensions` sends exactly one `ServerboundAttackPacket` before applying the local vanilla attack result.
+
+Vanilla `Player.canCriticalAttack()` requires positive fall distance, airborne state, the usual environment checks,
+and `!isSprinting`. Server command state also matters: a locally false sprint flag is insufficient if
+`LocalPlayer.wasSprinting` is still true and the STOP has not preceded the attack packet.
+
+### Proven root cause
+
+KillAura's strict Smart-held-jump branch and Always both used the current `wouldDoCriticalHit()` result. At
+`GameTickEvent` HEAD, that predicate could still see local sprinting from the previous movement cycle. KillAura only
+asked later INPUT/MOVEMENT_TICK SprintEvents to suppress sprint, and `shouldStopSprinting()` forecast only
+`willClickAt(1)` even when `isClickTick` was already due. Thus current-click validation could reject before the sprint
+event and vanilla server synchronization that were meant to prepare it. The second validation had the same strict
+predicate but no same-click preparation step.
+
+This is a combination of current-versus-next click prediction, local `isSprinting` not being cleared before final
+critical validation, and server STOP ordering. Sprint Legit is not the final event writer, and no evidence showed it
+reasserting sprint between a same-call preparation and attack emission. A rejected ItemCooldown click was not consumed,
+but the narrow falling window could pass before the later sprint lifecycle made both local and server-facing state
+eligible. Standalone Criticals `Jump` changes transformed jump input without activating Smart's physical-jump gate, so
+Smart can instead use its preserved permissive heuristic; that explains the reported compatibility difference.
+
+### Changed
+
+- `CriticalsSelectionContext` now records both local sprint state and `LocalPlayer.wasSprinting`, plus the real natural
+  critical predicate evaluated with sprint ignored only for classification. `Ignore` remains unconditional. Smart's
+  no-manual-jump heuristic is unchanged. Smart's held physical-jump branch and Always remain strict and distinguish
+  “otherwise ready, sprint synchronization required” from “genuinely critical-ready.”
+- KillAura sprint suppression now considers the current due click as well as tick `+1` prediction.
+- A due strict click may enter the existing attack pipeline when sprint is the only critical blocker and all unrelated
+  validation is valid. Immediately before the actual normal or direct shield-break attack, KillAura re-evaluates the
+  current target. If preparation is still the only missing step, it emits one necessary `STOP_SPRINTING`, clears local
+  sprint, synchronizes `wasSprinting=false`, and performs the real final validation before sending the attack.
+- If the server-facing flag is already false, no redundant STOP is sent; if local sprint is already false but the
+  server-facing flag is true, STOP is still sent before the attack. KillAura never sends START; vanilla/Sprint behavior
+  may resume after the attack.
+- Preparation has no persistent module state. Its scope is the current click pipeline and captured target/player/world
+  identities. Target loss/change, target removal, player/world replacement, or module disable prevents preparation.
+  Grounded, rising, environment-invalid, non-critical validation failures, and failed second validation do not call the
+  Clicker success path, so they do not consume ItemCooldown or update click timing.
+- Removed the old bounded unconditional `[KillAuraSmartCritDiag]` logger/recorder block rather than shipping temporary
+  runtime diagnostics. Existing general attack debug recording remains.
+
+Files changed for this fix are `ModuleCriticals.kt`, `SmartCriticalDecision.kt`, `ModuleKillAura.kt`,
+`SmartCriticalDecisionTest.kt`, and this chronological entry.
+
+### Focused tests and ordinary test status
+
+`SmartCriticalDecisionTest` was updated against the live `calculateItemCooldownProgress` API and now covers held
+physical Jump with initial local/server sprint, grounded/rising retention, descending preparation, exactly one
+automatic attack, zero physical attack-key presses, six repeated bunny-hop cycles, Jump release/permissive Smart,
+transformed standalone-Jump compatibility, impossible-critical fallback, strict Always ground/rise/falling behavior,
+local/server sprint desynchronization, no redundant STOP/START ownership, Ignore, non-consumption, second-validation
+exactly-once behavior, scope invalidation, and unchanged KeepSprint/packet-critical source contracts.
+
+Using the existing untracked source filter that excludes only unrelated `PointFindingKtTest.kt`, 73 focused tests
+passed: 15 Smart/Always/coordinator tests, 7 ItemCooldown tests, 28 V-Core Aura fidelity tests, 8 MaceSwap tests, and
+15 EMace phase-coordinator tests. The filter was not modified or committed.
+
+The ordinary unfiltered `test` task was attempted. It remains blocked before tests execute only by the pre-existing
+`src/test/kotlin/net/ccbluex/liquidbounce/utils/aiming/PointFindingKtTest.kt` unresolved `math`, `Vec3d`, `x/y/z`, and
+`toVector3f` symbols. The formerly stale SmartCriticalDecision and ItemCooldown tests now compile and pass.
+
+### Build, artifact, and runtime status
+
+Canonical command:
+`env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=$JAVA_HOME/bin:$PATH sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+
+- Result: `BUILD SUCCESSFUL in 2m 28s`.
+- Main JAR: `build/libs/liquidbounce-0.31.2.jar`; SHA-256:
+  `95bb780652115ba384acb3ff931edfd7a5d587ccae217e37bca3c3c99457813c`.
+- Sources JAR SHA-256: `9c9050070f9c6a249988e570b687587a95d3cf2287db8a7a9cd9d866e500bab2`.
+- `git diff --check`: passed before this append and is rerun during final staging review.
+
+FCL/Android runtime testing was not available in this headless Termux workspace. Compilation and model tests do not
+prove live critical damage, packet ordering, cooldown cadence, or anti-cheat acceptance. Pending Minecraft `26.1.2`
+FCL matrix:
+
+1. Sprint Legit ON, standalone Criticals OFF, KillAura Smart: hold forward and Jump continuously; expect automatic
+   criticals during descent and no ground hit while the held-jump gate is active.
+2. Same configuration, tap and release Jump; existing critical behavior must remain functional.
+3. Release Jump completely; Smart must resume ordinary attacks under its existing heuristic.
+4. KillAura Always: no grounded attack; manually jump without attack input; expect exactly one automatic descending
+   critical.
+5. Standalone Criticals Jump ON: Smart remains compatible with no double jump or double attack.
+6. Exercise target loss/switching, module toggling, repeated bunny-hopping, and a long continuous combat session.
+7. Observe sprint commands, attack count, ordinary-hit leakage, cooldown cadence, and Grim Sprint/BadPackets/PacketOrder
+   alerts.
+
+### Supersedes
+
+This entry supersedes the 2026-07-20 Smart manual-jump entry only where it claimed the existing future SprintEvent
+suppression was sufficient and that no direct same-click sprint command was required. The physical-Jump gate,
+ItemCooldown half-tick sampling, retained-click principle, Smart fallback semantics, Ignore semantics, and standalone
+Criticals separation remain valid. The earlier claim that cooldown sampling alone explained continuous-jump failures
+was already superseded and remains superseded. Commit and push results are reported in the task handoff.
