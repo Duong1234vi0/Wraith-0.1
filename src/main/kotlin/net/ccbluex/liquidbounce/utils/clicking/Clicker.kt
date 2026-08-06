@@ -168,7 +168,19 @@ open class Clicker<T>(
      * [block] should return true if the click was successful. Otherwise, it will not count as a click.
      */
     fun click(block: () -> Boolean) {
-        val clicks = getClickAmount()
+        click(getClickAmount(), block)
+    }
+
+    /**
+     * Executes one click that an owning feature retained from an earlier scheduler-ready tick.
+     * The ordinary attack and item-cooldown gates still apply, and the click is accounted for
+     * exactly like a current scheduler click when [block] succeeds.
+     */
+    internal fun clickRetained(block: () -> Boolean) {
+        click(1, block)
+    }
+
+    private fun click(clicks: Int, block: () -> Boolean) {
 
         debugParameter("Current Clicks") { clicks }
         debugParameter("Peek Clicks") { clickArray.get(1) }

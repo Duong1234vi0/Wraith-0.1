@@ -24,6 +24,7 @@ internal data class CriticalsSelectionContext(
     val mode: CriticalsSelectionMode,
     val physicalJumpKeyPressed: Boolean,
     val transformedPlayerInputJump: Boolean,
+    val manualJumpCycleActive: Boolean,
     val naturalCriticalEnvironmentPossible: Boolean,
     val gliding: Boolean,
     val onGround: Boolean,
@@ -47,7 +48,7 @@ internal data class CriticalsSelectionDecision(
 internal fun decideCriticalSelection(context: CriticalsSelectionContext): CriticalsSelectionDecision {
     val manualJumpGateActive = context.mode == CriticalsSelectionMode.SMART &&
         isManualJumpCriticalGateActive(
-            physicalJumpKeyPressed = context.physicalJumpKeyPressed,
+            manualJumpCycleActive = context.manualJumpCycleActive,
             naturalCriticalEnvironmentPossible = context.naturalCriticalEnvironmentPossible,
             gliding = context.gliding,
         )
@@ -79,7 +80,7 @@ internal fun decideCriticalSelection(context: CriticalsSelectionContext): Critic
 }
 
 internal fun isManualJumpCriticalGateActive(
-    physicalJumpKeyPressed: Boolean,
+    manualJumpCycleActive: Boolean,
     naturalCriticalEnvironmentPossible: Boolean,
     gliding: Boolean,
-): Boolean = physicalJumpKeyPressed && naturalCriticalEnvironmentPossible && !gliding
+): Boolean = manualJumpCycleActive && naturalCriticalEnvironmentPossible && !gliding

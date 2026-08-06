@@ -13578,3 +13578,129 @@ suppression was sufficient and that no direct same-click sprint command was requ
 ItemCooldown half-tick sampling, retained-click principle, Smart fallback semantics, Ignore semantics, and standalone
 Criticals separation remain valid. The earlier claim that cooldown sampling alone explained continuous-jump failures
 was already superseded and remains superseded. Commit and push results are reported in the task handoff.
+
+## KillAura Smart held-Jump lifecycle and post-movement critical boundary — 2026-08-06
+
+### Runtime correction to the previous entry
+
+Commit `93cf9f3d06e8d7a8c9e7135e1d65c5ea68e2ee9b` built successfully and its focused model tests passed, but the user
+confirmed that it did **not** fix the original FCL runtime defect. With KillAura `Criticals=Smart`, `KeepSprint=false`,
+ItemCooldown `Minimum=1.0..1.0`, Sprint `Legit`, and standalone Criticals disabled, continuously holding physical Jump
+still produced no automatic descending critical. Tapping and releasing Jump could critical, and standalone Criticals
+`Jump` could make the same Aura path critical. This entry therefore does not treat the previous sprint-only result as
+runtime validation and does not reinterpret the request as automatic jumping.
+
+FCL was unavailable in this headless Termux workspace. The exact held-forward/held-Jump 20-cycle runtime matrix,
+critical damage, movement-before-attack ordering as observed by the server, STOP/START commands, cooldown resets, and
+Grim alerts remain pending. Build and production-owned tests below are not a claim that the live defect is fixed.
+
+### Checked and mapped order
+
+Re-read `Skill/README.md`, `Skill/Agen.md`, `Skill/CODEBASE_RULES.md`, `Skill/AGENT1_USAGE.md`, the previous
+Smart/Always Agent1 entry, and all later history affecting KillAura, Clicker, input, sprint, or critical logic. Inspected
+the current requested Criticals, KillAura, Clicker, ItemCooldown, combat-extension, Sprint, input/client/player mixin,
+and Smart test sources. Also traced the mapped Minecraft `26.1.2` sources and Wraith event/sequence dispatcher.
+
+The current update order is:
+
+1. `KeyMapping.isDown` exposes the physical level state.
+2. Wraith dispatches `GameTickEvent` at `Minecraft.tick` HEAD; existing Sequences and KillAura run here, before this
+   tick's local-player input and movement.
+3. Vanilla keybind handling runs, then entity ticking reaches `LocalPlayer.tick`/`aiStep`.
+4. `KeyboardInput.tick` samples `KeyMapping.isDown`, dispatches `MovementInputEvent`, and stores the transformed
+   `Input.jump` result.
+5. `LocalPlayer.aiStep` applies sprint decisions and the transformed input, then `LivingEntity.aiStep` performs jump
+   motion/travel.
+6. `Entity.move` updates `onGround` and `fallDistance`; `Player.tick` subsequently increments the attack-strength
+   ticker.
+7. `LocalPlayer.sendPosition` synchronizes sprint, emits the movement packet containing the resulting ground state,
+   then Wraith dispatches `PlayerNetworkMovementTickEvent.POST` at method return.
+8. The ordinary early KillAura path validates and calls the Clicker from its GameTick Sequence. The new owned
+   post-movement path is reached only after the falling movement packet has been sent; final validation and any
+   required `STOP_SPRINTING` precede the attack packet.
+
+### Code-level root cause
+
+`SmartCriticalDecision` defined the manual gate from the current raw physical key level. A tap released before descent
+and a `CriticalsJump`-injected transformed jump both had `physicalJumpKeyPressed=false` at the later decision, bypassing
+the strict gate and using `smartHeuristicPermitsAttack`. A continuously held key remained trapped in the strict
+`wouldDoCriticalHit()` branch for the entire cycle. This exactly explains the reported branch difference and proves
+that standalone Criticals was changing a decision/timing path, not providing a legitimate dependency.
+
+The remaining structural timing mismatch was that KillAura made its ordinary decision at `GameTickEvent` HEAD, before
+the current `KeyboardInput.tick`, jump/travel, fall-distance update, attack-strength increment, sprint synchronization,
+and movement-packet emission. The prior synthetic `FallingCritical(fallDistance=0.12)` test supplied a snapshot that
+production did not guarantee at this boundary. Sprint preparation corrected one predicate input but did not move or
+retain the decision to the boundary where the current falling state and cooldown advancement exist. Production also
+had no `pendingClickId` coordinator corresponding to the test-only simulation.
+
+### Changed
+
+- Added production-owned `KillAuraCriticalCycleCoordinator`. It separates raw physical intent from the jump lifecycle,
+  latches a Smart manual cycle from the final transformed input/jump transition, preserves it across key release until
+  an airborne landing, starts the next held-key bunny-hop cycle after landing, and resets on pre-airborne transformed
+  input cancellation, target/player/world change, impossible critical environments, gliding, disable, or invalid scope.
+- Smart's strict manual gate now consumes the latched cycle instead of the current physical key level. Ground, rising,
+  and apex states remain blocked. With no manual cycle, the existing Smart heuristic remains authoritative; injected
+  jump input does not become a standalone-Criticals prerequisite. `Ignore` is unchanged.
+- A scheduler-ready click is retained by the production coordinator during a Smart manual cycle (and the existing
+  strict Always opportunity). KillAura defers the early GameTick path, waits for a post-`sendPosition` state with
+  `!onGround && fallDistance>0`, then performs the full facing/range and final natural-critical validation. The Clicker
+  has an opt-in retained-click execution route that still applies its existing attack cooldown, ItemCooldown,
+  successful-click accounting, and cooldown renewal; CPS arrays, thresholds, global scheduling, and key simulation are
+  unchanged. Pipeline ownership prevents two attacks for one retained click.
+- The post-movement boundary is evidence that the current falling/on-ground movement packet was already emitted; it is
+  not a replacement of `fallDistance>0` with vertical velocity. `wouldDoCriticalHit()` remains the final attack gate.
+  If sprint alone blocks that proven state, the prior scoped STOP/local/`wasSprinting` preparation is preserved and is
+  revalidated before the attack packet.
+- `Always` keeps its no-ground/no-rising contract and uses the same post-movement recovery only for a proven natural
+  falling state. No standalone Criticals mode is enabled or consulted. No attack-key input is introduced.
+- Added bounded diagnostics behind existing `ModuleDebug`: prefix `[KillAuraSmartCritDiag]`, Smart only, running Aura,
+  valid current target, and physical/transformed/manual-cycle jump activity, capped at 80 distinct relevant ticks per
+  activation. Each compact JSON line records tick, current/+1 scheduler state, physical/transformed jump, gate/cycle,
+  ground/fall/Y velocity, local/server-facing sprint, attack and ItemCooldown progress/threshold, Smart heuristic,
+  strict critical predicates, sprint-stop need, permission, facing/range, pipeline entry, STOP and attack-packet
+  emission, and the final rejection reason. This supports held, tap/release, and injected-Jump comparisons without an
+  unconditional logger.
+
+Files changed by this correction are `ModuleCriticals.kt`, `SmartCriticalDecision.kt`,
+`KillAuraCriticalCycleCoordinator.kt`, `ModuleKillAura.kt`, `KillAuraClicker.kt`, `Clicker.kt`,
+`SmartCriticalDecisionTest.kt`, and this entry.
+
+### Production-owned coverage and verification
+
+Replaced the test-only `PreparedAttackSimulation`, `RetainedClickSimulation`, invented `pendingClickId`, idealized
+falling snapshots, and static source-string assertions. The 11 Smart/Always tests now drive the same production-owned
+coordinator used by KillAura and cover ground/rise/apex/early fall/late fall/landing, held and released physical Jump,
+transformed-only Jump, 20 continuous held-key cycles, cooldown readiness in each phase, retained-click execution,
+exactly one pipeline per ready click, sprint true/false preparation, cancellation and
+target/player/world/disable/impossible-environment resets, Always, and Ignore.
+
+Using the existing untracked init filter that excludes only the unrelated `PointFindingKtTest.kt`, 69 focused tests
+passed: 11 Smart lifecycle/decision tests, 7 ItemCooldown tests, 28 V-Core Aura tests, 8 MaceSwap tests, and 15 EMace
+phase-coordinator tests. The normal unfiltered test task was also attempted and remains blocked at
+`compileTestKotlin` by the pre-existing `PointFindingKtTest.kt` unresolved `math`, `Vec3d`, `x/y/z`, and `toVector3f`
+symbols.
+
+Canonical required build:
+`env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=$JAVA_HOME/bin:$PATH sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+
+- Result after the final cancellation and target-scope reset review: `BUILD SUCCESSFUL in 3m 57s`.
+- Main JAR: `build/libs/liquidbounce-0.31.2.jar`; SHA-256
+  `d66be5b6acc5f6d96e75cb4521940629d8dd91a60250af26b615229f1af1b3c9`.
+- Sources JAR SHA-256: `d7f4fa686d346c29d3c638d545692d7acadea7921b66c8a564ec4bb709e24f0c`.
+- `git diff --check` passed before this append and is repeated on the staged correction.
+
+### Supersedes
+
+This entry supersedes the previous sprint-only root-cause conclusion and its statement that no persistent production
+state was required. It also supersedes the previous 73-test success as evidence of runtime behavior: those tests
+modeled an ideal falling decision point and a coordinator absent from production. The scoped STOP correction remains
+because mapped packet order still requires server-facing sprint false before attack when sprint is the only strict
+critical blocker. The separation of standalone Criticals, ItemCooldown sampling/threshold behavior, Smart's ordinary
+no-manual-cycle heuristic, Always's strict natural-critical contract, and Ignore remain in force.
+
+Mandatory FCL validation is pending and must use the supplied configuration for at least 20 continuously held-Jump
+cycles, compare tap/release and standalone Criticals Jump, repeat with Always, and inspect critical damage, ordinary-hit
+leakage, attack count/cooldown reset, movement/STOP/attack packet order, and Grim alerts before reporting the runtime
+defect fixed. Commit and push results are reported in the task handoff.

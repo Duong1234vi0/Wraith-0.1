@@ -54,11 +54,18 @@ object KillAuraClicker : Clicker<ModuleKillAura>(
         sequence: Sequence,
         rotation: Rotation? = null,
         preAttack: (() -> Boolean)? = null,
+        retainedClick: Boolean = false,
         attack: () -> Boolean,
     ) {
-        if (!isClickTick) {
+        if (!isClickTick && !retainedClick) {
             // If we are not going to click, we don't need to prepare the environment
             return
+        }
+
+        val executeClick: (() -> Boolean) -> Unit = if (retainedClick && !isClickTick) {
+            ::clickRetained
+        } else {
+            ::click
         }
 
         // V-Core Aura performs its raw ShieldBreaker action before Aura's normal
@@ -67,7 +74,7 @@ object KillAuraClicker : Clicker<ModuleKillAura>(
         // the normal interactive scene first.
         if (preAttack != null) {
             var handled = false
-            click {
+            executeClick {
                 if (handled) {
                     false
                 } else {
@@ -91,7 +98,7 @@ object KillAuraClicker : Clicker<ModuleKillAura>(
             if (shouldBypassCooldown && previousAttackCooldown > 0) {
                 mc.attackCooldown = 0
             }
-            click(attack)
+            executeClick(attack)
         } finally {
             if (shouldBypassCooldown) {
                 mc.attackCooldown = previousAttackCooldown

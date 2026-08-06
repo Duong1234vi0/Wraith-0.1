@@ -174,7 +174,10 @@ object ModuleCriticals : ClientModule("Criticals", Category.COMBAT) {
 
         fun isCriticalHit(target: Entity): Boolean = evaluateCriticalHit(target).permitsAttack
 
-        internal fun evaluateCriticalHit(target: Entity): CriticalsSelectionDecision {
+        internal fun evaluateCriticalHit(
+            target: Entity,
+            manualJumpCycleActive: Boolean = mc.options.jumpKey.isPressed,
+        ): CriticalsSelectionDecision {
             val smartHeuristicPermitsAttack = if (this == SMART) {
                 !shouldWaitForCrit(target, ignoreState = true)
             } else {
@@ -189,6 +192,7 @@ object ModuleCriticals : ClientModule("Criticals", Category.COMBAT) {
                     mode = this,
                     physicalJumpKeyPressed = mc.options.jumpKey.isPressed,
                     transformedPlayerInputJump = player.input.playerInput.jump,
+                    manualJumpCycleActive = manualJumpCycleActive,
                     naturalCriticalEnvironmentPossible = naturalCriticalEnvironmentPossible,
                     gliding = player.isGliding,
                     onGround = player.onGround(),
