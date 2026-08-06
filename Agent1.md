@@ -13316,3 +13316,125 @@ flushing unrelated queued types. Pose pushes remain protected by `try/finally`.
   `https://github.com/Duong1234vi0/Wraith-0.1.git`.
 - This post-push documentation update is committed and pushed separately; its final hash is reported in the task
   handoff. FCL/Android visual testing remains pending, and compilation does not prove the bloom balance.
+
+## Silent Watermark alignment and original Wraith mark — 2026-08-06
+
+### User report and scope
+
+The Silent-style `Watermark` body text rendered slightly below its adjacent icon glyphs, while the first client icon
+was still Silent's inherited `"i"` glyph, visually resembling three diagonal stripes. The requested change was limited
+to the existing Watermark: align all Watermark body text to the icon row and replace only the first glyph with a fixed,
+original, accent-tinted Wraith texture mark. Other HUD elements, ClickGUI, settings, registration order, persistence,
+and the remaining username/server/FPS/TPS icon glyphs had to remain unchanged.
+
+### Current files and evidence checked
+
+- Repository workflow/render rules and safe Agent1 usage in `Skill/README.md`, `Skill/Agen.md`,
+  `Skill/AGENT1_USAGE.md`, `Skill/CODEBASE_RULES.md`, and `Skill/RENDER_PORTING_GUIDE.md`.
+- Live Watermark and shared draw paths in `SilentHudElements.kt` and `ExosGuiRenderer.kt`.
+- Font selection and MSDF layout in `FontManager.kt`, `MsdfTextRenderer.kt`, `FontRenderer.kt`, and `MsdfGlyph.kt`.
+- Live metrics and relevant glyph plane bounds in `silent_sf_pro_regular.json` and `silentcoreicons.json`.
+- Batched texture/resource paths in `RoundedTextureGui.kt`, `RoundedTextureGuiElementRenderState.java`, its shader,
+  `IdentifierExtension.kt`, vanilla `GuiGraphicsExtractor`/`GUI_TEXTURED`, and existing live callers.
+- Existing regression coverage in `SilentHudLayoutTest.kt`, current `HudManager.kt` registration assertions, the
+  unrelated `wyvern_logo.png`, and the relevant prior Silent HUD Agent1 history.
+
+### Metric finding and root cause
+
+Both faces receive the same global `MsdfTextRenderer.BASELINE_FACTOR = 0.7f`, but Watermark centered them through
+`SilentHudDraw.centeredY()` and a generic `size * 0.7` visual height. That height does not describe each atlas' actual
+visible plane. At the Watermark's live sizes, the body font is size `8` and the icon font is size `10`:
+
+- `silent_sf_pro_regular` metrics: ascender `0.9521484375`, descender `-0.2412109375`, line height `1.193359375`;
+- `silentcoreicons` metrics: ascender `0.9375`, descender `-0.0625`, line height `1.0`;
+- the retained icon glyphs `N`, `L`, and `t` have plane centers near `0.4375`, so their visible centers land about
+  `0.875px` above the nominal row center at size `10`; `q` lands about `0.665px` above it;
+- representative body capitals/digits center near the nominal row, while lowercase/descender-heavy text can extend
+  lower.
+
+Equal numeric input Y values therefore did not give equal visible centers. The Watermark also explicitly constructed
+its first segment as `Segment("i", label)`, so the inherited client glyph remained on the normal icon-font path.
+
+### Changed
+
+- Added one Watermark-local visible-center correction, `WATERMARK_VISIBLE_CENTER_OFFSET = -0.875f`.
+- All Watermark body strings use one precomputed corrected `bodyY`: animated client label, username, server, FPS, and
+  TPS. No global font baseline, FontManager, ExosGuiRenderer, ClickGUI, or other HUD element was changed.
+- Replaced the segment model's first `"i"` glyph with `SegmentIcon.WraithMark`; `N`, `L`, `t`, and `q` remain
+  `SegmentIcon.FontGlyph` values on `SilentHudDraw.icon()`.
+- The mark is drawn as a fixed `10 x 10` texture and contributes exactly `10px` to the existing content-driven width.
+  Existing gap/padding/segment spacing, animated label widths, total panel width, and server text copy rectangle order
+  remain intact.
+- Registered the bundled PNG at the stable `liquidbounce:hud/wraith_mark` dynamic texture identifier through the
+  existing NativeImage resource loader. No old glyph fallback remains in normal rendering.
+- The non-rounded mark uses the real current `DrawContext` and vanilla batched `RenderPipelines.GUI_TEXTURED` blit;
+  the vertex color is the live Wraith accent. Fractional pose translation preserves the exact Watermark row position.
+
+### Asset
+
+Added `src/main/resources/resources/liquidbounce/hud/icons/wraith_mark.png`: a fixed, original, symmetrical angular
+Wraith hood/mask with two narrow slanted eye cuts and a small center notch. It contains no text or stripe motif and does
+not reuse Wyvern, LiquidBounce, Silent, or another client mark. The built-in image generation workflow produced the
+original concept on chroma green; deterministic local conversion/downsampling produced the final monochrome white
+`64 x 64`, 8-bit color-type-6 RGBA PNG with transparent outer pixels and antialiased alpha.
+
+The inspected rounded-texture shader was not used for this mark because it intentionally ignores `argb` RGB and would
+leave white artwork untinted. Changing that shared shader would affect unrelated skin/vignette callers. The existing
+batched `GUI_TEXTURED` path supplies the required RGB tint without a global rendering change.
+
+### Preserved behavior
+
+NameProtect, username/server/FPS/TPS content and formatting, animated Wraith/version/build label phases, dynamic panel
+width, horizontal spacing, fixed Watermark position, server copy hitbox and Singleplayer guard, HUD editor selection,
+all other Silent/Wyvern/Hotbar HUD elements, ModuleHUD settings, registration order, persistence, and ClickGUI remain
+unchanged.
+
+### Tests and static verification
+
+- `git diff --check`: passed.
+- Production `compileKotlin compileJava`: `BUILD SUCCESSFUL in 42s`.
+- The direct focused `SilentHudLayoutTest` command was attempted and blocked before test execution by the unrelated
+  existing `PointFindingKtTest.kt` unresolved `math`, `Vec3d`, coordinate fields, and `toVector3f` references.
+- The same focused suite was rerun through the established untracked init script excluding only
+  `PointFindingKtTest.kt`: 10 tests passed, `BUILD SUCCESSFUL in 23s`.
+- New tests prove the first segment is texture-backed, the inherited `Segment("i", label)` is absent, remaining glyphs
+  stay font-backed, one shared `-0.875f` correction is used, dynamic width calls the new icon-width path, and the PNG is
+  `64 x 64`, RGBA color type 6, monochrome white where visible, non-empty, alpha-bearing, and transparent on every outer
+  pixel.
+
+### Clean build and JAR verification
+
+Canonical command:
+`env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk/bin:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/bin sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`
+
+- Result: `BUILD SUCCESSFUL in 2m 14s`.
+- Main JAR: `build/libs/liquidbounce-0.31.2.jar`; SHA-256:
+  `2a90e671f132878db9e06233f02a5279710d406a807f2831255f2498e527f4a9`.
+- Sources JAR SHA-256: `c2ba07060884c7de2ab8a4cff58bc97e2070820bb87d89eb98b2a7cd9d8bcf1e`.
+- JAR contains `resources/liquidbounce/hud/icons/wraith_mark.png`.
+- Source and JAR asset SHA-256 both equal
+  `0cc390db0b98a3351fae71e0bfdc5aff7fe26d97aac1cb08472969864eeac13b`; the JAR copy was independently identified as
+  `64 x 64`, 8-bit/color RGBA.
+
+### FCL runtime status
+
+Not run in this headless Termux workspace. Compilation, focused tests, and JAR inspection do not prove visible
+alignment, accent tint, or Android NativeImage/GPU presentation. Pending on Minecraft `26.1.2` through FCL/Android:
+enable Watermark; compare every body string to adjacent icons; watch all animated label phases; confirm the mark is
+crisp/accent-tinted with no stripes, black square, missing texture, or opaque background; check username, long server,
+FPS/TPS spacing; verify the server copy hitbox in chat; test the normal GUI scale and one different scale; and confirm
+HotKeys, Information, Notifications, TargetHUD, StaffList, HotbarStatusHud, and ClickGUI are unchanged.
+
+### Files changed, deviations, commit, and push
+
+- `src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/SilentHudElements.kt`
+- `src/main/resources/resources/liquidbounce/hud/icons/wraith_mark.png`
+- `src/test/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/SilentHudLayoutTest.kt`
+- this append-only `Agent1.md` entry.
+
+Implementation commit: `c3e81b13` — `fix(hud): align watermark and add wraith mark`.
+The only render-path deviation from the preference was the proven rounded-texture RGB-tint limitation described above;
+the supported batched GUI path preserves the requested result without unrelated shared changes. The unfiltered test
+source blocker and FCL status are recorded above. Documentation commit and push result are reported after this entry is
+committed. The pre-existing unrelated Agent1 deletion and all other dirty/untracked worktree files were preserved and
+excluded.
