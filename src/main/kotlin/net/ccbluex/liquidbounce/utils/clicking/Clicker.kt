@@ -82,12 +82,6 @@ open class Clicker<T>(
         null
     }
 
-    internal val debugItemCooldownProgress: Float?
-        get() = itemCooldown?.cooldownProgress()
-
-    internal val debugItemCooldownThreshold: Float?
-        get() = itemCooldown?.currentThreshold
-
     /**
      * When missing a hit, Minecraft has a cooldown before you can attack again.
      * This option will consider the cooldown before attacking again.
@@ -168,19 +162,7 @@ open class Clicker<T>(
      * [block] should return true if the click was successful. Otherwise, it will not count as a click.
      */
     fun click(block: () -> Boolean) {
-        click(getClickAmount(), block)
-    }
-
-    /**
-     * Executes one click that an owning feature retained from an earlier scheduler-ready tick.
-     * The ordinary attack and item-cooldown gates still apply, and the click is accounted for
-     * exactly like a current scheduler click when [block] succeeds.
-     */
-    internal fun clickRetained(block: () -> Boolean) {
-        click(1, block)
-    }
-
-    private fun click(clicks: Int, block: () -> Boolean) {
+        val clicks = getClickAmount()
 
         debugParameter("Current Clicks") { clicks }
         debugParameter("Peek Clicks") { clickArray.get(1) }

@@ -13704,3 +13704,81 @@ Mandatory FCL validation is pending and must use the supplied configuration for 
 cycles, compare tap/release and standalone Criticals Jump, repeat with Always, and inspect critical damage, ordinary-hit
 leakage, attack count/cooldown reset, movement/STOP/attack packet order, and Grim alerts before reporting the runtime
 defect fixed. Commit and push results are reported in the task handoff.
+
+## KillAura Smart/Always reference restoration — 2026-08-06
+
+### Request and authority
+
+The two coordinator-based fixes in commits `93cf9f3d06e8d7a8c9e7135e1d65c5ea68e2ee9b` and
+`159171ff8ac840166b4a0211d837aa4df66f065f` did not resolve the user's FCL held-Jump case. The user then supplied the
+working Minecraft `1.21.4` project at `WorkSpace/Client/tesststststststst`; its `gradle.properties` confirms
+`minecraft_version=1.21.4`. That project's KillAura/Criticals sources were treated as the behavioral authority. The
+live Wraith repository and its `minecraft_version=26.1.2` build remain authoritative for mappings, current APIs, and
+unrelated integrations.
+
+### Reference compared
+
+Read and compared the complete reference and live versions of `ModuleCriticals.kt`, `CriticalsJump.kt`,
+`ModuleKillAura.kt`, `KillAuraClicker.kt`, and `Clicker.kt`. Also inspected both failed commits and the complete failed
+`SmartCriticalDecision.kt`, `KillAuraCriticalCycleCoordinator.kt`, and `SmartCriticalDecisionTest.kt` additions.
+`CriticalsJump.shouldWaitForCrit` already matched the working reference modulo current Mojang mappings and unrelated
+removed-module integration, so it was not changed.
+
+### Restored source behavior
+
+`CriticalsSelectionMode` again directly implements the working reference contract:
+
+- `IGNORE -> true`;
+- `SMART -> !shouldWaitForCrit(target, ignoreState = true)`;
+- `ALWAYS -> wouldDoCriticalHit()`.
+
+Sprint suppression again returns false for Ignore and grounded state, then uses only
+`target != null && clicker.willClickAt(1)`. The only required mapping adaptation is reference
+`player.isOnGround` to current `player.onGround()`.
+
+KillAura once again owns attacks only from its normal tick handler. It requires
+`clickScheduler.isClickTick && validateAttack(target)`, invokes the ordinary clicker, and validates the same target
+again immediately before the real attack. `validateAttack` uses the reference critical selection while preserving
+the live gliding exemption and current inventory, block-breaking, and ShieldBreaker cooldown conditions.
+
+### Removed failed architecture
+
+Removed the physical/manual Jump-key gate, transformed-input/manual-cycle selection context, server-sprint selection
+requirements, direct `STOP_SPRINTING` preparation, post-movement attack handler and `Sequence`, retained scheduler
+clicks, critical attack boundary/scope types, coordinator lifecycle/reset hooks, target-scope synchronization,
+`[KillAuraSmartCritDiag]` packet listener/fields/helpers/logging, and the synthetic coordinator decision tests.
+Deleted `SmartCriticalDecision.kt`, `KillAuraCriticalCycleCoordinator.kt`, and `SmartCriticalDecisionTest.kt`.
+Removed `retainedClick` from `KillAuraClicker`, `clickRetained` from `Clicker`, and the now-unused cooldown diagnostic
+accessors introduced solely for that failed path.
+
+### Preserved current integrations
+
+The restoration did not replace the live `ModuleKillAura.kt`. ElytraTarget range/prediction, rotations and raycast,
+WallsBypass, ShieldBreaker/pre-attack handling, MaceSwap, EMaceHelper post-actions, AutoCart/FocusedFull coordination,
+AutoBlock, target tracking/locking, inventory handling, screen cooldown handling, `simulateKeybindPress=false`, and
+current 26.1.2 packet/API mappings remain in place.
+
+### Verification
+
+- Focused source comparison confirmed the selection branches, sprint decision, normal scheduler gate, and immediate
+  final validation match the working 1.21.4 source.
+- Stale-reference search found no remaining failed decision/coordinator/retained-click/diagnostic architecture.
+- `git diff --check`: passed.
+- Normal `test` was attempted. Main compilation succeeded; `compileTestKotlin` remains blocked only by the existing
+  `PointFindingKtTest.kt` unresolved `math`, `Vec3d`, `x/y/z`, and `toVector3f` references.
+- Required clean assembly succeeded in `2m 3s`:
+  `env JAVA_HOME=/data/data/com.termux/files/usr/lib/jvm/java-25-openjdk PATH=$JAVA_HOME/bin:$PATH sh ./gradlew --no-daemon --no-build-cache clean assemble -x detekt`.
+- Main JAR SHA-256: `1f40e660a2fe61609404b7e98f2877aba575e94d386d4cb0e1abaef682f6a5c8`.
+- Sources JAR SHA-256: `af1c237fee44cd44a2dadd2d06cd3a13bf6653f7b2315c9e7c37385dd82d27ce`.
+
+### FCL status and supersession
+
+FCL/Android runtime testing is pending; compilation does not prove Smart/Always runtime success. Required checks are:
+Smart with standalone Criticals off while continuously holding forward and Jump without attack input; Smart with a
+tap/release jump; Always grounded then manually falling without attack input; and Smart with standalone Criticals Jump
+enabled to confirm it remains optional and does not double-attack.
+
+This entry supersedes the two 2026-08-06 coordinator-based entries where they describe the manual-key gate,
+post-movement coordinator, retained clicks, direct sprint preparation, or their synthetic tests as the intended fix.
+The working 1.21.4 source is the behavior authority for this restoration. Commit and push results are reported in the
+task handoff after the scoped commit is created and pushed.

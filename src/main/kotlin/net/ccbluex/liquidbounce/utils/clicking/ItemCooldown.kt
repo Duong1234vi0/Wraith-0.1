@@ -50,9 +50,6 @@ class ItemCooldown<T>(module: T) : ToggleableConfigurable(module, "ItemCooldown"
 
     private var nextCooldown = minimumCooldown.random()
 
-    internal val currentThreshold: Float
-        get() = nextCooldown
-
     fun isCooldownPassed(ticks: Int = 0) = !this.enabled || cooldownProgress(ticks) >= nextCooldown
 
     /**

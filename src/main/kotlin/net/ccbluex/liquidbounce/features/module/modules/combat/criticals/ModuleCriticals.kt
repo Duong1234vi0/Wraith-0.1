@@ -31,7 +31,6 @@ import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.modes.*
 import net.ccbluex.liquidbounce.features.module.modules.movement.fly.ModuleFly
 import net.ccbluex.liquidbounce.utils.block.collideBlockIntersects
 import net.ccbluex.liquidbounce.utils.clicking.Clicker
-import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.combat.findEnemy
 import net.ccbluex.liquidbounce.utils.entity.box
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.CRITICAL_MODIFICATION
@@ -172,40 +171,12 @@ object ModuleCriticals : ClientModule("Criticals", Category.COMBAT) {
         IGNORE("Ignore"),
         ALWAYS("Always");
 
-        fun isCriticalHit(target: Entity): Boolean = evaluateCriticalHit(target).permitsAttack
-
-        internal fun evaluateCriticalHit(
-            target: Entity,
-            manualJumpCycleActive: Boolean = mc.options.jumpKey.isPressed,
-        ): CriticalsSelectionDecision {
-            val smartHeuristicPermitsAttack = if (this == SMART) {
-                !shouldWaitForCrit(target, ignoreState = true)
-            } else {
-                false
+        fun isCriticalHit(target: Entity): Boolean {
+            return when (this) {
+                IGNORE -> true
+                SMART -> !shouldWaitForCrit(target, ignoreState = true)
+                ALWAYS -> wouldDoCriticalHit()
             }
-            val naturalCriticalEnvironmentPossible = allowsCriticalHit(ignoreOnGround = true)
-            val wouldDoNaturalCritical = wouldDoCriticalHit()
-            val wouldDoNaturalCriticalIgnoringSprint = wouldDoCriticalHit(ignoreSprint = true)
-
-            return decideCriticalSelection(
-                CriticalsSelectionContext(
-                    mode = this,
-                    physicalJumpKeyPressed = mc.options.jumpKey.isPressed,
-                    transformedPlayerInputJump = player.input.playerInput.jump,
-                    manualJumpCycleActive = manualJumpCycleActive,
-                    naturalCriticalEnvironmentPossible = naturalCriticalEnvironmentPossible,
-                    gliding = player.isGliding,
-                    onGround = player.onGround(),
-                    fallDistance = player.fallDistance.toFloat(),
-                    verticalVelocity = player.deltaMovement.y,
-                    sprinting = player.isSprinting,
-                    serverSprinting = player.wasSprinting,
-                    attackStrengthReady = player.getAttackCooldownProgress(0.5f) > 0.9f,
-                    wouldDoCriticalHit = wouldDoNaturalCritical,
-                    wouldDoCriticalHitIgnoringSprint = wouldDoNaturalCriticalIgnoringSprint,
-                    smartHeuristicPermitsAttack = smartHeuristicPermitsAttack,
-                )
-            )
         }
 
         fun shouldStopSprinting(clicker: Clicker<*>, target: Entity?): Boolean {
@@ -220,7 +191,7 @@ object ModuleCriticals : ClientModule("Criticals", Category.COMBAT) {
             }
 
             // If we are about to do a critical hit, we should stop sprinting.
-            return target != null && (clicker.isClickTick || clicker.willClickAt(1))
+            return target != null && clicker.willClickAt(1)
         }
 
     }
