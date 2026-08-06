@@ -31,6 +31,7 @@ import net.ccbluex.liquidbounce.features.module.modules.render.gui.ExosGuiRender
 import net.ccbluex.liquidbounce.render.gui.drawRoundedPlayerSkinFace
 import net.ccbluex.liquidbounce.utils.client.ServerObserver
 import net.ccbluex.liquidbounce.utils.client.mc
+import net.ccbluex.liquidbounce.utils.client.registerDynamicImageFromResources
 import net.ccbluex.liquidbounce.utils.entity.currentFps
 import net.ccbluex.liquidbounce.utils.entity.deltaMovement
 import net.ccbluex.liquidbounce.utils.entity.drawItem
@@ -39,6 +40,8 @@ import net.ccbluex.liquidbounce.utils.entity.getActualHealth
 import net.ccbluex.liquidbounce.utils.entity.matrices
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screens.ChatScreen
+import net.minecraft.client.renderer.RenderPipelines
+import net.minecraft.resources.Identifier
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.player.Player
 import org.lwjgl.glfw.GLFW
@@ -171,14 +174,14 @@ class SilentWatermarkElement :
         val label = animatedClientLabel(System.currentTimeMillis())
 
         val sections = listOf(
-            Segment("i", label),
-            Segment("N", username),
-            Segment("L", server),
-            Segment("t", fps),
-            Segment("q", tps),
+            Segment(SegmentIcon.WraithMark, label),
+            Segment(SegmentIcon.FontGlyph("N"), username),
+            Segment(SegmentIcon.FontGlyph("L"), server),
+            Segment(SegmentIcon.FontGlyph("t"), fps),
+            Segment(SegmentIcon.FontGlyph("q"), tps),
         )
         val contentWidth = sections.sumOf { segment ->
-            (SilentHudDraw.iconWidth(segment.icon, iconSize) + gap + SilentHudDraw.bodyWidth(segment.text, textSize)).toDouble()
+            (iconWidth(segment.icon, iconSize) + gap + SilentHudDraw.bodyWidth(segment.text, textSize)).toDouble()
         }.toFloat() + gap * (sections.size - 1)
         val totalWidth = paddingX * 2f + contentWidth
 
@@ -189,16 +192,15 @@ class SilentWatermarkElement :
         SilentHudDraw.panel(context, px, py, totalWidth, height, 5f, 1f)
         var cursorX = px + paddingX
         val centerY = py + height * 0.5f
+        val bodyY = watermarkCenteredY(centerY, SilentHudDraw.bodyHeight(textSize))
         sections.forEach { segment ->
-            val iconY = SilentHudDraw.centeredY(centerY, iconSize)
-            val textY = SilentHudDraw.centeredY(centerY, textSize)
-            SilentHudDraw.icon(context, segment.icon, cursorX, iconY, iconSize, SilentHudDraw.accent())
-            cursorX += SilentHudDraw.iconWidth(segment.icon, iconSize) + gap
+            drawIcon(context, segment.icon, cursorX, centerY, iconSize, SilentHudDraw.accent())
+            cursorX += iconWidth(segment.icon, iconSize) + gap
             val textW = SilentHudDraw.bodyWidth(segment.text, textSize)
             if (segment.text == server) {
                 serverCopyRect = SilentRect(cursorX, py, textW, height)
             }
-            SilentHudDraw.body(context, segment.text, cursorX, textY, textSize, SilentHudDraw.WHITE)
+            SilentHudDraw.body(context, segment.text, cursorX, bodyY, textSize, SilentHudDraw.WHITE)
             cursorX += textW + gap
         }
 
@@ -222,7 +224,65 @@ class SilentWatermarkElement :
 
     private var serverCopyRect: SilentRect? = null
 
-    private data class Segment(val icon: String, val text: String)
+    private fun drawIcon(
+        context: DrawContext,
+        icon: SegmentIcon,
+        x: Float,
+        centerY: Float,
+        iconSize: Float,
+        color: Int,
+    ) {
+        when (icon) {
+            SegmentIcon.WraithMark -> drawWraithMark(context, x, watermarkCenteredY(centerY, WRAITH_MARK_SIZE), color)
+            is SegmentIcon.FontGlyph -> SilentHudDraw.icon(
+                context,
+                icon.value,
+                x,
+                SilentHudDraw.centeredY(centerY, iconSize),
+                iconSize,
+                color,
+            )
+        }
+    }
+
+    private fun drawWraithMark(context: DrawContext, x: Float, y: Float, color: Int) {
+        val integralX = floor(x).toInt()
+        val integralY = floor(y).toInt()
+        context.pose().pushMatrix()
+        try {
+            context.pose().translate(x - integralX, y - integralY)
+            context.blit(
+                RenderPipelines.GUI_TEXTURED,
+                wraithMarkTexture,
+                integralX,
+                integralY,
+                0f,
+                0f,
+                WRAITH_MARK_SIZE.toInt(),
+                WRAITH_MARK_SIZE.toInt(),
+                WRAITH_MARK_TEXTURE_SIZE,
+                WRAITH_MARK_TEXTURE_SIZE,
+                color,
+            )
+        } finally {
+            context.pose().popMatrix()
+        }
+    }
+
+    private fun iconWidth(icon: SegmentIcon, iconSize: Float): Float = when (icon) {
+        SegmentIcon.WraithMark -> WRAITH_MARK_SIZE
+        is SegmentIcon.FontGlyph -> SilentHudDraw.iconWidth(icon.value, iconSize)
+    }
+
+    private fun watermarkCenteredY(centerY: Float, visibleHeight: Float): Float =
+        centerY - visibleHeight * 0.5f + WATERMARK_VISIBLE_CENTER_OFFSET
+
+    private data class Segment(val icon: SegmentIcon, val text: String)
+
+    private sealed interface SegmentIcon {
+        data object WraithMark : SegmentIcon
+        data class FontGlyph(val value: String) : SegmentIcon
+    }
 
     private fun animatedClientLabel(nowMs: Long): String {
         val labels = listOf(
@@ -251,6 +311,15 @@ class SilentWatermarkElement :
 
     private companion object {
         const val SINGLEPLAYER = "Singleplayer"
+        const val WRAITH_MARK_SIZE = 10f
+        const val WRAITH_MARK_TEXTURE_SIZE = 64
+        const val WATERMARK_VISIBLE_CENTER_OFFSET = -0.875f
+
+        val wraithMarkTexture: Identifier by lazy {
+            Identifier.fromNamespaceAndPath("liquidbounce", "hud/wraith_mark").apply {
+                registerDynamicImageFromResources("hud/icons/wraith_mark.png")
+            }
+        }
     }
 }
 

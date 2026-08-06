@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
+import javax.imageio.ImageIO
 import kotlin.math.abs
 
 class SilentHudLayoutTest {
@@ -100,6 +101,50 @@ class SilentHudLayoutTest {
         assertFalse(source.contains("distanceValue"))
         assertTrue(source.contains("entries.removeAll"))
         assertTrue(source.contains("override fun resetState()"))
+    }
+
+    @Test
+    fun `Watermark uses one aligned texture mark and preserves the remaining icon glyphs`() {
+        val source = source("src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/render/gui/hud/SilentHudElements.kt")
+
+        assertFalse(source.contains("Segment(\"i\", label)"))
+        assertTrue(source.contains("Segment(SegmentIcon.WraithMark, label)"))
+        listOf("N", "L", "t", "q").forEach { glyph ->
+            assertTrue(source.contains("Segment(SegmentIcon.FontGlyph(\"$glyph\")"), glyph)
+        }
+        assertTrue(source.contains("registerDynamicImageFromResources(\"hud/icons/wraith_mark.png\")"))
+        assertTrue(source.contains("RenderPipelines.GUI_TEXTURED"))
+        assertTrue(source.contains("val bodyY = watermarkCenteredY"))
+        assertTrue(source.contains("WATERMARK_VISIBLE_CENTER_OFFSET = -0.875f"))
+        assertTrue(source.contains("iconWidth(segment.icon, iconSize) + gap"))
+    }
+
+    @Test
+    fun `Wraith Watermark mark is a transparent monochrome RGBA PNG`() {
+        val path = Path.of("src/main/resources/resources/liquidbounce/hud/icons/wraith_mark.png")
+        val bytes = Files.readAllBytes(path)
+        val image = ImageIO.read(path.toFile())
+
+        assertEquals(6, bytes[25].toInt() and 0xFF, "PNG color type")
+        assertEquals(64, image.width)
+        assertEquals(64, image.height)
+        assertTrue(image.colorModel.hasAlpha())
+
+        var visiblePixels = 0
+        repeat(image.height) { y ->
+            repeat(image.width) { x ->
+                val argb = image.getRGB(x, y)
+                val alpha = (argb ushr 24) and 0xFF
+                if (x == 0 || y == 0 || x == image.width - 1 || y == image.height - 1) {
+                    assertEquals(0, alpha, "outer pixel at $x,$y")
+                }
+                if (alpha > 0) {
+                    visiblePixels++
+                    assertEquals(0xFFFFFF, argb and 0xFFFFFF, "visible RGB at $x,$y")
+                }
+            }
+        }
+        assertTrue(visiblePixels > 0)
     }
 
     @Test
